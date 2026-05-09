@@ -5,7 +5,12 @@
 // These helpers fail soft (returning null / [] on transport errors) so
 // the UI can stay rendered when the daemon is briefly unreachable.
 
-import type { ImportFolderRequest, ImportFolderResponse } from '@open-design/contracts';
+import type {
+  ApplyResult,
+  ImportFolderRequest,
+  ImportFolderResponse,
+  InstalledPluginRecord,
+} from '@open-design/contracts';
 import { randomUUID } from '../utils/uuid';
 import type {
   ChatMessage,
@@ -324,4 +329,75 @@ export async function saveTabs(
   } catch {
     // best-effort
   }
+}
+
+// ---------- plugins ----------
+// Plan §3.C1 — plugin discovery + apply.
+//
+// applyPlugin() is the canonical entry point for both the inline rail
+// (NewProjectPanel + ChatComposer) and the marketplace detail page. It
+// hits POST /api/plugins/:id/apply, which is the same pure resolver
+// the daemon uses; the response carries everything the composer needs:
+//   - query (pre-filled brief)
+//   - contextItems (chip strip)
+//   - inputs (form fields)
+//   - appliedPlugin (snapshot id; sent back on POST /api/runs to pin
+//     the prompt block to the frozen view)
+
+export async function listPlugins(): Promise<InstalledPluginRecord[]> {
+  try {
+    const resp = await fetch('/api/plugins');
+    if (!resp.ok) return [];
+    const json = (await resp.json()) as { plugins?: InstalledPluginRecord[] };
+    return json.plugins ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function applyPlugin(
+  pluginId: string,
+  options: {
+    inputs?: Record<string, unknown>;
+    projectId?: string;
+    grantCaps?: string[];
+  } = {},
+): Promise<ApplyResult | null> {
+  try {
+    const resp = await fetch(
+      `/api/plugins/${encodeURIComponent(pluginId)}/apply`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inputs: options.inputs ?? {},
+          projectId: options.projectId,
+          grantCaps: options.grantCaps ?? [],
+        }),
+      },
+    );
+    if (!resp.ok) return null;
+    const json = (await resp.json()) as ApplyResult & { ok?: boolean };
+    return json;
+  } catch {
+    return null;
+  }
+}
+
+// Render the brief that the composer should display for the active
+// applied plugin. Substitutes `{{var}}` placeholders inside
+// useCase.query against the user-supplied inputs map; missing values
+// stay as `{{var}}` so the gating "fill required" hint stays visible.
+export function renderPluginBriefTemplate(
+  template: string,
+  inputs: Record<string, unknown>,
+): string {
+  return template.replace(/\{\{\s*([a-zA-Z_][\w-]*)\s*\}\}/g, (full, key) => {
+    if (key in inputs) {
+      const v = inputs[key];
+      if (v === undefined || v === null || v === '') return full;
+      return String(v);
+    }
+    return full;
+  });
 }
