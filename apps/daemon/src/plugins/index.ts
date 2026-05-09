@@ -33,6 +33,13 @@ export {
   type SnapshotDiffReport,
   type SnapshotDiffEntry,
 } from './snapshot-diff.js';
+export {
+  pluginInventoryStats,
+  snapshotInventoryStats,
+  type PluginInventoryStats,
+  type SnapshotInventoryStats,
+  type SnapshotStatsRow,
+} from './stats.js';
 export * from './atoms/build-test.js';
 export * from './atoms/code-import.js';
 export * from './atoms/design-extract.js';

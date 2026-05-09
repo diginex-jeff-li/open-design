@@ -3764,6 +3764,27 @@ export async function startServer({
     }
   });
 
+  // Plan §3.DD1 — `od plugin stats`. Aggregates the installed-
+  // plugin roster + the applied_plugin_snapshots roster into one
+  // health/inventory report. Pure helpers in plugins/stats.ts;
+  // the route wires the SQLite reads + merges on the way out.
+  app.get('/api/plugins/stats', async (_req, res) => {
+    try {
+      const { pluginInventoryStats, snapshotInventoryStats } = await import('./plugins/stats.js');
+      const installed = listInstalledPlugins(db);
+      const inventoryRows = db.prepare(
+        `SELECT status, project_id, run_id, applied_at FROM applied_plugin_snapshots`,
+      ).all() as Array<{ status: 'fresh' | 'stale'; project_id: string | null; run_id: string | null; applied_at: number }>;
+      res.json({
+        plugins:   pluginInventoryStats(installed),
+        snapshots: snapshotInventoryStats(inventoryRows),
+        generatedAt: Date.now(),
+      });
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
   // Plan §3.CC1 — `od plugin canon <snapshotId>`. Returns the
   // canonical `## Active plugin` block the agent will see when
   // this snapshot is spliced into the system prompt. Powered by

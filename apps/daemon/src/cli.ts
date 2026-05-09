@@ -823,6 +823,7 @@ async function runPlugin(args) {
   switch (sub) {
     case 'list':      return runPluginList(rest);
     case 'search':    return runPluginSearch(rest);
+    case 'stats':     return runPluginStats(rest);
     case 'info':      return runPluginInfo(rest);
     case 'install':   return runPluginInstall(rest);
     case 'upgrade':   return runPluginUpgrade(rest);
@@ -1544,6 +1545,78 @@ flags as 'od plugin list'.`);
     emptyMessage: `No installed plugins matched "${query}".`,
     showRank: true,
   });
+}
+
+// Plan §3.DD1 — `od plugin stats`. Pretty-prints the
+// pluginInventoryStats + snapshotInventoryStats aggregation. The
+// daemon-side route owns the SQLite reads; the CLI is a thin
+// formatter.
+async function runPluginStats(rest) {
+  const flags = parseFlags(rest, {
+    string:  PLUGIN_STRING_FLAGS,
+    boolean: PLUGIN_BOOLEAN_FLAGS,
+  });
+  if (flags.help || flags.h) {
+    console.log(`Usage:
+  od plugin stats [--json]
+
+Prints an at-a-glance plugin + snapshot inventory:
+  - Plugin counts by sourceKind, trust, taskKind.
+  - Bundled vs. third-party split.
+  - Plugins with elevated capabilities (fs:write, subprocess,
+    bash, network, connector:*).
+  - Snapshot total, status breakdown, project / run linkage.
+  - Oldest / newest applied snapshot timestamps.`);
+    process.exit(0);
+  }
+  const base = pluginDaemonUrl(flags).replace(/\/$/, '');
+  const url = `${base}/api/plugins/stats`;
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    console.error(`GET ${url} failed: ${resp.status} ${await resp.text()}`);
+    process.exit(1);
+  }
+  const data = await resp.json();
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+    return;
+  }
+  const p = data?.plugins ?? {};
+  const s = data?.snapshots ?? {};
+  const lastInstalled = formatTimestamp(p.lastInstalledAt);
+  const lastUpdated   = formatTimestamp(p.lastUpdatedAt);
+  const oldestApplied = formatTimestamp(s.oldestAppliedAt);
+  const newestApplied = formatTimestamp(s.newestAppliedAt);
+  console.log('# Plugins');
+  console.log(`  total:            ${p.total ?? 0}`);
+  console.log(`  bundled:          ${p.bundled ?? 0}`);
+  console.log(`  third-party:      ${p.thirdParty ?? 0}`);
+  console.log(`  with elevated:    ${p.withElevatedCapabilities ?? 0}`);
+  console.log(`  by sourceKind:    ${formatCounts(p.bySourceKind)}`);
+  console.log(`  by trust:         ${formatCounts(p.byTrust)}`);
+  console.log(`  by taskKind:      ${formatCounts(p.byTaskKind)}`);
+  console.log(`  last installed:   ${lastInstalled}`);
+  console.log(`  last updated:     ${lastUpdated}`);
+  console.log('');
+  console.log('# Snapshots');
+  console.log(`  total:            ${s.total ?? 0}`);
+  console.log(`  by status:        ${formatCounts(s.byStatus)}`);
+  console.log(`  with project:     ${s.withProject ?? 0}`);
+  console.log(`  with run:         ${s.withRun ?? 0}`);
+  console.log(`  oldest applied:   ${oldestApplied}`);
+  console.log(`  newest applied:   ${newestApplied}`);
+}
+
+function formatCounts(counts) {
+  if (!counts || typeof counts !== 'object') return '(none)';
+  const entries = Object.entries(counts).sort(([a], [b]) => a.localeCompare(b));
+  if (entries.length === 0) return '(none)';
+  return entries.map(([k, v]) => `${k}=${v}`).join(', ');
+}
+
+function formatTimestamp(ts) {
+  if (typeof ts !== 'number' || !Number.isFinite(ts)) return '(none)';
+  try { return new Date(ts).toISOString(); } catch { return String(ts); }
 }
 
 async function fetchPluginList(flags) {
@@ -2385,6 +2458,7 @@ function printPluginHelp() {
   console.log(`Usage:
   od plugin list [--task-kind <kind>]     List installed plugins (filterable).
   od plugin search <query> [--tag <t>]    Search installed plugins by id/title/desc/tag.
+  od plugin stats [--json]                Inventory + snapshot health report.
   od plugin info <id>                     Print a plugin's manifest + trust state as JSON.
   od plugin install --source <path>       Install a plugin from a local folder (Phase 1).
   od plugin upgrade <id>                  Re-install a plugin from its recorded source.
