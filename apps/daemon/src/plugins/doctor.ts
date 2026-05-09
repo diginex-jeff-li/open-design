@@ -18,6 +18,8 @@ import { manifestSourceDigest, resolveContext, validateSafe, type RegistryView }
 import type { InstalledPluginRecord, PluginManifest } from '@open-design/contracts';
 import type Database from 'better-sqlite3';
 import { findAtom, isImplementedAtom, isKnownAtom } from './atoms.js';
+import { validateConnectorRefs, type ConnectorProbe } from './connector-gate.js';
+import { isParseableUntil } from './until.js';
 import { listSnapshotsForProject, markSnapshotStale } from './snapshots.js';
 
 type SqliteDb = Database.Database;
@@ -41,7 +43,10 @@ export interface DoctorReport {
 export function doctorPlugin(
   plugin: InstalledPluginRecord,
   registry: RegistryView,
-  options?: { warnOnMissingRefs?: boolean },
+  options?: {
+    warnOnMissingRefs?: boolean;
+    connectorProbe?: ConnectorProbe | undefined;
+  },
 ): DoctorReport {
   const issues: Diagnostic[] = [];
   const manifest = plugin.manifest;
@@ -83,6 +88,33 @@ export function doctorPlugin(
           field: `od.pipeline.stages.${stage.id}`,
         });
       }
+    }
+    if (stage.repeat === true && !stage.until) {
+      issues.push({
+        severity: 'error',
+        code: 'pipeline.until-missing',
+        message: `Pipeline stage '${stage.id}' sets repeat:true but no until expression.`,
+        field: `od.pipeline.stages.${stage.id}`,
+      });
+    }
+    if (stage.until && !isParseableUntil(stage.until)) {
+      issues.push({
+        severity: 'error',
+        code: 'pipeline.until-invalid',
+        message: `Pipeline stage '${stage.id}' has an unparseable until expression: '${stage.until}'.`,
+        field: `od.pipeline.stages.${stage.id}`,
+      });
+    }
+  }
+
+  if (options?.connectorProbe) {
+    for (const issue of validateConnectorRefs(manifest, options.connectorProbe)) {
+      issues.push({
+        severity: issue.code === 'unknown-connector' ? 'error' : 'warning',
+        code:     `connector.${issue.code}`,
+        message:  issue.message,
+        field:    'od.connectors',
+      });
     }
   }
 

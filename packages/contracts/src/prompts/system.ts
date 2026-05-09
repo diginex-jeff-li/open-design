@@ -60,6 +60,13 @@ export interface ComposeInput {
   // Snapshot of HTML files that the agent should treat as a starting
   // reference rather than a fixed deliverable.
   template?: ProjectTemplate | undefined;
+  // Optional `## Active plugin` / `## Plugin inputs` / `## Plugin atoms`
+  // block (PB1). Daemon callers feed in `renderPluginBlock(snapshot)`;
+  // contracts-side callers running the API fallback may still pass the
+  // block through. v1 spec §11.8 routes plugin runs through the daemon
+  // (web returns 409 when a plugin is bound), so contracts callers only
+  // see this on a daemon-bound run that uses the contracts composer.
+  pluginBlock?: string | undefined;
 }
 
 export function composeSystemPrompt({
@@ -70,6 +77,7 @@ export function composeSystemPrompt({
   designSystemTitle,
   metadata,
   template,
+  pluginBlock,
 }: ComposeInput): string {
   // Discovery + philosophy goes FIRST so its hard rules ("emit a form on
   // turn 1", "branch on brand on turn 2", "TodoWrite on turn 3", run
@@ -92,6 +100,10 @@ export function composeSystemPrompt({
     parts.push(
       `\n\n## Active skill${skillName ? ` — ${skillName}` : ''}\n\nFollow this skill's workflow exactly.${preflight}\n\n${skillBody.trim()}`,
     );
+  }
+
+  if (pluginBlock && pluginBlock.trim().length > 0) {
+    parts.push(pluginBlock);
   }
 
   const metaBlock = renderMetadataBlock(metadata, template);

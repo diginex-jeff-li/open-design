@@ -18,19 +18,26 @@ import {
   resolveContext,
   type RegistryView,
 } from '@open-design/plugin-runtime';
-import type {
-  AppliedPluginSnapshot,
-  ApplyResult,
-  InstalledPluginRecord,
-  McpServerSpec,
-  PluginAssetRef,
-  PluginConnectorBinding,
-  PluginConnectorRef,
-  PluginManifest,
-  PluginProjectMetadataPatch,
-  TrustTier,
+import {
+  renderPluginBlock,
+  type AppliedPluginSnapshot,
+  type ApplyResult,
+  type InstalledPluginRecord,
+  type McpServerSpec,
+  type PluginAssetRef,
+  type PluginConnectorBinding,
+  type PluginConnectorRef,
+  type PluginManifest,
+  type PluginProjectMetadataPatch,
+  type TrustTier,
 } from '@open-design/contracts';
 import { resolveCapabilitiesGranted, requiredCapabilities } from './trust.js';
+import {
+  deriveAutoOAuthPrompts,
+  mergeAutoOAuthPrompts,
+  resolveConnectorBindings,
+  type ConnectorProbe,
+} from './connector-gate.js';
 
 export class MissingInputError extends Error {
   readonly fields: string[];
@@ -55,6 +62,13 @@ export interface ApplyInput {
   // `od.context.designSystem.primary: true` without a concrete ref get
   // bound to this id at apply time.
   activeProjectDesignSystem?: { id: string; title?: string } | undefined;
+  // Sync probe over the connector catalog + status maps. When supplied,
+  // apply resolves `od.connectors.*` against the live catalog and
+  // auto-derives an `oauth-prompt` GenUI surface for any not-yet-connected
+  // required connector (spec §10.3.1). When omitted (legacy callers, unit
+  // tests), the connector bindings stay in `pending` status and no
+  // auto-prompt is derived.
+  connectorProbe?: ConnectorProbe | undefined;
 }
 
 export interface ApplyComputed {
@@ -92,18 +106,15 @@ export function applyPlugin(input: ApplyInput): ApplyComputed {
 
   const assets = buildAssetRefs(manifest);
   const mcpServers = manifest.od?.context?.mcp?.slice() ?? [];
-  const connectorsRequired: PluginConnectorRef[] = [
-    ...(manifest.od?.connectors?.required ?? []).map((r) => ({ ...r, required: true })),
-    ...(manifest.od?.connectors?.optional ?? []).map((r) => ({ ...r, required: false })),
-  ];
-  const connectorsResolved: PluginConnectorBinding[] = connectorsRequired.map((c) => ({
-    id: c.id,
-    tools: Array.isArray(c.tools) ? c.tools : [],
-    required: c.required,
-    status: 'pending' as const,
-  }));
+  const { resolved: connectorsResolved, required: connectorsRequired } =
+    resolveConnectorBindings(manifest, input.connectorProbe);
   const required = requiredCapabilities(manifest);
   const granted = resolveCapabilitiesGranted({ manifest, trust });
+  const declaredSurfaces = manifest.od?.genui?.surfaces ?? [];
+  const autoSurfaces = input.connectorProbe
+    ? deriveAutoOAuthPrompts(connectorsResolved)
+    : [];
+  const genuiSurfaces = mergeAutoOAuthPrompts(declaredSurfaces, autoSurfaces);
 
   const taskKind = (manifest.od?.taskKind ?? 'new-generation') as AppliedPluginSnapshot['taskKind'];
 
@@ -142,7 +153,7 @@ export function applyPlugin(input: ApplyInput): ApplyComputed {
     connectorsResolved,
     mcpServers,
     pipeline:             manifest.od?.pipeline,
-    genuiSurfaces:        manifest.od?.genui?.surfaces ?? [],
+    genuiSurfaces,
     pluginTitle:          manifest.title ?? manifest.name,
     pluginDescription:    manifest.description,
     query:                queryText || undefined,
@@ -156,7 +167,7 @@ export function applyPlugin(input: ApplyInput): ApplyComputed {
     assets,
     mcpServers,
     pipeline:            manifest.od?.pipeline,
-    genuiSurfaces:       manifest.od?.genui?.surfaces ?? [],
+    genuiSurfaces,
     projectMetadata,
     trust,
     capabilitiesGranted: granted,
@@ -241,56 +252,10 @@ function pickDesignSystemId(
   return undefined;
 }
 
-export function pluginPromptBlock(snapshot: AppliedPluginSnapshot): string {
-  // Render the ## Active plugin / ## Plugin inputs block injected into
-  // composeSystemPrompt. Plain markdown — `composeSystemPrompt` joins the
-  // string verbatim. The block is intentionally short; rich content lives
-  // in the active skill body / craft section.
-  const lines: string[] = [];
-  lines.push('\n\n## Active plugin');
-  lines.push('');
-  lines.push(
-    `The user applied plugin **${snapshot.pluginTitle ?? snapshot.pluginId}** (\`${snapshot.pluginId}@${snapshot.pluginVersion}\`).`,
-  );
-  if (snapshot.pluginDescription) {
-    lines.push('');
-    lines.push(snapshot.pluginDescription.trim());
-  }
-  if (snapshot.query) {
-    lines.push('');
-    lines.push(`The plugin's example brief is: _${snapshot.query.trim()}_`);
-  }
-
-  const inputs = snapshot.inputs ?? {};
-  const inputKeys = Object.keys(inputs).sort();
-  if (inputKeys.length > 0) {
-    lines.push('');
-    lines.push('## Plugin inputs');
-    lines.push('');
-    lines.push('Treat these as authoritative answers to questions the plugin author baked into the brief — do not re-ask the user about them.');
-    lines.push('');
-    for (const key of inputKeys) {
-      lines.push(`- **${key}**: ${formatInput(inputs[key])}`);
-    }
-  }
-
-  const atomIds = snapshot.resolvedContext?.atoms ?? [];
-  if (atomIds.length > 0) {
-    lines.push('');
-    lines.push('## Plugin atoms');
-    lines.push('');
-    lines.push('The plugin opted into these workflow atoms; prefer them over ad-hoc shortcuts:');
-    lines.push('');
-    for (const id of atomIds) lines.push(`- \`${id}\``);
-  }
-
-  return lines.join('\n');
-}
-
-function formatInput(value: string | number | boolean | undefined): string {
-  if (value === undefined || value === null) return '(empty)';
-  if (typeof value === 'string') return value.length > 0 ? value : '(empty)';
-  return String(value);
-}
+// Plugin prompt block renderer. Lives in
+// `packages/contracts/src/prompts/plugin-block.ts` so the daemon and the
+// contracts-side composer share one definition (spec §11.8 PB1).
+// Re-exported here for back-compat with daemon-internal callers.
+export const pluginPromptBlock = renderPluginBlock;
 
 export type { McpServerSpec };

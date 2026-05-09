@@ -74,6 +74,8 @@ const PLUGIN_STRING_FLAGS = new Set([
   'source',
   'inputs',
   'project',
+  'snapshot-id',
+  'capabilities',
 ]);
 const PLUGIN_BOOLEAN_FLAGS = new Set([
   'help',
@@ -81,11 +83,30 @@ const PLUGIN_BOOLEAN_FLAGS = new Set([
   'json',
 ]);
 
+const UI_STRING_FLAGS = new Set([
+  'daemon-url',
+  'run',
+  'project',
+  'value',
+  'value-json',
+  'plugin',
+  'snapshot-id',
+  'persist',
+  'kind',
+]);
+const UI_BOOLEAN_FLAGS = new Set([
+  'help',
+  'h',
+  'json',
+  'skip',
+]);
+
 const SUBCOMMAND_MAP = {
   media: runMedia,
   mcp: runMcp,
   research: runResearch,
   plugin: runPlugin,
+  ui: runUi,
 };
 
 if (argv[0] === 'mcp' && argv[1] === 'live-artifacts') {
@@ -213,8 +234,11 @@ function printRootHelp() {
   od research search --query <text> [--max-sources 5] [--daemon-url <url>]
       Run agent-callable Tavily research through the local daemon.
 
-  od plugin <list|info|install|uninstall|apply|doctor> [args]
+  od plugin <list|info|install|uninstall|apply|doctor|replay|trust> [args]
       Discover, install, and apply plugins through the local daemon.
+
+  od ui <list|show|respond|revoke|prefill> [args]
+      Read and answer GenUI surfaces (form / choice / confirmation / oauth-prompt) headlessly.
 
   "$OD_NODE_BIN" "$OD_BIN" tools ...
       Recommended agent-runtime form; avoids relying on user PATH for od or node.
@@ -737,6 +761,8 @@ async function runPlugin(args) {
     case 'uninstall': return runPluginUninstall(rest);
     case 'apply':     return runPluginApply(rest);
     case 'doctor':    return runPluginDoctor(rest);
+    case 'replay':    return runPluginReplay(rest);
+    case 'trust':     return runPluginTrust(rest);
     default:
       console.error(`unknown subcommand: od plugin ${sub}`);
       printPluginHelp();
@@ -932,6 +958,321 @@ function safeParseJson(s) {
   try { return JSON.parse(s); } catch { return null; }
 }
 
+// `od plugin replay <runId> --snapshot-id <id>` — re-emit the immutable
+// snapshot the original run was launched against, so the caller (or
+// another agent) can re-apply the same plugin against fresh state. Phase
+// 2A keeps replay headless: the CLI prints the snapshot + rerun bundle;
+// the agent restarts the run via `od plugin apply` followed by a normal
+// `od run start`. Future Phase 2C `od plugin run` will collapse this
+// into a one-shot wrapper.
+async function runPluginReplay(rest) {
+  const flags = parseFlags(rest, { string: PLUGIN_STRING_FLAGS, boolean: PLUGIN_BOOLEAN_FLAGS });
+  const runId = rest.find((a) => !a.startsWith('-')
+    && a !== flags['daemon-url']
+    && a !== flags.source
+    && a !== flags.inputs
+    && a !== flags.project
+    && a !== flags['snapshot-id']
+    && a !== flags.capabilities);
+  if (!runId) {
+    console.error('Usage: od plugin replay <runId> --snapshot-id <id>');
+    process.exit(2);
+  }
+  const snapshotId = flags['snapshot-id'];
+  if (!snapshotId) {
+    console.error('--snapshot-id is required (runs are in-memory in Phase 2A; pass the snapshot id returned by od plugin apply)');
+    process.exit(2);
+  }
+  const url = `${pluginDaemonUrl(flags).replace(/\/$/, '')}/api/runs/${encodeURIComponent(runId)}/replay`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ snapshotId }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    console.error(`POST /api/runs/${runId}/replay failed: ${resp.status} ${JSON.stringify(data)}`);
+    process.exit(1);
+  }
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+    return;
+  }
+  console.log(`[replay] ${data.rerun?.pluginId}@${data.rerun?.pluginVersion} digest=${(data.rerun?.manifestSourceDigest ?? '').slice(0, 12)}…`);
+  console.log(`[replay] inputs: ${JSON.stringify(data.rerun?.inputs ?? {})}`);
+  console.log('[replay] re-apply via: od plugin apply ' + data.rerun?.pluginId + ' --inputs ' + JSON.stringify(JSON.stringify(data.rerun?.inputs ?? {})));
+}
+
+// `od plugin trust <id> --capabilities <comma-sep>` — flip a plugin's
+// capabilities_granted set. Phase 2A wires trust capabilities (per-id
+// connector grants etc.); Phase 3 layers in the marketplace trust UI on
+// top. The CLI is the canonical write surface (invariant I4).
+async function runPluginTrust(rest) {
+  const flags = parseFlags(rest, { string: PLUGIN_STRING_FLAGS, boolean: PLUGIN_BOOLEAN_FLAGS });
+  const id = rest.find((a) => !a.startsWith('-')
+    && a !== flags['daemon-url']
+    && a !== flags.source
+    && a !== flags.inputs
+    && a !== flags.project
+    && a !== flags['snapshot-id']
+    && a !== flags.capabilities);
+  if (!id) {
+    console.error('Usage: od plugin trust <id> --capabilities connector:figma,connector:notion');
+    process.exit(2);
+  }
+  const caps = typeof flags.capabilities === 'string' && flags.capabilities.trim().length > 0
+    ? flags.capabilities.split(',').map((c) => c.trim()).filter(Boolean)
+    : [];
+  // Trust mutation goes through the existing `installed_plugins` row;
+  // Phase 3 adds the dedicated `/api/plugins/:id/trust` endpoint so this
+  // CLI handler will switch endpoints without changing the user surface.
+  // Until then, surface the action as a no-op against the v1 daemon and
+  // document the deferred behaviour.
+  process.stdout.write(JSON.stringify({
+    ok:       true,
+    pluginId: id,
+    granted:  caps,
+    note:     'Phase 2A registers the CLI surface; the /api/plugins/:id/trust mutation lands in Phase 3.',
+  }, null, 2) + '\n');
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: od ui …  (spec §10.3.4 headless GenUI surface inbox)
+// ---------------------------------------------------------------------------
+
+async function runUi(args) {
+  if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    printUiHelp();
+    process.exit(args.length === 0 ? 2 : 0);
+  }
+  const sub = args[0];
+  const rest = args.slice(1);
+  switch (sub) {
+    case 'list':    return runUiList(rest);
+    case 'show':    return runUiShow(rest);
+    case 'respond': return runUiRespond(rest);
+    case 'revoke':  return runUiRevoke(rest);
+    case 'prefill': return runUiPrefill(rest);
+    default:
+      console.error(`unknown subcommand: od ui ${sub}`);
+      printUiHelp();
+      process.exit(2);
+  }
+}
+
+function uiDaemonUrl(flags) {
+  return (flags && flags['daemon-url']) || process.env.OD_DAEMON_URL || 'http://127.0.0.1:7456';
+}
+
+async function runUiList(rest) {
+  const flags = parseFlags(rest, { string: UI_STRING_FLAGS, boolean: UI_BOOLEAN_FLAGS });
+  const base = uiDaemonUrl(flags).replace(/\/$/, '');
+  let url;
+  if (flags.run) url = `${base}/api/runs/${encodeURIComponent(flags.run)}/genui`;
+  else if (flags.project) url = `${base}/api/projects/${encodeURIComponent(flags.project)}/genui`;
+  else {
+    console.error('Usage: od ui list --run <runId> | --project <projectId>');
+    process.exit(2);
+  }
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    console.error(`GET ${url} failed: ${resp.status} ${await resp.text()}`);
+    process.exit(1);
+  }
+  const data = await resp.json();
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+    return;
+  }
+  const surfaces = Array.isArray(data?.surfaces) ? data.surfaces : [];
+  if (surfaces.length === 0) {
+    console.log('No GenUI surfaces.');
+    return;
+  }
+  for (const s of surfaces) {
+    console.log(`${s.surfaceId}  kind=${s.kind}  persist=${s.persist}  status=${s.status}  rowId=${s.id}`);
+  }
+}
+
+async function runUiShow(rest) {
+  const flags = parseFlags(rest, { string: UI_STRING_FLAGS, boolean: UI_BOOLEAN_FLAGS });
+  const positional = rest.filter((a) => !a.startsWith('-')
+    && a !== flags['daemon-url']
+    && a !== flags.run
+    && a !== flags.project
+    && a !== flags.value
+    && a !== flags['value-json']
+    && a !== flags.plugin
+    && a !== flags['snapshot-id']
+    && a !== flags.persist
+    && a !== flags.kind);
+  const runId = flags.run ?? positional[0];
+  const surfaceId = flags['snapshot-id'] ? null : positional[flags.run ? 0 : 1];
+  if (!runId || !surfaceId) {
+    console.error('Usage: od ui show --run <runId> <surfaceId>');
+    process.exit(2);
+  }
+  const url = `${uiDaemonUrl(flags).replace(/\/$/, '')}/api/runs/${encodeURIComponent(runId)}/genui/${encodeURIComponent(surfaceId)}`;
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    console.error(`GET ${url} failed: ${resp.status} ${await resp.text()}`);
+    process.exit(1);
+  }
+  const data = await resp.json();
+  process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+}
+
+async function runUiRespond(rest) {
+  const flags = parseFlags(rest, { string: UI_STRING_FLAGS, boolean: UI_BOOLEAN_FLAGS });
+  const positional = rest.filter((a) => !a.startsWith('-')
+    && a !== flags['daemon-url']
+    && a !== flags.run
+    && a !== flags.project
+    && a !== flags.value
+    && a !== flags['value-json']
+    && a !== flags.plugin
+    && a !== flags['snapshot-id']
+    && a !== flags.persist
+    && a !== flags.kind);
+  const runId = flags.run ?? positional[0];
+  const surfaceId = positional[flags.run ? 0 : 1];
+  if (!runId || !surfaceId) {
+    console.error('Usage: od ui respond --run <runId> <surfaceId> [--value <text> | --value-json <json> | --skip]');
+    process.exit(2);
+  }
+  let value = null;
+  if (flags.skip) {
+    // Skip translates to a null answer; daemon resolves the surface in
+    // `resolved` state with `respondedBy: 'auto'`. Phase 2A keeps the
+    // semantics simple; spec §10.3.4 onTimeout='skip' lands in Phase 4.
+    value = null;
+  } else if (typeof flags['value-json'] === 'string') {
+    try { value = JSON.parse(flags['value-json']); } catch (err) {
+      console.error(`--value-json must be valid JSON: ${err.message}`);
+      process.exit(2);
+    }
+  } else if (typeof flags.value === 'string') {
+    value = flags.value;
+  }
+  const url = `${uiDaemonUrl(flags).replace(/\/$/, '')}/api/runs/${encodeURIComponent(runId)}/genui/${encodeURIComponent(surfaceId)}/respond`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ value, respondedBy: 'user' }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    console.error(`POST ${url} failed: ${resp.status} ${JSON.stringify(data)}`);
+    process.exit(1);
+  }
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+  } else {
+    console.log(`[ui] ${surfaceId} resolved (rowId=${data?.surface?.id})`);
+  }
+}
+
+async function runUiRevoke(rest) {
+  const flags = parseFlags(rest, { string: UI_STRING_FLAGS, boolean: UI_BOOLEAN_FLAGS });
+  const positional = rest.filter((a) => !a.startsWith('-')
+    && a !== flags['daemon-url']
+    && a !== flags.run
+    && a !== flags.project
+    && a !== flags.value
+    && a !== flags['value-json']
+    && a !== flags.plugin
+    && a !== flags['snapshot-id']
+    && a !== flags.persist
+    && a !== flags.kind);
+  const projectId = flags.project ?? positional[0];
+  const surfaceId = positional[flags.project ? 0 : 1];
+  if (!projectId || !surfaceId) {
+    console.error('Usage: od ui revoke --project <projectId> <surfaceId>');
+    process.exit(2);
+  }
+  const url = `${uiDaemonUrl(flags).replace(/\/$/, '')}/api/projects/${encodeURIComponent(projectId)}/genui/${encodeURIComponent(surfaceId)}/revoke`;
+  const resp = await fetch(url, { method: 'POST' });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    console.error(`POST ${url} failed: ${resp.status} ${JSON.stringify(data)}`);
+    process.exit(1);
+  }
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+  } else {
+    console.log(`[ui] revoked ${data.invalidated} row(s)`);
+  }
+}
+
+async function runUiPrefill(rest) {
+  const flags = parseFlags(rest, { string: UI_STRING_FLAGS, boolean: UI_BOOLEAN_FLAGS });
+  const positional = rest.filter((a) => !a.startsWith('-')
+    && a !== flags['daemon-url']
+    && a !== flags.run
+    && a !== flags.project
+    && a !== flags.value
+    && a !== flags['value-json']
+    && a !== flags.plugin
+    && a !== flags['snapshot-id']
+    && a !== flags.persist
+    && a !== flags.kind);
+  const projectId = flags.project ?? positional[0];
+  const surfaceId = positional[flags.project ? 0 : 1];
+  const snapshotId = flags['snapshot-id'];
+  if (!projectId || !surfaceId || !snapshotId) {
+    console.error('Usage: od ui prefill --project <projectId> --snapshot-id <id> <surfaceId> [--value <text> | --value-json <json>] [--persist run|conversation|project] [--kind form|choice|confirmation|oauth-prompt]');
+    process.exit(2);
+  }
+  let value = null;
+  if (typeof flags['value-json'] === 'string') {
+    try { value = JSON.parse(flags['value-json']); } catch (err) {
+      console.error(`--value-json must be valid JSON: ${err.message}`);
+      process.exit(2);
+    }
+  } else if (typeof flags.value === 'string') {
+    value = flags.value;
+  }
+  const url = `${uiDaemonUrl(flags).replace(/\/$/, '')}/api/projects/${encodeURIComponent(projectId)}/genui/prefill`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      snapshotId,
+      surfaceId,
+      kind:    flags.kind ?? 'confirmation',
+      persist: flags.persist ?? 'project',
+      value,
+    }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    console.error(`POST ${url} failed: ${resp.status} ${JSON.stringify(data)}`);
+    process.exit(1);
+  }
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+  } else {
+    console.log(`[ui] prefilled ${surfaceId} (rowId=${data?.surface?.id})`);
+  }
+}
+
+function printUiHelp() {
+  console.log(`Usage:
+  od ui list  --run <runId>                          List GenUI surfaces for a run.
+  od ui list  --project <projectId>                  List GenUI surfaces for a project.
+  od ui show  --run <runId> <surfaceId>              Read a single surface (kind / schema / value).
+  od ui respond --run <runId> <surfaceId> [--value <txt> | --value-json <json> | --skip]
+                                                     Answer a pending surface from any process.
+  od ui revoke --project <projectId> <surfaceId>     Invalidate a project-tier cached answer.
+  od ui prefill --project <projectId> --snapshot-id <id> <surfaceId>
+                [--value <text> | --value-json <json>] [--persist run|conversation|project]
+                                                     Pre-answer a surface so the run never broadcasts it.
+
+Common options:
+  --daemon-url <url>   Open Design daemon HTTP base (default OD_DAEMON_URL or http://127.0.0.1:7456).
+  --json               Emit raw JSON (suitable for scripts) instead of human-readable output.`);
+}
+
 function printPluginHelp() {
   console.log(`Usage:
   od plugin list                          List installed plugins.
@@ -940,6 +1281,10 @@ function printPluginHelp() {
   od plugin uninstall <id>                Remove a plugin from the registry + on-disk staging.
   od plugin apply <id> [--inputs <json>]  Compute an ApplyResult (preview) for a plugin.
   od plugin doctor <id>                   Lint a plugin's manifest, atoms and resolved refs.
+  od plugin replay <runId> --snapshot-id <id>
+                                          Re-emit the immutable snapshot a run launched against.
+  od plugin trust <id> --capabilities a,b
+                                          Stage a capability grant (full mutation lands Phase 3).
 
 Common options:
   --daemon-url <url>   Open Design daemon HTTP base (default OD_DAEMON_URL or http://127.0.0.1:7456).

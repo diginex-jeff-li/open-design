@@ -21,5 +21,6 @@ export * from './sse/common';
 export * from './sse/chat';
 export * from './sse/proxy';
 export * from './prompts/system';
+export * from './prompts/plugin-block.js';
 export * from './critique';
 export * from './plugins/index.js';
