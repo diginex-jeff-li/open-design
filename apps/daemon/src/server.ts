@@ -38,15 +38,17 @@ import { listCodexPets, readCodexPetSpritesheet } from './codex-pets.js';
 import { syncCommunityPets } from './community-pets-sync.js';
 import { listDesignSystems, readDesignSystem } from './design-systems.js';
 import {
+  applyDiffReviewDecisionToCwd,
   applyPlugin,
   defaultRegistryRoots,
+  defaultBundledRoot,
   doctorPlugin,
   FIRST_PARTY_ATOMS,
   getInstalledPlugin,
   getSnapshot,
-  defaultBundledRoot,
   installFromLocalFolder,
   installPlugin,
+  isDiffReviewSurfaceId,
   listInstalledPlugins,
   listIterationsForRun,
   MissingInputError,
@@ -158,6 +160,7 @@ import {
   projectDir,
   readProjectFile,
   removeProjectDir,
+  resolveProjectDir,
   sanitizeName,
   searchProjectFiles,
   writeProjectFile,
@@ -3879,7 +3882,7 @@ export async function startServer({
     }
   });
 
-  app.post('/api/runs/:runId/genui/:surfaceId/respond', (req, res) => {
+  app.post('/api/runs/:runId/genui/:surfaceId/respond', async (req, res) => {
     try {
       const body = req.body && typeof req.body === 'object' ? req.body : {};
       const value = 'value' in body ? body.value : null;
@@ -3899,7 +3902,43 @@ export async function startServer({
         return res.status(404).json({ error: 'no pending surface for runId/surfaceId' });
       }
       const updated = respondSurfaceRow(db, { rowId: row.id, value, respondedBy });
-      res.json({ ok: true, surface: updated });
+
+      // Plan §3.R1 / spec §10.3 / §21.5 — auto-bridge for the
+      // diff-review choice surface. When the surface id matches the
+      // auto-derived prefix, we immediately persist the decision into
+      // the run's project cwd so the next pipeline stage (handoff,
+      // typically) sees `<cwd>/review/decision.json` without a second
+      // turn through the agent. Best-effort: failures don't block the
+      // 200 response — the agent or a follow-up call can retry.
+      let diffReviewBridge: { ok: boolean; error?: string } | undefined;
+      if (isDiffReviewSurfaceId(req.params.surfaceId)) {
+        try {
+          const run = design.runs.get(req.params.runId);
+          const projectId = (run as { projectId?: string | null } | undefined)?.projectId ?? null;
+          if (projectId) {
+            const project = getProject(db, projectId);
+            const metadata = project?.metadata && typeof project.metadata === 'string'
+              ? JSON.parse(project.metadata)
+              : project?.metadata ?? undefined;
+            const cwd = resolveProjectDir(PROJECTS_DIR, projectId, metadata);
+            const bridgeResult = await applyDiffReviewDecisionToCwd({
+              cwd,
+              value,
+              reviewer: respondedBy === 'agent' || respondedBy === 'auto' ? 'agent' : 'user',
+            });
+            diffReviewBridge = bridgeResult.ok ? { ok: true } : { ok: false, error: bridgeResult.error };
+          } else {
+            diffReviewBridge = { ok: false, error: 'run is not linked to a project' };
+          }
+        } catch (err) {
+          diffReviewBridge = { ok: false, error: (err as Error).message };
+          console.warn('[plugins] diff-review bridge failed:', err);
+        }
+      }
+
+      const responsePayload: Record<string, unknown> = { ok: true, surface: updated };
+      if (diffReviewBridge) responsePayload.diffReviewBridge = diffReviewBridge;
+      res.json(responsePayload);
     } catch (err) {
       res.status(500).json({ error: String(err) });
     }
