@@ -49,7 +49,9 @@ import {
   listIterationsForRun,
   MissingInputError,
   pluginPromptBlock,
+  pruneExpiredSnapshots,
   resolvePluginSnapshot,
+  startSnapshotGc,
   uninstallPlugin,
 } from './plugins/index.js';
 import {
@@ -1950,6 +1952,23 @@ export async function startServer({
     console.log('[od] Codex plugins disabled via OD_CODEX_DISABLE_PLUGINS=1');
   }
 
+  // Plan §3.A5 / spec §16 Phase 5 / PB2: periodic snapshot GC. Disabled
+  // when OD_SNAPSHOT_GC_INTERVAL_MS is 0; otherwise one-time bootstrap
+  // sweep + interval. The function returns a NOOP_HANDLE when disabled
+  // so we don't have to branch on the result.
+  const snapshotGc = startSnapshotGc({ db });
+  // One immediate sweep so a daemon that just gained the ALTER doesn't
+  // wait the full interval before reaping pre-existing expired rows.
+  try {
+    const initialSweep = pruneExpiredSnapshots(db);
+    if (initialSweep.removed > 0) {
+      console.log(`[plugins] snapshot GC startup sweep removed ${initialSweep.removed} row(s)`);
+    }
+  } catch (err) {
+    console.warn(`[plugins] snapshot GC startup sweep failed: ${(err)?.message ?? err}`);
+  }
+  void snapshotGc; // keep handle alive for the daemon's lifetime
+
   // Warm agent-capability probes (e.g. whether the installed Claude Code
   // build advertises --include-partial-messages) so the first /api/chat
   // hits a populated cache even if /api/agents hasn't been called yet.
@@ -3350,6 +3369,50 @@ export async function startServer({
       const snap = getSnapshot(db, req.params.snapshotId);
       if (!snap) return res.status(404).json({ error: 'snapshot not found' });
       res.json(snap);
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  // Plan §3.A5: list all applied snapshots; useful for `od plugin
+  // snapshots list` and the audit dashboard.
+  app.get('/api/applied-plugins', (_req, res) => {
+    try {
+      const rows = db
+        .prepare(`SELECT id FROM applied_plugin_snapshots ORDER BY applied_at DESC LIMIT 500`)
+        .all();
+      res.json({
+        snapshots: rows.map((r) => getSnapshot(db, (r).id)).filter((x) => x !== null),
+      });
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+  app.get('/api/projects/:projectId/applied-plugins', (req, res) => {
+    try {
+      const rows = db
+        .prepare(`SELECT id FROM applied_plugin_snapshots WHERE project_id = ? ORDER BY applied_at DESC`)
+        .all(req.params.projectId);
+      res.json({
+        snapshots: rows.map((r) => getSnapshot(db, (r).id)).filter((x) => x !== null),
+      });
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  // Plan §3.A5 / spec §16 Phase 5: operator escape hatch for forced
+  // snapshot pruning. The periodic worker (`startSnapshotGc`) runs the
+  // unreferenced-TTL sweep automatically; this endpoint additionally
+  // accepts `{ before: <unix-ms> }` to force-delete unreferenced rows
+  // older than the cutoff. Referenced rows (run_id IS NOT NULL) stay
+  // pinned forever per PB2 reproducibility-first.
+  app.post('/api/applied-plugins/prune', (req, res) => {
+    try {
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const before = typeof body.before === 'number' ? body.before : undefined;
+      const result = pruneExpiredSnapshots(db, before ? { before } : {});
+      res.json({ ok: true, removed: result.removed, ids: result.ids });
     } catch (err) {
       res.status(500).json({ error: String(err) });
     }

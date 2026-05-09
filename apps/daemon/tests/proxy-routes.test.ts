@@ -433,7 +433,7 @@ describe('API proxy routes', () => {
           }),
         });
         expect(res.status).toBe(409);
-        const body = await res.json();
+        const body = (await res.json()) as { error?: { code?: string } };
         expect(body?.error?.code).toBe('PLUGIN_REQUIRES_DAEMON');
       });
 
@@ -450,7 +450,7 @@ describe('API proxy routes', () => {
           }),
         });
         expect(res.status).toBe(409);
-        const body = await res.json();
+        const body = (await res.json()) as { error?: { code?: string } };
         expect(body?.error?.code).toBe('PLUGIN_REQUIRES_DAEMON');
       });
     }

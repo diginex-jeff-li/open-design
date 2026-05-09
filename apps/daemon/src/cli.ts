@@ -767,10 +767,135 @@ async function runPlugin(args) {
     case 'doctor':    return runPluginDoctor(rest);
     case 'replay':    return runPluginReplay(rest);
     case 'trust':     return runPluginTrust(rest);
+    case 'snapshots': return runPluginSnapshots(rest);
+    case 'run':       return runPluginRun(rest);
     default:
       console.error(`unknown subcommand: od plugin ${sub}`);
       printPluginHelp();
       process.exit(2);
+  }
+}
+
+// Plan §3.A5 / spec §16 Phase 5: operator escape hatch for snapshot GC.
+// Two subcommands:
+//   - `od plugin snapshots list [--project <id>]` — list snapshots
+//   - `od plugin snapshots prune [--before <ts>]` — force-delete expired
+//     (and optionally older-than-cutoff unreferenced) rows.
+async function runPluginSnapshots(args) {
+  const sub = args[0];
+  if (!sub || sub === 'help' || args.includes('--help') || args.includes('-h')) {
+    console.log(`Usage:
+  od plugin snapshots list  [--project <id>]               List applied plugin snapshots.
+  od plugin snapshots prune [--before <unix-ms>]           Delete expired (or older-than-cutoff) snapshots.`);
+    process.exit(args.length === 0 ? 2 : 0);
+  }
+  const flags = parseFlags(args.slice(1), { string: PLUGIN_STRING_FLAGS, boolean: PLUGIN_BOOLEAN_FLAGS });
+  const base = pluginDaemonUrl(flags).replace(/\/$/, '');
+  if (sub === 'list') {
+    const url = flags.project
+      ? `${base}/api/projects/${encodeURIComponent(flags.project)}/applied-plugins`
+      : `${base}/api/applied-plugins`;
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      console.error(`GET ${url} failed: ${resp.status} ${await resp.text()}`);
+      process.exit(1);
+    }
+    const data = await resp.json();
+    process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+    return;
+  }
+  if (sub === 'prune') {
+    const url = `${base}/api/applied-plugins/prune`;
+    const before = flags.before ? Number(flags.before) : undefined;
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(before ? { before } : {}),
+    });
+    if (!resp.ok) {
+      console.error(`POST ${url} failed: ${resp.status} ${await resp.text()}`);
+      process.exit(1);
+    }
+    const data = await resp.json();
+    if (flags.json) {
+      process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+      return;
+    }
+    console.log(`[snapshots] pruned ${data.removed ?? 0} snapshot(s)`);
+    return;
+  }
+  console.error(`unknown subcommand: od plugin snapshots ${sub}`);
+  process.exit(2);
+}
+
+// Plan §3.B3: `od plugin run <id>` shorthand. Today this is a thin
+// wrapper around `od plugin apply` + `POST /api/runs` so a code agent
+// can drive the apply→start→follow loop without two hops. Phase 4
+// adds full ND-JSON event streaming through `od run watch`.
+async function runPluginRun(rest) {
+  const flags = parseFlags(rest, { string: PLUGIN_STRING_FLAGS, boolean: PLUGIN_BOOLEAN_FLAGS });
+  const id = rest.find((a) => !a.startsWith('-')
+    && a !== flags['daemon-url']
+    && a !== flags.source
+    && a !== flags.inputs
+    && a !== flags.project
+    && a !== flags['snapshot-id']
+    && a !== flags.capabilities
+    && a !== flags['grant-caps']);
+  if (!id) {
+    console.error('Usage: od plugin run <id> --project <projectId> [--inputs <json>] [--grant-caps a,b]');
+    process.exit(2);
+  }
+  if (!flags.project) {
+    console.error('--project <projectId> is required (Phase 1.5 will add the auto-create wrapper)');
+    process.exit(2);
+  }
+  const inputs = flags.inputs ? safeParseJson(flags.inputs) ?? {} : {};
+  const grantCaps = typeof flags['grant-caps'] === 'string' && flags['grant-caps'].length > 0
+    ? flags['grant-caps'].split(',').map((c) => c.trim()).filter(Boolean)
+    : [];
+  const base = pluginDaemonUrl(flags).replace(/\/$/, '');
+  // 1. Apply (returns ApplyResult + manifestSourceDigest).
+  const applyResp = await fetch(`${base}/api/plugins/${encodeURIComponent(id)}/apply`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ inputs, grantCaps, projectId: flags.project }),
+  });
+  const applyData = await applyResp.json().catch(() => ({}));
+  if (!applyResp.ok) {
+    console.error(`apply failed: ${applyResp.status} ${JSON.stringify(applyData)}`);
+    process.exit(applyResp.status === 422 ? 67 : 1);
+  }
+  // 2. Start the run with pluginId so the daemon resolver pins the
+  //    snapshot to the run object.
+  const runResp = await fetch(`${base}/api/runs`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      projectId:        flags.project,
+      pluginId:         id,
+      pluginInputs:     inputs,
+      grantCaps,
+    }),
+  });
+  const runData = await runResp.json().catch(() => ({}));
+  if (!runResp.ok) {
+    if (runResp.status === 409 && runData?.error?.code === 'capabilities-required') {
+      const missing = (runData.error.data?.missing ?? []).join(',');
+      console.error(`[run] capabilities required: ${missing}`);
+      console.error(`[run] retry with --grant-caps ${missing} or run \`od plugin trust ${id} --capabilities ${missing}\``);
+      process.exit(66);
+    }
+    console.error(`run failed: ${runResp.status} ${JSON.stringify(runData)}`);
+    process.exit(1);
+  }
+  if (flags.json) {
+    process.stdout.write(JSON.stringify({ apply: applyData, run: runData }, null, 2) + '\n');
+    return;
+  }
+  console.log(`[run] started run ${runData.runId} (snapshot ${applyData?.appliedPlugin?.snapshotId ?? 'n/a'})`);
+  if (flags.follow) {
+    console.log(`[run] follow stream: GET ${base}/api/runs/${runData.runId}/events`);
   }
 }
 
