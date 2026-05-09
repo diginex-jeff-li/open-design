@@ -118,3 +118,47 @@ export function pluginEventBufferSize(): number {
 export function __resetPluginEventBufferForTests(): void {
   singleton.reset();
 }
+
+// Plan §3.KK2 — pure roll-up over a slice of events. Useful for
+// dashboards + the `od plugin events stats` CLI summary. Lives
+// next to the buffer so consumers can compute the same rollup
+// shape over either the full buffer or a filtered subset.
+
+export interface PluginEventStats {
+  total:         number;
+  byKind:        Record<string, number>;
+  byPluginId:    Record<string, number>;
+  oldestAt:      number | null;
+  newestAt:      number | null;
+  // Ids of the first / last entries so a CLI can echo the range
+  // without re-walking the slice.
+  firstId:       number | null;
+  lastId:        number | null;
+}
+
+export function summarisePluginEvents(events: ReadonlyArray<PluginEvent>): PluginEventStats {
+  const stats: PluginEventStats = {
+    total:      events.length,
+    byKind:     {},
+    byPluginId: {},
+    oldestAt:   null,
+    newestAt:   null,
+    firstId:    null,
+    lastId:     null,
+  };
+  for (const ev of events) {
+    stats.byKind[ev.kind] = (stats.byKind[ev.kind] ?? 0) + 1;
+    if (ev.pluginId) {
+      stats.byPluginId[ev.pluginId] = (stats.byPluginId[ev.pluginId] ?? 0) + 1;
+    }
+    if (typeof ev.at === 'number') {
+      stats.oldestAt = stats.oldestAt === null ? ev.at : Math.min(stats.oldestAt, ev.at);
+      stats.newestAt = stats.newestAt === null ? ev.at : Math.max(stats.newestAt, ev.at);
+    }
+    if (typeof ev.id === 'number') {
+      stats.firstId = stats.firstId === null ? ev.id : Math.min(stats.firstId, ev.id);
+      stats.lastId  = stats.lastId  === null ? ev.id : Math.max(stats.lastId,  ev.id);
+    }
+  }
+  return stats;
+}

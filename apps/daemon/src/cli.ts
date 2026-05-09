@@ -1760,30 +1760,95 @@ async function runPluginEvents(rest) {
   const sub = rest[0];
   if (!sub || sub === 'help' || rest.includes('--help') || rest.includes('-h')) {
     console.log(`Usage:
-  od plugin events tail [-f] [--since <id>] [--json] [--daemon-url <url>]
+  od plugin events tail     [-f] [--since <id>] [--kind <k>] [--plugin-id <id>] [--json]
+  od plugin events snapshot [--since <id>] [--kind <k>] [--plugin-id <id>] [--json]
+  od plugin events stats    [--json]
 
-Tails the daemon's in-memory plugin event ring buffer:
-  - 'plugin.installed'   when od plugin install / upgrade succeeds
-  - 'plugin.uninstalled' when od plugin uninstall succeeds
-  - other lifecycle events (apply / snapshot-prune) as they wire in
+Tail / snapshot / stats over the daemon's in-memory plugin event
+ring buffer (capped at 1000 entries; resets on daemon restart).
+Lifecycle vocabulary:
+  plugin.installed | plugin.upgraded | plugin.uninstalled
+  plugin.trust-changed | plugin.snapshot-pruned
+  plugin.marketplace-refreshed | plugin.applied
 
-Backlog is emitted on connect so a tail consumer doesn't miss
-events that fired just before they connected. Optional --since
-<id> trims the backlog. -f keeps the connection open + prints
-new events live.`);
+  --since <id>       Trim backlog to events strictly after id.
+  --kind <k>         Filter to a single kind.
+  --plugin-id <id>   Filter to events touching one plugin id.
+  -f / --follow      tail-only: keep the SSE stream open.
+  --json             Emit raw JSON (one event per line on tail,
+                     full report on snapshot/stats).`);
     process.exit(sub ? 0 : 2);
   }
+  const flags = parseFlags(rest.slice(1), {
+    string:  new Set([...PLUGIN_STRING_FLAGS, 'since', 'kind', 'plugin-id']),
+    boolean: new Set([...PLUGIN_BOOLEAN_FLAGS, 'f', 'follow']),
+  });
+  const base = pluginDaemonUrl(flags).replace(/\/$/, '');
+  const since = typeof flags.since === 'string' ? Number(flags.since) : 0;
+  const kindFilter = typeof flags.kind === 'string' && flags.kind.length > 0 ? flags.kind : null;
+  const pluginIdFilter = typeof flags['plugin-id'] === 'string' && flags['plugin-id'].length > 0
+    ? flags['plugin-id']
+    : null;
+  const matches = (ev) => {
+    if (!ev) return false;
+    if (kindFilter && ev.kind !== kindFilter) return false;
+    if (pluginIdFilter && ev.pluginId !== pluginIdFilter) return false;
+    return true;
+  };
+
+  if (sub === 'snapshot') {
+    const url = `${base}/api/plugins/events/snapshot${Number.isFinite(since) && since > 0 ? `?since=${since}` : ''}`;
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      console.error(`GET ${url} failed: ${resp.status} ${await resp.text()}`);
+      process.exit(1);
+    }
+    const data = await resp.json();
+    const events = (Array.isArray(data?.events) ? data.events : []).filter(matches);
+    if (flags.json) {
+      process.stdout.write(JSON.stringify({ events, count: events.length, generatedAt: data?.generatedAt }, null, 2) + '\n');
+      return;
+    }
+    if (events.length === 0) {
+      console.log('[events snapshot] no events match filter');
+      return;
+    }
+    for (const ev of events) {
+      const ts = ev.at ? new Date(ev.at).toISOString() : '?';
+      const detailKeys = ev.details ? Object.keys(ev.details).slice(0, 3).join(',') : '';
+      console.log(`#${ev.id}  ${ts}  ${ev.kind}  pluginId=${ev.pluginId || '-'}` +
+        (detailKeys ? `  details=${detailKeys}` : ''));
+    }
+    return;
+  }
+
+  if (sub === 'stats') {
+    const resp = await fetch(`${base}/api/plugins/events/stats`);
+    if (!resp.ok) {
+      console.error(`GET /api/plugins/events/stats failed: ${resp.status} ${await resp.text()}`);
+      process.exit(1);
+    }
+    const data = await resp.json();
+    if (flags.json) {
+      process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+      return;
+    }
+    const s = data?.stats ?? {};
+    console.log('# Plugin events');
+    console.log(`  total:           ${s.total ?? 0}`);
+    console.log(`  by kind:         ${formatCounts(s.byKind)}`);
+    console.log(`  by pluginId:     ${formatCounts(s.byPluginId)}`);
+    console.log(`  oldest at:       ${formatTimestamp(s.oldestAt)}`);
+    console.log(`  newest at:       ${formatTimestamp(s.newestAt)}`);
+    console.log(`  id range:        ${s.firstId ?? '(none)'} \u2192 ${s.lastId ?? '(none)'}`);
+    return;
+  }
+
   if (sub !== 'tail') {
     console.error(`unknown subcommand: od plugin events ${sub}`);
     process.exit(2);
   }
-  const flags = parseFlags(rest.slice(1), {
-    string:  new Set([...PLUGIN_STRING_FLAGS, 'since']),
-    boolean: new Set([...PLUGIN_BOOLEAN_FLAGS, 'f', 'follow']),
-  });
   const follow = flags.f === true || flags.follow === true;
-  const since = typeof flags.since === 'string' ? Number(flags.since) : 0;
-  const base = pluginDaemonUrl(flags).replace(/\/$/, '');
   const url = `${base}/api/plugins/events${Number.isFinite(since) && since > 0 ? `?since=${since}` : ''}`;
   const resp = await fetch(url, { headers: { accept: 'text/event-stream' } });
   if (!resp.ok || !resp.body) {
@@ -1794,6 +1859,7 @@ new events live.`);
   const decoder = new TextDecoder();
   let buffer = '';
   const renderEvent = (channel, data) => {
+    if (!matches(data)) return;
     if (flags.json) {
       process.stdout.write(JSON.stringify({ channel, ...data }) + '\n');
       return;
@@ -2918,8 +2984,9 @@ function printPluginHelp() {
                                           (no LLM in the loop).
   od plugin verify <pluginId>             CI meta-command: doctor + simulate + canon --check
                                           driven by an .od-verify.json config in the plugin folder.
-  od plugin events tail [-f] [--since N]  Tail the in-memory plugin event ring buffer
-                                          (install / uninstall / upgrade / etc.).
+  od plugin events tail [-f] [--kind k]   Tail the in-memory plugin event ring buffer.
+  od plugin events snapshot               One-shot read (filterable, no SSE).
+  od plugin events stats                  Roll-up: counts by kind / pluginId / time range.
   od plugin diff <a> <b> [--json]         Compare two installed plugins by id.
   od plugin replay <runId> --snapshot-id <id>
                                           Re-emit the immutable snapshot a run launched against.

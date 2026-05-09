@@ -2115,6 +2115,26 @@ export async function startServer({
     }
   });
 
+  // Plan §3.KK1 — non-SSE one-shot read of the event ring buffer.
+  // Useful for dashboards + the `od plugin events snapshot` CLI
+  // command that doesn't need a live tail.
+  app.get('/api/plugins/events/snapshot', async (req, res) => {
+    const since = Number(typeof req.query.since === 'string' ? req.query.since : 0);
+    const { pluginEventSnapshot } = await import('./plugins/events.js');
+    const events = pluginEventSnapshot(Number.isFinite(since) && since > 0 ? since : 0);
+    res.json({ events, count: events.length, generatedAt: Date.now() });
+  });
+
+  // Plan §3.KK2 — rolled-up stats over the buffer. Counts by kind +
+  // pluginId + oldest/newest timestamps + id range.
+  app.get('/api/plugins/events/stats', async (_req, res) => {
+    const { pluginEventSnapshot, summarisePluginEvents } = await import('./plugins/events.js');
+    res.json({
+      stats: summarisePluginEvents(pluginEventSnapshot()),
+      generatedAt: Date.now(),
+    });
+  });
+
   // Plan §3.II1 — `od plugin events tail`. SSE-backed live event
   // stream of plugin lifecycle events from the in-memory ring
   // buffer. On open: emits the buffered backlog as 'event: backlog'
