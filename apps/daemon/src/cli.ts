@@ -117,6 +117,7 @@ const SUBCOMMAND_MAP = {
   run: runRun,
   files: runFiles,
   conversation: runConversation,
+  daemon: runDaemon,
 };
 
 if (argv[0] === 'mcp' && argv[1] === 'live-artifacts') {
@@ -2111,4 +2112,137 @@ Common options:
       console.error(`unknown subcommand: od conversation ${sub}`);
       process.exit(2);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: od daemon  (Phase 1.5 lifecycle, plan §6 / §3.F2)
+//
+// `od daemon start [--headless] [--serve-web] [--port <n>] [--host <addr>]`
+//   - --headless: implies --no-open, never tries to launch a browser.
+//                 The default `od` (no subcommand) keeps its
+//                 desktop-friendly behaviour for back-compat.
+//   - --serve-web: same as --headless but allows the Next.js bundle to
+//                  serve over the existing port. v1 doesn't bundle a
+//                  separate web port; the flag is reserved so downstream
+//                  packaged callers can branch on it.
+//
+// `od daemon status [--json] [--daemon-url <url>]` calls /api/daemon/status.
+// `od daemon stop   [--daemon-url <url>]`         calls POST /api/daemon/shutdown.
+// ---------------------------------------------------------------------------
+
+const DAEMON_STRING_FLAGS = new Set([
+  'daemon-url', 'port', 'host', 'namespace',
+]);
+const DAEMON_BOOLEAN_FLAGS = new Set([
+  'help', 'h', 'json', 'headless', 'serve-web', 'no-open',
+]);
+
+async function runDaemon(args) {
+  if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    console.log(`Usage:
+  od daemon start [--headless] [--serve-web] [--port <n>] [--host <addr>] [--no-open]
+                  [--namespace <ns>]
+                                          Start the daemon (Phase 1.5 headless mode).
+  od daemon status [--json] [--daemon-url <url>]
+                                          Print the daemon's runtime snapshot.
+  od daemon stop   [--daemon-url <url>]   Send a graceful shutdown signal.
+
+Common options:
+  --daemon-url <url>   Open Design daemon HTTP base.
+  --headless           No browser auto-open; aliased --no-open.
+  --serve-web          Serve the web UI over the existing port (no electron).
+  --json               Emit raw JSON.`);
+    process.exit(args.length === 0 ? 2 : 0);
+  }
+  const sub = args[0];
+  const rest = args.slice(1);
+  const flags = parseFlags(rest, { string: DAEMON_STRING_FLAGS, boolean: DAEMON_BOOLEAN_FLAGS });
+  switch (sub) {
+    case 'start':   return runDaemonStart(flags);
+    case 'status':  return runDaemonStatus(flags);
+    case 'stop':    return runDaemonStop(flags);
+    default:
+      console.error(`unknown subcommand: od daemon ${sub}`);
+      process.exit(2);
+  }
+}
+
+async function runDaemonStart(flags) {
+  // The headless flag implies --no-open AND auto-applies any other
+  // headless-only env defaults. Because the existing default-mode boot
+  // already handles port / host / no-open, we forward into it by
+  // mutating process.argv before re-entering the boot path.
+  // Simpler path: re-implement the boot inline, mirroring the default.
+  const port = Number(flags.port ?? process.env.OD_PORT ?? 7456);
+  const host = String(flags.host ?? process.env.OD_BIND_HOST ?? '127.0.0.1');
+  const headless = Boolean(flags.headless || flags['no-open'] || flags['serve-web']);
+  if (flags.namespace) process.env.OD_NAMESPACE = String(flags.namespace);
+  process.env.OD_BIND_HOST = host;
+  process.env.OD_PORT = String(port);
+  const { startServer: startHeadless } = await import('./server.js');
+  const started = await startHeadless({ port, host, returnServer: true });
+  const url = started.url;
+  const server = started.server;
+  const shutdown = started.shutdown;
+  const closeServer = () => new Promise((resolve) => {
+    let resolved = false;
+    const resolveOnce = () => { if (!resolved) { resolved = true; resolve(); } };
+    const idleTimer = setTimeout(() => server.closeIdleConnections?.(), 1_000);
+    const hardTimer = setTimeout(() => { server.closeAllConnections?.(); resolveOnce(); }, 5_000);
+    idleTimer.unref?.();
+    hardTimer.unref?.();
+    server.close(() => resolveOnce());
+  });
+  let shuttingDown = false;
+  const stop = () => {
+    if (shuttingDown) process.exit(0);
+    shuttingDown = true;
+    void Promise.allSettled([
+      Promise.resolve().then(() => shutdown?.()),
+      closeServer(),
+    ]).finally(() => process.exit(0));
+  };
+  process.on('SIGINT', stop);
+  process.on('SIGTERM', stop);
+  console.log(`[od] listening on ${url} (${headless ? 'headless' : 'desktop'})`);
+  if (!headless) {
+    const opener = process.platform === 'darwin' ? 'open'
+      : process.platform === 'win32' ? 'start'
+      : 'xdg-open';
+    import('node:child_process').then(({ spawn }) => {
+      spawn(opener, [url], { detached: true, stdio: 'ignore' }).unref();
+    });
+  }
+}
+
+async function runDaemonStatus(flags) {
+  const base = (flags['daemon-url'] || process.env.OD_DAEMON_URL || 'http://127.0.0.1:7456').replace(/\/$/, '');
+  let resp;
+  try {
+    resp = await fetch(`${base}/api/daemon/status`);
+  } catch (err) {
+    return exitWithStructuredError({
+      code:    'daemon-not-running',
+      message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+    });
+  }
+  if (!resp.ok) return structuredHttpFailure(resp);
+  const data = await resp.json();
+  if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+  console.log(`[daemon] ${data.bindHost}:${data.port} v${data.version} pid=${data.pid} plugins=${data.installedPlugins} namespace=${data.namespace ?? '-'}`);
+}
+
+async function runDaemonStop(flags) {
+  const base = (flags['daemon-url'] || process.env.OD_DAEMON_URL || 'http://127.0.0.1:7456').replace(/\/$/, '');
+  let resp;
+  try {
+    resp = await fetch(`${base}/api/daemon/shutdown`, { method: 'POST' });
+  } catch (err) {
+    return exitWithStructuredError({
+      code:    'daemon-not-running',
+      message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+    });
+  }
+  if (!resp.ok) return structuredHttpFailure(resp);
+  console.log(`[daemon] shutdown scheduled`);
 }

@@ -1998,6 +1998,49 @@ export async function startServer({
     res.json({ version });
   });
 
+  // Plan §3.F2 / spec §11.7 — daemon lifecycle status. Returns the
+  // host / port the server is bound to plus the data dir + namespace,
+  // so `od daemon status --json` can render a one-shot health snapshot
+  // without depending on /api/version's content shape.
+  app.get('/api/daemon/status', async (_req, res) => {
+    const versionInfo = await readCurrentAppVersionInfo();
+    res.json({
+      ok: true,
+      version: versionInfo.version,
+      bindHost: process.env.OD_BIND_HOST ?? '127.0.0.1',
+      port: Number(process.env.OD_PORT ?? 7456),
+      dataDir: RUNTIME_DATA_DIR,
+      mediaConfigDir: process.env.OD_MEDIA_CONFIG_DIR ?? null,
+      namespace: process.env.OD_NAMESPACE ?? null,
+      pid: process.pid,
+      shuttingDown: daemonShuttingDown,
+      installedPlugins: (() => {
+        try {
+          return (db.prepare('SELECT COUNT(*) AS n FROM installed_plugins').get())?.n ?? 0;
+        } catch {
+          return 0;
+        }
+      })(),
+    });
+  });
+
+  // Plan §3.F2 — graceful shutdown. The CLI calls this from
+  // `od daemon stop`; the actual close path goes through the same
+  // SIGTERM-equivalent flow as a parent-process kill (the boot wrapper
+  // in cli.ts wires the process listeners). 202 Accepted because the
+  // shutdown completes after the response flush.
+  app.post('/api/daemon/shutdown', requireLocalDaemonRequest, (_req, res) => {
+    res.status(202).json({ ok: true, scheduled: true });
+    setImmediate(() => {
+      try {
+        process.emit('SIGTERM');
+      } catch {
+        // Best-effort; if the listener was removed (or the process is
+        // mid-shutdown already) the kernel SIGTERM falls back below.
+      }
+    });
+  });
+
   registerConnectorRoutes(app, { sendApiError, authorizeToolRequest, projectsRoot: PROJECTS_DIR, requireLocalDaemonRequest });
 
   app.get('/api/connectors/composio/config', (_req, res) => {
