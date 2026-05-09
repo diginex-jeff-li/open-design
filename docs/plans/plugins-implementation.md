@@ -118,9 +118,14 @@ This section tracks **what exists in the repo today**. Update in the same PR tha
 | `plugins/_official/atoms/<atom>/{SKILL.md,open-design.json}` | shipped | Phase 4 (§23.3.2 entry slice) — bundled atom SKILL.md fragments |
 | `packages/agui-adapter/` | shipped | Phase 4 — pure-TS AG-UI canonical event encoder |
 | `packages/contracts/src/prompts/atom-block.ts` | shipped | Phase 4 — `renderActiveStageBlock(stageId, bodies)` pure renderer |
-| `tools/pack/docker-compose.yml` | shipped | Phase 5 entry slice — hosted-mode reference manifest |
-| `tools/pack/helm/open-design/{Chart,values,README}.yaml` | shipped | Phase 5 entry slice — Helm chart parameter surface (templates pending) |
+| `tools/pack/docker-compose.yml` | shipped | Phase 5 — hosted-mode reference manifest |
+| `tools/pack/helm/open-design/templates/**` | shipped | Phase 5 — Deployment / Service / Secret / ConfigMap / PVCs / Ingress / NOTES |
+| `tools/pack/helm/open-design/values-{aws,gcp,azure,aliyun,tencent,huawei,self}.yaml` | shipped | Phase 5 — per-cloud overrides (volume + ingress diffs) |
 | `deploy/Dockerfile` plugins/_official COPY | shipped | Phase 5 — bundled atoms travel with the image |
+| `.github/workflows/docker-image.yml` | shipped | Phase 5 — multi-arch ghcr.io push (:edge / :version) |
+| `apps/daemon/src/storage/project-storage.ts` | shipped | Phase 5 — ProjectStorage interface + Local impl + S3 stub |
+| `apps/daemon/src/storage/daemon-db.ts` | shipped | Phase 5 — DaemonDb config resolver (sqlite default, postgres stub) |
+| `GET /api/plugins/:id/asset/*` | shipped | Phase 4 — sandboxed plugin asset endpoint (§9.2 CSP) |
 | `apps/daemon/src/plugins/trust.ts` | shipped | Phase 1 + Phase 2A — `validateCapabilityList`, `grantCapabilities`, `revokeCapabilities` |
 | `apps/daemon/src/plugins/doctor.ts` | shipped | Phase 1 (manifest + atom + ref checks) → expanded Phase 3 |
 | `apps/daemon/src/genui/registry.ts` | shipped | Phase 2A — F8 cross-conversation cache + lifecycle |
@@ -465,10 +470,10 @@ Deliverables
 
 - [x] `linux/amd64` + `linux/arm64` Dockerfile per spec §15.1 (`deploy/Dockerfile`; entry-slice base is `node:24-alpine` with `NODE_IMAGE` build-arg override → `node:24-bookworm-slim`; bundled atom plugins ship inside the image).
 - [x] CI pushes `:edge` on main, `:<version>` on tag — `.github/workflows/docker-image.yml`.
-- [x] `tools/pack/docker-compose.yml`, `tools/pack/helm/` — chart templates (Deployment / Service / Secret / ConfigMap / PVCs / Ingress / NOTES) shipped.
+- [x] `tools/pack/docker-compose.yml`, `tools/pack/helm/` — chart templates (Deployment / Service / Secret / ConfigMap / PVCs / Ingress / NOTES) shipped, per-cloud `values-<cloud>.yaml` overrides shipped (AWS / GCP / Azure / Aliyun / Tencent / Huawei / self-hosted).
 - [x] Bound-API-token guard: daemon refuses to bind `OD_BIND_HOST=<non-loopback>` without `OD_API_TOKEN`; bearer middleware on `/api/*` skipped only on loopback peers and on the open probes (`/api/health`, `/api/version`, `/api/daemon/status`).
-- [ ] `ProjectStorage` adapter for S3-compatible blob stores.
-- [ ] `DaemonDb` adapter for Postgres.
+- [x] `ProjectStorage` adapter substrate — `LocalProjectStorage` (v1 default) wired + tested; `S3ProjectStorage` interface-locked stub; `resolveProjectStorage` reads `OD_PROJECT_STORAGE`. AWS SDK wiring stays as the next Phase 5 PR.
+- [x] `DaemonDb` adapter substrate — `resolveDaemonDbConfig` reads `OD_DAEMON_DB` + `OD_PG_*`; the SQLite path is the only reachable backend until the postgres adapter lands.
 - [x] **Snapshot retention enforcement job (PB2).** Landed early (§3.A5): periodic worker (`OD_SNAPSHOT_GC_INTERVAL_MS`, default 6 h) deletes expired rows. Referenced-row TTL via `OD_SNAPSHOT_RETENTION_DAYS` stays opt-in. CLI escape hatch: `od plugin snapshots prune --before <ts>`.
 
 Validation
@@ -540,10 +545,10 @@ Plus repo-wide gates
 
 | Field | Value |
 | --- | --- |
-| Current phase | Phase 2A + 1 + 1.5 + 2B + 2C entry slice + 3 (full) + 4 (full minus the composeSystemPrompt rewiring + the web custom-component sandbox loader) + 5 (full minus pluggable storage / Postgres / S3) |
-| Next planned PR | composeSystemPrompt() reads atom prompt fragments from `loadAtomBodies()` instead of inline `system.ts` constants (spec §23.3.2 patch 2 — substrate landed); web GenUISurfaceRenderer custom-component sandbox loader (consumes `od.genui.surfaces[].component`); Phase 5 `ProjectStorage` S3-compatible + `DaemonDb` Postgres adapters; per-cloud Helm `values-<cloud>.yaml` overrides; Phase 6 / 7 / 8 native scenarios |
+| Current phase | Phase 2A + 1 + 1.5 + 2B + 2C entry slice + 3 (full) + 4 (full minus the live composeSystemPrompt rewiring) + 5 (full minus the AWS SDK + postgres adapter wiring) |
+| Next planned PR | (a) Wire composeSystemPrompt's pipeline branch through loadAtomBodies + renderActiveStageBlock so OD_BUNDLED_ATOM_PROMPTS=1 swaps the inline DISCOVERY_AND_PHILOSOPHY constants for SKILL.md fragments; (b) AWS SDK wiring inside S3ProjectStorage; (c) postgres adapter wiring inside the DaemonDb resolver; (d) `OD_SNAPSHOT_RETENTION_DAYS` referenced-row TTL enforcement; (e) Phase 6 / 7 / 8 native scenarios (figma-extract / token-map / code-import / build-test). |
 | Open spec push-backs | none — PB1 / PB2 resolved (see §7) |
-| Last sync against `docs/plugins-spec.md` | 2026-05-09 (Phase 5 bound-API-token guard + Helm chart templates + ghcr.io CI workflow + surface.component manifest field landing) |
+| Last sync against `docs/plugins-spec.md` | 2026-05-09 (Phase 5 per-cloud Helm overrides + composeSystemPrompt activeStageBlocks + plugin asset route + ProjectStorage / DaemonDb adapter substrate landing) |
 
 Update this table on every plugin-system PR merge. When the value of "Current phase" advances, also flip the matching deliverables in §6 and the modules in §3.
 
