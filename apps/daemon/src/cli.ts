@@ -822,11 +822,128 @@ async function runPlugin(args) {
     case 'trust':     return runPluginTrust(rest);
     case 'snapshots': return runPluginSnapshots(rest);
     case 'run':       return runPluginRun(rest);
+    case 'scaffold': return runPluginScaffold(rest);
+    case 'export':   return runPluginExport(rest);
     default:
       console.error(`unknown subcommand: od plugin ${sub}`);
       printPluginHelp();
       process.exit(2);
   }
+}
+
+// Phase 4 / spec §14.1 — `od plugin scaffold` interactive starter.
+//
+// Side-effect: writes a SKILL.md + open-design.json starter under
+// `<targetDir>/<id>/`. Default targetDir is process.cwd() so a code
+// agent can drop the scaffold into the current repo root.
+async function runPluginScaffold(rest) {
+  const flags = parseFlags(rest, {
+    string: new Set([
+      'id', 'title', 'description', 'task-kind', 'mode', 'scenario', 'out',
+    ]),
+    boolean: new Set(['help', 'h', 'json', 'with-claude-plugin']),
+  });
+  if (rest.length === 0 || flags.help || flags.h) {
+    console.log(`Usage:
+  od plugin scaffold --id <id> [--title "<title>"] [--description "<text>"]
+                     [--task-kind new-generation|code-migration|figma-migration|tune-collab]
+                     [--mode <mode>] [--scenario <scenario>]
+                     [--out <dir>] [--with-claude-plugin]
+
+Writes <out|cwd>/<id>/{SKILL.md,open-design.json,README.md}.`);
+    process.exit(rest.length === 0 ? 2 : 0);
+  }
+  const id = typeof flags.id === 'string' && flags.id.length > 0
+    ? flags.id
+    : rest.find((a) => !a.startsWith('-'));
+  if (!id) {
+    console.error('Usage: od plugin scaffold --id <id>');
+    process.exit(2);
+  }
+  const targetDir = typeof flags.out === 'string' && flags.out.length > 0
+    ? flags.out
+    : process.cwd();
+  const { scaffoldPlugin, ScaffoldError } = await import('./plugins/scaffold.js');
+  try {
+    const input = {
+      targetDir,
+      id,
+      ...(flags.title       ? { title: flags.title }             : {}),
+      ...(flags.description ? { description: flags.description } : {}),
+      ...(flags['task-kind']
+        ? { taskKind: flags['task-kind'] }
+        : {}),
+      ...(flags.mode        ? { mode: flags.mode }               : {}),
+      ...(flags.scenario    ? { scenario: flags.scenario }       : {}),
+      withClaudePlugin: Boolean(flags['with-claude-plugin']),
+    };
+    const result = await scaffoldPlugin(input);
+    if (flags.json) return process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+    console.log(`[scaffold] ${result.folder}`);
+    for (const file of result.files) console.log(`  ${file}`);
+    console.log(`\nNext: od plugin install ${result.folder}`);
+  } catch (err) {
+    if (err instanceof ScaffoldError) {
+      console.error(`[scaffold] ${err.message}`);
+      process.exit(2);
+    }
+    throw err;
+  }
+}
+
+// Phase 4 / spec §14 — `od plugin export <projectId> --as <target>`.
+//
+// Produces a publish-ready folder from the AppliedPluginSnapshot
+// behind a given project (or directly from a snapshot id). Three
+// targets: 'od', 'claude-plugin', 'agent-skill'.
+async function runPluginExport(rest) {
+  const flags = parseFlags(rest, {
+    string: new Set(['daemon-url', 'as', 'out', 'snapshot-id', 'project']),
+    boolean: new Set(['help', 'h', 'json']),
+  });
+  if (rest.length === 0 || flags.help || flags.h) {
+    console.log(`Usage:
+  od plugin export <projectId> --as od|claude-plugin|agent-skill --out <dir>
+  od plugin export --snapshot-id <id> --as od|claude-plugin|agent-skill --out <dir>
+
+The export resolves through the daemon HTTP \`POST /api/applied-plugins/export\`
+endpoint so the running daemon's installed_plugins / applied_plugin_snapshots
+view is the single source of truth.`);
+    process.exit(rest.length === 0 ? 2 : 0);
+  }
+  const positional = rest.find((a) => !a.startsWith('-'));
+  const projectId = flags.project ?? positional ?? null;
+  const snapshotId = typeof flags['snapshot-id'] === 'string' ? flags['snapshot-id'] : null;
+  if (!projectId && !snapshotId) {
+    console.error('Usage: od plugin export <projectId> --as <target> --out <dir>');
+    process.exit(2);
+  }
+  const target = String(flags.as ?? 'od');
+  if (target !== 'od' && target !== 'claude-plugin' && target !== 'agent-skill') {
+    console.error(`--as must be one of: od, claude-plugin, agent-skill (got "${target}")`);
+    process.exit(2);
+  }
+  const out = typeof flags.out === 'string' && flags.out.length > 0
+    ? flags.out
+    : process.cwd();
+  const base = pluginDaemonUrl(flags).replace(/\/$/, '');
+  const resp = await fetch(`${base}/api/applied-plugins/export`, {
+    method:  'POST',
+    headers: { 'content-type': 'application/json' },
+    body:    JSON.stringify({
+      ...(snapshotId ? { snapshotId } : { projectId }),
+      target,
+      outDir: out,
+    }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    console.error(`POST /api/applied-plugins/export failed: ${resp.status} ${JSON.stringify(data)}`);
+    process.exit(1);
+  }
+  if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+  console.log(`[export] ${data.folder} (snapshot ${data.snapshotId})`);
+  for (const f of data.files ?? []) console.log(`  ${f}`);
 }
 
 // Plan §3.B4 / spec §6: `od marketplace …` minimum verbs. Add / list /

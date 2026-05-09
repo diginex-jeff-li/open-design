@@ -3564,6 +3564,47 @@ export async function startServer({
     }
   });
 
+  // Phase 4 / spec §14 — exporter route. Materialises a publish-ready
+  // folder from the snapshot behind a given project (or an explicit
+  // snapshot id). The daemon writes through `outDir` on the host
+  // filesystem, so the CLI is the canonical caller; the route stays
+  // local-loopback-only.
+  app.post('/api/applied-plugins/export', requireLocalDaemonRequest, async (req, res) => {
+    try {
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const target = body.target === 'od' || body.target === 'claude-plugin' || body.target === 'agent-skill'
+        ? body.target
+        : null;
+      if (!target) {
+        return res.status(400).json({ error: 'target must be one of: od, claude-plugin, agent-skill' });
+      }
+      const outDir = typeof body.outDir === 'string' && body.outDir.length > 0
+        ? body.outDir
+        : null;
+      if (!outDir) {
+        return res.status(400).json({ error: 'outDir is required' });
+      }
+      const { exportPlugin, ExportError } = await import('./plugins/export.js');
+      try {
+        const result = await exportPlugin({
+          db,
+          target,
+          outDir,
+          ...(typeof body.snapshotId === 'string' ? { snapshotId: body.snapshotId } : {}),
+          ...(typeof body.projectId  === 'string' ? { projectId:  body.projectId  } : {}),
+        });
+        res.json({ ok: true, ...result });
+      } catch (err) {
+        if (err instanceof ExportError) {
+          return res.status(404).json({ error: err.message });
+        }
+        throw err;
+      }
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
   // Plan §3.A5 / spec §16 Phase 5: operator escape hatch for forced
   // snapshot pruning. The periodic worker (`startSnapshotGc`) runs the
   // unreferenced-TTL sweep automatically; this endpoint additionally
