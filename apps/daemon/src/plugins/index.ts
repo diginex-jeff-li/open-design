@@ -8,6 +8,7 @@ export * from './doctor.js';
 export * from './installer.js';
 export * from './persistence.js';
 export * from './pipeline.js';
+export * from './pipeline-runner.js';
 export * from './registry.js';
 export * from './gc.js';
 export * from './resolve-snapshot.js';
