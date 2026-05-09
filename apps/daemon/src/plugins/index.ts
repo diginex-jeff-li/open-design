@@ -21,6 +21,12 @@ export {
   type SearchInstalledPluginsResult,
   type SearchInstalledPluginsResultEntry,
 } from './search.js';
+export {
+  diffPlugins,
+  type DiffPluginsInput,
+  type PluginDiffReport,
+  type PluginDiffEntry,
+} from './diff.js';
 export * from './atoms/build-test.js';
 export * from './atoms/code-import.js';
 export * from './atoms/design-extract.js';

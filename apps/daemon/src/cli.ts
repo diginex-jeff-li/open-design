@@ -828,6 +828,7 @@ async function runPlugin(args) {
     case 'upgrade':   return runPluginUpgrade(rest);
     case 'uninstall': return runPluginUninstall(rest);
     case 'apply':     return runPluginApply(rest);
+    case 'diff':      return runPluginDiff(rest);
     case 'doctor':    return runPluginDoctor(rest);
     case 'replay':    return runPluginReplay(rest);
     case 'trust':     return runPluginTrust(rest);
@@ -1602,6 +1603,64 @@ async function runPluginInstall(rest) {
 // Plan §3.Z2 — `od plugin upgrade <id>`. Re-installs the plugin
 // from its recorded source. Streams the same SSE event shape as
 // install, so 'progress' / 'success' / 'error' arrive verbatim.
+// Plan §3.AA1 — `od plugin diff <a> <b>`. Compares two installed
+// plugins (by id) and prints a structured report. Useful for
+// debugging replay invariance + reviewing version bumps.
+async function runPluginDiff(rest) {
+  const flags = parseFlags(rest, { string: PLUGIN_STRING_FLAGS, boolean: PLUGIN_BOOLEAN_FLAGS });
+  const positional = rest.filter((a) => !a.startsWith('-'));
+  if (flags.help || flags.h || positional.length < 2) {
+    console.log(`Usage:
+  od plugin diff <id-a> <id-b> [--json]
+
+Compares two installed plugins (or two installs of the same id at
+different versions) and prints every changed field. Output groups
+into 'added' / 'removed' / 'changed' with one line per field.`);
+    process.exit(positional.length < 2 ? 2 : 0);
+  }
+  const [idA, idB] = positional;
+  const base = pluginDaemonUrl(flags).replace(/\/$/, '');
+  const [respA, respB] = await Promise.all([
+    fetch(`${base}/api/plugins/${encodeURIComponent(idA)}`),
+    fetch(`${base}/api/plugins/${encodeURIComponent(idB)}`),
+  ]);
+  if (!respA.ok) {
+    console.error(`GET /api/plugins/${idA} failed: ${respA.status}`);
+    process.exit(1);
+  }
+  if (!respB.ok) {
+    console.error(`GET /api/plugins/${idB} failed: ${respB.status}`);
+    process.exit(1);
+  }
+  const a = await respA.json();
+  const b = await respB.json();
+  const { diffPlugins } = await import('./plugins/diff.js');
+  const report = diffPlugins({ a, b });
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+    return;
+  }
+  if (report.entries.length === 0) {
+    console.log(`[diff] ${idA} and ${idB} are equivalent on every recorded field.`);
+    return;
+  }
+  console.log(`[diff] ${idA} \u2194 ${idB} — ${report.added} added, ${report.removed} removed, ${report.changed} changed`);
+  for (const e of report.entries) {
+    const tag = e.kind === 'added'   ? '+'
+              : e.kind === 'removed' ? '-'
+              : '~';
+    if (e.summary) {
+      console.log(`  ${tag} ${e.field}  (${e.summary})`);
+    } else if (e.kind === 'changed') {
+      console.log(`  ${tag} ${e.field}: ${e.before ?? ''} \u2192 ${e.after ?? ''}`);
+    } else if (e.kind === 'added') {
+      console.log(`  ${tag} ${e.field}: ${e.after ?? ''}`);
+    } else {
+      console.log(`  ${tag} ${e.field}: ${e.before ?? ''}`);
+    }
+  }
+}
+
 async function runPluginUpgrade(rest) {
   const flags = parseFlags(rest, { string: PLUGIN_STRING_FLAGS, boolean: PLUGIN_BOOLEAN_FLAGS });
   const id = rest.find((a) => !a.startsWith('-') && a !== flags['daemon-url'] && a !== flags.source);
@@ -2218,6 +2277,7 @@ function printPluginHelp() {
   od plugin uninstall <id>                Remove a plugin from the registry + on-disk staging.
   od plugin apply <id> [--inputs <json>]  Compute an ApplyResult (preview) for a plugin.
   od plugin doctor <id>                   Lint a plugin's manifest, atoms and resolved refs.
+  od plugin diff <a> <b> [--json]         Compare two installed plugins by id.
   od plugin replay <runId> --snapshot-id <id>
                                           Re-emit the immutable snapshot a run launched against.
   od plugin trust <id> --capabilities a,b
