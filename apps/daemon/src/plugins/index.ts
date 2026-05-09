@@ -3,6 +3,12 @@
 // and accidentally bypasses the snapshot writer (spec §8.2.1).
 export * from './atoms.js';
 export * from './apply.js';
+export {
+  validatePluginFolder,
+  flattenValidationDiagnostics,
+  type ValidatePluginFolderInput,
+  type ValidatePluginFolderResult,
+} from './validate.js';
 export * from './atoms/build-test.js';
 export * from './atoms/code-import.js';
 export * from './atoms/design-extract.js';

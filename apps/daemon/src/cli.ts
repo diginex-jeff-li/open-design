@@ -832,6 +832,7 @@ async function runPlugin(args) {
     case 'snapshots': return runPluginSnapshots(rest);
     case 'run':       return runPluginRun(rest);
     case 'scaffold': return runPluginScaffold(rest);
+    case 'validate': return runPluginValidate(rest);
     case 'export':   return runPluginExport(rest);
     case 'publish':  return runPluginPublish(rest);
     default:
@@ -899,6 +900,96 @@ Writes <out|cwd>/<id>/{SKILL.md,open-design.json,README.md}.`);
     }
     throw err;
   }
+}
+
+// Phase 4 / spec §11.5 / plan §3.W1 — `od plugin validate <folder>`.
+//
+// Pre-install lint pass against an author's working dir. Optionally
+// fetches the daemon's registry view so skill / DS / atom refs in
+// the manifest can be checked too; falls back to an empty registry
+// when --no-daemon is set or the daemon is unreachable.
+async function runPluginValidate(rest) {
+  const flags = parseFlags(rest, {
+    string:  new Set(['daemon-url']),
+    boolean: new Set(['help', 'h', 'json', 'no-daemon']),
+  });
+  if (flags.help || flags.h || rest.length === 0 || rest[0]?.startsWith('-')) {
+    console.log(`Usage:
+  od plugin validate <folder> [--json] [--no-daemon] [--daemon-url <url>]
+
+Runs the plugin doctor against an unfinished plugin folder before
+install. Validates manifest shape, atom ids, until expressions, and
+context refs against the live daemon registry (skip with --no-daemon).
+
+Exit codes:
+  0  doctor.ok = true
+  4  doctor.ok = false (errors present)
+  2  CLI usage error / folder unreadable`);
+    process.exit(rest.length === 0 ? 2 : 0);
+  }
+  const folder = rest[0];
+
+  // Try to load the daemon's registry view; the validator works
+  // offline too — emits warnings instead of errors for refs we
+  // can't resolve.
+  let registry;
+  if (!flags['no-daemon']) {
+    const base = libraryDaemonUrl(flags).replace(/\/$/, '');
+    try {
+      const [skillsResp, dsResp, atomsResp] = await Promise.all([
+        fetch(`${base}/api/skills`).catch(() => null),
+        fetch(`${base}/api/design-systems`).catch(() => null),
+        fetch(`${base}/api/atoms`).catch(() => null),
+      ]);
+      const skills = (skillsResp?.ok ? (await skillsResp.json())?.skills : []) ?? [];
+      const designSystems = (dsResp?.ok ? (await dsResp.json())?.designSystems : []) ?? [];
+      const atoms = (atomsResp?.ok ? (await atomsResp.json())?.atoms : []) ?? [];
+      registry = {
+        skills:        skills.map((s) => ({ id: s.id, title: s.name ?? s.title, description: s.description })),
+        designSystems: designSystems.map((d) => ({ id: d.id, title: d.title })),
+        craft:         [],
+        atoms:         atoms.map((a) => ({ id: a.id, label: a.label })),
+      };
+    } catch {
+      registry = undefined;
+    }
+  }
+
+  let result;
+  try {
+    const { validatePluginFolder, flattenValidationDiagnostics } = await import('./plugins/validate.js');
+    result = await validatePluginFolder({ folder, ...(registry ? { registry } : {}) });
+    if (flags.json) {
+      const flat = flattenValidationDiagnostics(result);
+      process.stdout.write(JSON.stringify({
+        ok:      result.ok,
+        folder:  result.folder,
+        ...(result.doctor ? { freshDigest: result.doctor.freshDigest, pluginId: result.doctor.pluginId } : {}),
+        diagnostics: flat,
+      }, null, 2) + '\n');
+    } else {
+      console.log(`[validate] folder: ${result.folder}`);
+      if (result.doctor) {
+        console.log(`[validate] pluginId: ${result.doctor.pluginId}`);
+        console.log(`[validate] freshDigest: ${result.doctor.freshDigest.slice(0, 12)}\u2026`);
+      }
+      const diagnostics = (await import('./plugins/validate.js')).flattenValidationDiagnostics(result);
+      const errors = diagnostics.filter((d) => d.severity === 'error');
+      const warnings = diagnostics.filter((d) => d.severity === 'warning');
+      const infos = diagnostics.filter((d) => d.severity === 'info');
+      for (const d of errors)   console.error(`  [error]   ${d.code}: ${d.message}`);
+      for (const d of warnings) console.warn (`  [warning] ${d.code}: ${d.message}`);
+      for (const d of infos)    console.log  (`  [info]    ${d.code}: ${d.message}`);
+      if (errors.length === 0 && warnings.length === 0 && infos.length === 0) {
+        console.log('[validate] no issues');
+      }
+      console.log(`[validate] ok=${result.ok}`);
+    }
+  } catch (err) {
+    console.error(`[validate] failed: ${err?.message ?? err}`);
+    process.exit(2);
+  }
+  process.exit(result.ok ? 0 : 4);
 }
 
 // Phase 4 / spec §14 — `od plugin export <projectId> --as <target>`.
@@ -1893,6 +1984,8 @@ function printPluginHelp() {
                                           Re-emit the immutable snapshot a run launched against.
   od plugin trust <id> --capabilities a,b
                                           Stage a capability grant (full mutation lands Phase 3).
+  od plugin validate <folder> [--json]    Lint a plugin folder before installing
+                                          (manifest parse + atom + ref checks).
 
 Common options:
   --daemon-url <url>   Open Design daemon HTTP base (default OD_DAEMON_URL or http://127.0.0.1:7456).
