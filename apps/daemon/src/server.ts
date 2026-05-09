@@ -3764,6 +3764,32 @@ export async function startServer({
     }
   });
 
+  // Plan §3.CC1 — `od plugin canon <snapshotId>`. Returns the
+  // canonical `## Active plugin` block the agent will see when
+  // this snapshot is spliced into the system prompt. Powered by
+  // the same renderPluginBlock() composeSystemPrompt() uses, so
+  // the CLI output is byte-equal to what the agent reads.
+  //
+  // Two response modes:
+  //   - default            : { snapshotId, pluginId, block }
+  //   - Accept: text/plain : raw block body for shell pipes
+  app.get('/api/applied-plugins/:snapshotId/canon', (req, res) => {
+    try {
+      const snap = getSnapshot(db, req.params.snapshotId);
+      if (!snap) return res.status(404).json({ error: 'snapshot not found' });
+      const block = pluginPromptBlock(snap);
+      const accepts = String(req.headers['accept'] ?? '').toLowerCase();
+      if (accepts.includes('text/plain')) {
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.send(block);
+        return;
+      }
+      res.json({ snapshotId: snap.snapshotId, pluginId: snap.pluginId, block });
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
   // Plan §3.B4 / spec §6: marketplace registry minimum verbs.
   // Phase 3 layers in `od plugin install <name>` resolution + the trust
   // UI on top; this route set is the storage half.

@@ -828,6 +828,7 @@ async function runPlugin(args) {
     case 'upgrade':   return runPluginUpgrade(rest);
     case 'uninstall': return runPluginUninstall(rest);
     case 'apply':     return runPluginApply(rest);
+    case 'canon':     return runPluginCanon(rest);
     case 'diff':      return runPluginDiff(rest);
     case 'doctor':    return runPluginDoctor(rest);
     case 'replay':    return runPluginReplay(rest);
@@ -1675,6 +1676,47 @@ async function runPluginInstall(rest) {
 // Plan §3.Z2 — `od plugin upgrade <id>`. Re-installs the plugin
 // from its recorded source. Streams the same SSE event shape as
 // install, so 'progress' / 'success' / 'error' arrive verbatim.
+// Plan §3.CC1 — `od plugin canon <snapshotId>`. Prints the
+// canonical `## Active plugin` block a snapshot will splice into
+// the system prompt. Useful for understanding what the agent
+// reads + locking byte-equality regression tests against the
+// daemon's renderPluginBlock() output.
+async function runPluginCanon(rest) {
+  const flags = parseFlags(rest, { string: PLUGIN_STRING_FLAGS, boolean: PLUGIN_BOOLEAN_FLAGS });
+  const positional = rest.filter((a) => !a.startsWith('-'));
+  const id = positional[0];
+  if (flags.help || flags.h || !id) {
+    console.log(`Usage:
+  od plugin canon <snapshotId> [--json]
+
+Prints the canonical '## Active plugin' / '## Plugin inputs' /
+'## Plugin atoms' block this snapshot would splice into the
+system prompt. Default output is plain text; --json wraps the
+block in { snapshotId, pluginId, block }.`);
+    process.exit(id ? 0 : 2);
+  }
+  const base = pluginDaemonUrl(flags).replace(/\/$/, '');
+  const url = `${base}/api/applied-plugins/${encodeURIComponent(id)}/canon`;
+  const headers = { accept: flags.json ? 'application/json' : 'text/plain' };
+  const resp = await fetch(url, { headers });
+  if (resp.status === 404) {
+    console.error(`snapshot ${id} not found`);
+    process.exit(72);
+  }
+  if (!resp.ok) {
+    console.error(`GET ${url} failed: ${resp.status} ${await resp.text()}`);
+    process.exit(1);
+  }
+  if (flags.json) {
+    const data = await resp.json();
+    process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+    return;
+  }
+  const body = await resp.text();
+  process.stdout.write(body);
+  if (!body.endsWith('\n')) process.stdout.write('\n');
+}
+
 // Plan §3.AA1 — `od plugin diff <a> <b>`. Compares two installed
 // plugins (by id) and prints a structured report. Useful for
 // debugging replay invariance + reviewing version bumps.
@@ -2349,6 +2391,7 @@ function printPluginHelp() {
   od plugin uninstall <id>                Remove a plugin from the registry + on-disk staging.
   od plugin apply <id> [--inputs <json>]  Compute an ApplyResult (preview) for a plugin.
   od plugin doctor <id>                   Lint a plugin's manifest, atoms and resolved refs.
+  od plugin canon <snapshotId>            Print the canonical system-prompt block for a snapshot.
   od plugin diff <a> <b> [--json]         Compare two installed plugins by id.
   od plugin replay <runId> --snapshot-id <id>
                                           Re-emit the immutable snapshot a run launched against.
