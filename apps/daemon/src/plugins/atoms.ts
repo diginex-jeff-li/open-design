@@ -27,14 +27,17 @@ export const FIRST_PARTY_ATOMS: ReadonlyArray<AtomCatalogEntry> = [
   { id: 'live-artifact',           label: 'Live artifact',           description: 'Create/refresh live artifacts.',            status: 'implemented', taskKinds: ['new-generation', 'tune-collab'] },
   { id: 'connector',               label: 'Connector',               description: 'Composio connector tool calls.',            status: 'implemented', taskKinds: ['new-generation', 'tune-collab'] },
   { id: 'critique-theater',        label: 'Critique theater',        description: '5-dim panel critique; devloop signal.',     status: 'implemented', taskKinds: ['new-generation', 'code-migration', 'figma-migration', 'tune-collab'] },
-  { id: 'code-import',             label: 'Code import',             description: 'Clone / read existing repo.',               status: 'planned',     taskKinds: ['code-migration'] },
-  { id: 'design-extract',          label: 'Design extract',          description: 'Extract design tokens from source.',        status: 'planned',     taskKinds: ['code-migration', 'figma-migration'] },
-  { id: 'figma-extract',           label: 'Figma extract',           description: 'Extract Figma node tree + tokens.',         status: 'planned',     taskKinds: ['figma-migration'] },
-  { id: 'token-map',               label: 'Token map',               description: 'Map tokens onto active design system.',     status: 'planned',     taskKinds: ['code-migration', 'figma-migration'] },
-  { id: 'rewrite-plan',            label: 'Rewrite plan',            description: 'Long-running multi-file rewrite plan.',     status: 'planned',     taskKinds: ['code-migration', 'tune-collab'] },
-  { id: 'patch-edit',              label: 'Patch edit',              description: 'Small-step file patches.',                  status: 'planned',     taskKinds: ['code-migration', 'tune-collab'] },
-  { id: 'diff-review',             label: 'Diff review',             description: 'Render rewrite as diff for review.',        status: 'planned',     taskKinds: ['code-migration', 'tune-collab'] },
-  { id: 'handoff',                 label: 'Handoff',                 description: 'Push artifact to downstream surfaces.',     status: 'planned',     taskKinds: ['tune-collab'] },
+  // Phase 6/7/8 atoms — promoted from 'planned' to 'implemented'
+  // by the §3.N1-N4 / §3.O2-O5 / §3.P1-P2 / §3.Q2 / §3.S1 slices.
+  { id: 'code-import',             label: 'Code import',             description: 'Walk an existing repo into <cwd>/code/index.json.',       status: 'implemented', taskKinds: ['code-migration'] },
+  { id: 'design-extract',          label: 'Design extract',          description: 'Extract design tokens into <cwd>/code/tokens.json.',      status: 'implemented', taskKinds: ['code-migration', 'figma-migration'] },
+  { id: 'figma-extract',           label: 'Figma extract',           description: 'Pull Figma file tree + assets via REST.',                 status: 'implemented', taskKinds: ['figma-migration'] },
+  { id: 'token-map',               label: 'Token map',               description: 'Crosswalk source token bag onto active design system.',   status: 'implemented', taskKinds: ['code-migration', 'figma-migration'] },
+  { id: 'rewrite-plan',            label: 'Rewrite plan',            description: 'Heuristic ownership classifier + per-leaf step list.',    status: 'implemented', taskKinds: ['code-migration', 'tune-collab'] },
+  { id: 'patch-edit',              label: 'Patch edit',              description: 'Atomic unified-diff applier with shell-tier safety gate.', status: 'implemented', taskKinds: ['code-migration', 'tune-collab'] },
+  { id: 'build-test',              label: 'Build / test',            description: 'Shell-out to typecheck + tests; emits build/tests.passing signals.', status: 'implemented', taskKinds: ['code-migration'] },
+  { id: 'diff-review',             label: 'Diff review',             description: 'Render rewrite as review/{diff.patch,summary.md,decision.json}.', status: 'implemented', taskKinds: ['code-migration', 'tune-collab'] },
+  { id: 'handoff',                 label: 'Handoff',                 description: 'Update ArtifactManifest provenance + handoffKind ladder.', status: 'implemented', taskKinds: ['code-migration', 'tune-collab'] },
 ];
 
 const ATOMS_BY_ID = new Map<string, AtomCatalogEntry>(FIRST_PARTY_ATOMS.map((a) => [a.id, a]));

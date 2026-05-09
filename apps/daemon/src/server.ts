@@ -3605,6 +3605,32 @@ export async function startServer({
     res.json({ atoms: FIRST_PARTY_ATOMS.map((a) => ({ ...a, taskKinds: a.taskKinds.slice() })) });
   });
 
+  // Plan §3.AA2 — `od atoms info <id>`. Returns the catalog row +
+  // the bundled SKILL.md body (when one exists at
+  // plugins/_official/atoms/<id>/SKILL.md) so the caller can render
+  // a single page describing what the atom does + the prompt
+  // fragment that drives it.
+  app.get('/api/atoms/:id', async (req, res) => {
+    const id = req.params.id;
+    const atom = FIRST_PARTY_ATOMS.find((a) => a.id === id);
+    if (!atom) return res.status(404).json({ error: { code: 'atom-not-found', message: `Unknown atom "${id}"` } });
+    const body: Record<string, unknown> = {
+      ...atom,
+      taskKinds: atom.taskKinds.slice(),
+    };
+    try {
+      const { loadAtomBodies } = await import('./plugins/atom-bodies.js');
+      const bodies = await loadAtomBodies(db, [id]);
+      if (bodies[0] && typeof bodies[0].body === 'string') {
+        body.skillBody = bodies[0].body;
+      }
+    } catch (err) {
+      // Best-effort; atom info still useful without the body.
+      console.warn(`[atoms] failed to load SKILL.md body for ${id}:`, err);
+    }
+    res.json(body);
+  });
+
   // Plan §3.L3 / spec §10.3.5 / §9.2 — plugin asset endpoint.
   //
   // Serves a static file from inside an installed plugin's fsPath,

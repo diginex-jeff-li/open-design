@@ -2926,6 +2926,7 @@ async function runAtoms(args) {
     console.log(`Usage:
   od atoms list             List first-party atoms (implemented + planned).
   od atoms show <id>        Print one atom's metadata.
+  od atoms info <id>        Print metadata + the bundled SKILL.md body.
 
 Common options:
   --daemon-url <url>   Open Design daemon HTTP base.
@@ -2963,6 +2964,34 @@ Common options:
         process.exit(65);
       }
       process.stdout.write(JSON.stringify(atom, null, 2) + '\n');
+      return;
+    }
+    case 'info': {
+      const id = rest.find((a) => !a.startsWith('-'));
+      if (!id) {
+        console.error('Usage: od atoms info <id>');
+        process.exit(2);
+      }
+      const resp = await fetch(`${base}/api/atoms/${encodeURIComponent(id)}`);
+      if (resp.status === 404) {
+        console.error(`atom ${id} not found`);
+        process.exit(65);
+      }
+      if (!resp.ok) return structuredHttpFailure(resp);
+      const atom = await resp.json();
+      if (flags.json) return process.stdout.write(JSON.stringify(atom, null, 2) + '\n');
+      console.log(`# ${atom.label} (${atom.id})`);
+      console.log(`status:    ${atom.status}`);
+      console.log(`taskKinds: ${(atom.taskKinds ?? []).join(', ')}`);
+      console.log(`summary:   ${atom.description}`);
+      if (typeof atom.skillBody === 'string' && atom.skillBody.length > 0) {
+        console.log('');
+        console.log('--- SKILL.md ---');
+        console.log(atom.skillBody.trimEnd());
+      } else {
+        console.log('');
+        console.log('(no bundled SKILL.md body found for this atom)');
+      }
       return;
     }
     default:
