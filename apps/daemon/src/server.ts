@@ -3514,7 +3514,7 @@ export async function startServer({
     writeEvent('progress', { kind: 'progress', phase: 'resolving', message: `Upgrading ${id} from ${source}` });
 
     try {
-      for await (const ev of installPlugin(db, { source })) {
+      for await (const ev of installPlugin(db, { source, eventKind: 'upgraded' })) {
         writeEvent(ev.kind, ev);
         if (ev.kind === 'success' || ev.kind === 'error') break;
       }
@@ -3660,6 +3660,19 @@ export async function startServer({
         ? revokeCapabilities({ db, pluginId: req.params.id, capabilities: accepted })
         : grantCapabilities({ db, pluginId: req.params.id, capabilities: accepted });
       const updated = getInstalledPlugin(db, req.params.id);
+      // Plan §3.JJ1 — emit a 'plugin.trust-changed' event so the
+      // ops live-tail surfaces capability mutations for security
+      // audit. Best-effort.
+      try {
+        const { recordPluginEvent } = await import('./plugins/events.js');
+        recordPluginEvent({
+          kind:     'plugin.trust-changed',
+          pluginId: req.params.id,
+          details:  { action, capabilities: accepted, total: next.length },
+        });
+      } catch {
+        // ignore — event recording never blocks the trust mutation.
+      }
       res.status(action === 'grant' ? 201 : 200).json({
         ok: true,
         id: req.params.id,
@@ -3944,6 +3957,16 @@ export async function startServer({
           error: { code: 'marketplace-refresh-failed', message: result.message, data: { errors: result.errors ?? [] } },
         });
       }
+      // Plan §3.JJ1 — emit a 'plugin.marketplace-refreshed' event
+      // so ops can audit catalog refreshes via the live tail.
+      try {
+        const { recordPluginEvent } = await import('./plugins/events.js');
+        recordPluginEvent({
+          kind:     'plugin.marketplace-refreshed',
+          pluginId: '',
+          details:  { marketplaceId: req.params.id },
+        });
+      } catch { /* best-effort */ }
       res.json(result.row);
     } catch (err) {
       res.status(500).json({ error: String(err) });
@@ -4053,11 +4076,24 @@ export async function startServer({
   // accepts `{ before: <unix-ms> }` to force-delete unreferenced rows
   // older than the cutoff. Referenced rows (run_id IS NOT NULL) stay
   // pinned forever per PB2 reproducibility-first.
-  app.post('/api/applied-plugins/prune', (req, res) => {
+  app.post('/api/applied-plugins/prune', async (req, res) => {
     try {
       const body = req.body && typeof req.body === 'object' ? req.body : {};
       const before = typeof body.before === 'number' ? body.before : undefined;
       const result = pruneExpiredSnapshots(db, before ? { before } : {});
+      // Plan §3.JJ1 — emit a 'plugin.snapshot-pruned' event when
+      // anything was actually removed, so ops can track GC churn
+      // via the live tail.
+      if (result.removed > 0) {
+        try {
+          const { recordPluginEvent } = await import('./plugins/events.js');
+          recordPluginEvent({
+            kind:     'plugin.snapshot-pruned',
+            pluginId: '',
+            details:  { removed: result.removed, ...(before ? { before } : {}) },
+          });
+        } catch { /* best-effort */ }
+      }
       res.json({ ok: true, removed: result.removed, ids: result.ids });
     } catch (err) {
       res.status(500).json({ error: String(err) });

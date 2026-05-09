@@ -66,6 +66,11 @@ export interface InstallOptions {
   // Pluggable network fetcher for tests. Production injects globalThis.fetch.
   // The contract: returns a ReadableStream of the gzipped tar bytes.
   fetcher?: ArchiveFetcher;
+  // Plan §3.JJ1 — emit 'plugin.installed' (default) or
+  // 'plugin.upgraded' from the producer hook. The upgrade route
+  // sets this to 'upgraded' so consumers can distinguish the two
+  // operations in the live event stream.
+  eventKind?: 'installed' | 'upgraded';
 }
 
 export type ArchiveFetcher = (url: string) => Promise<{
@@ -377,11 +382,13 @@ export async function* installFromLocalFolder(
   yield { kind: 'progress', phase: 'persisting', message: 'Writing installed_plugins row' };
   upsertInstalledPlugin(db, parsed.record);
 
-  // Plan §3.II1 — emit a 'plugin.installed' event so ops dashboards
-  // + `od plugin events tail` see the install land in the in-memory
-  // ring buffer. Best-effort; recordPluginEvent never throws.
+  // Plan §3.II1 / §3.JJ1 — emit 'plugin.installed' OR
+  // 'plugin.upgraded' (per opts.eventKind) so ops dashboards +
+  // `od plugin events tail` see the operation land in the in-
+  // memory ring buffer. Best-effort; recordPluginEvent never
+  // throws.
   recordPluginEvent({
-    kind:     'plugin.installed',
+    kind:     opts.eventKind === 'upgraded' ? 'plugin.upgraded' : 'plugin.installed',
     pluginId: parsed.record.id,
     details:  {
       version:    parsed.record.version,
