@@ -5786,14 +5786,17 @@ export async function startServer({
     // non-plain adapters and we'd emit the panel for a run the orchestrator
     // skips. Gating the threading itself keeps composer + orchestrator in
     // exact lockstep regardless of which side enforces eligibility.
-    // Plan §3.M2 / spec §23.4 — when OD_BUNDLED_ATOM_PROMPTS=1 is set
-    // AND the run carries a snapshot with a pipeline, render each
-    // stage's atoms[] into `## Active stage` blocks via the contracts
-    // helper. Default behaviour (flag unset OR no snapshot) is
-    // byte-equal to today's prompt.
+    // Plan §3.M2 / §3.V1 / spec §23.4 — render each stage's atoms[]
+    // into `## Active stage` blocks via the contracts helper when
+    // the run carries a snapshot with a pipeline. Default is now ON
+    // (flipped in §3.V1 once the bundled SKILL.md fragments covered
+    // every Phase 6/7/8 atom); set OD_BUNDLED_ATOM_PROMPTS=0 to opt
+    // out (the runs that need pre-§3.V1 byte-equal prompts: snapshot
+    // replay against an older daemon, regression-bisects).
     let activeStageBlocks;
+    const bundledAtomPromptsEnabled = process.env.OD_BUNDLED_ATOM_PROMPTS !== '0';
     if (
-      process.env.OD_BUNDLED_ATOM_PROMPTS === '1'
+      bundledAtomPromptsEnabled
       && typeof appliedPluginSnapshotId === 'string'
       && appliedPluginSnapshotId.length > 0
     ) {
@@ -6133,9 +6136,9 @@ export async function startServer({
         designSystemId,
         streamFormat: def?.streamFormat ?? 'plain',
         connectedExternalMcp,
-        // Plan §3.M2 — forward the run's snapshot id so the prompt
-        // composer can splice in `## Active stage` blocks when
-        // OD_BUNDLED_ATOM_PROMPTS=1 is set.
+        // Plan §3.M2 / §3.V1 — forward the run's snapshot id so the
+        // prompt composer can splice in `## Active stage` blocks.
+        // Default ON; set OD_BUNDLED_ATOM_PROMPTS=0 to opt out.
         appliedPluginSnapshotId: run?.appliedPluginSnapshotId ?? null,
       });
 
