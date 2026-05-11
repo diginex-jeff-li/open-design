@@ -1156,6 +1156,7 @@ export function ProjectView({
 
       const parser = createArtifactParser();
       let liveHtml = '';
+      let streamedText = '';
 
       const updateAssistant = (updater: (prev: ChatMessage) => ChatMessage) => {
         setMessages((curr) =>
@@ -1265,12 +1266,15 @@ export function ProjectView({
       abortRef.current = controller;
       cancelRef.current = cancelController;
       const handlers = {
-        onDelta: textBuffer.appendContent,
+        onDelta: (delta: string) => {
+          streamedText += delta;
+          textBuffer.appendContent(delta);
+        },
         onAgentEvent: (ev: AgentEvent) => {
           if (ev.kind === 'text') textBuffer.appendTextEvent(ev.text);
           else pushEvent(ev);
         },
-        onDone: () => {
+        onDone: (fullText = '') => {
           textBuffer.flush();
           textBuffer.cancel();
           cancelSendTextBuffer();
@@ -1278,6 +1282,37 @@ export function ProjectView({
             if (ev.type === 'artifact:end') {
               setArtifact((prev) => (prev ? { ...prev, html: ev.fullContent } : null));
             }
+          }
+          const emptyApiResponse =
+            config.mode === 'api' &&
+            !fullText.trim() &&
+            !streamedText.trim() &&
+            !liveHtml.trim();
+          if (emptyApiResponse) {
+            const diagnostic = t('assistant.emptyResponseMessage');
+            updateMessageById(
+              assistantId,
+              (prev) => ({
+                ...prev,
+                endedAt: Date.now(),
+                events: [
+                  ...(prev.events ?? []),
+                  { kind: 'status', label: 'empty_response', detail: config.model },
+                  { kind: 'text', text: diagnostic },
+                ],
+              }),
+              true,
+              { telemetryFinalized: true },
+            );
+            if (commentAttachments.length > 0) {
+              void patchAttachedStatuses(commentAttachments, 'failed');
+            }
+            setStreaming(false);
+            abortRef.current = null;
+            cancelRef.current = null;
+            void refreshProjectFiles();
+            onProjectsRefresh();
+            return;
           }
           updateAssistant((prev) => ({
             ...prev,

@@ -1275,6 +1275,8 @@ export interface Dict {
   'assistant.role': string;
   'assistant.workingLabel': string;
   'assistant.doneLabel': string;
+  'assistant.emptyResponseLabel': string;
+  'assistant.emptyResponseMessage': string;
   'assistant.unfinishedLabel': string;
   'assistant.unfinishedSummary': string;
   'assistant.unfinishedMore': string;
