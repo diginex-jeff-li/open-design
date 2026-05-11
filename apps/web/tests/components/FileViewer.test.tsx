@@ -20,6 +20,7 @@ vi.mock('../../src/state/projects', async () => {
 
 import {
   FileViewer,
+  LiveArtifactViewer,
   LiveArtifactRefreshHistoryPanel,
   SvgViewer,
   applyInspectOverridesToSource,
@@ -28,7 +29,7 @@ import {
   updateInspectOverride,
 } from '../../src/components/FileViewer';
 import type { InspectOverrideMap } from '../../src/components/FileViewer';
-import type { LiveArtifact, ProjectFile } from '../../src/types';
+import type { LiveArtifact, LiveArtifactWorkspaceEntry, ProjectFile } from '../../src/types';
 
 afterEach(() => {
   cleanup();
@@ -727,6 +728,73 @@ describe('FileViewer SVG artifacts', () => {
   });
 });
 
+describe('FileViewer comment picker and tweaks mode', () => {
+  function htmlPreviewFile(): ProjectFile {
+    return baseFile({
+      name: 'preview.html',
+      path: 'preview.html',
+      mime: 'text/html',
+      kind: 'html',
+      artifactManifest: {
+        version: 1,
+        kind: 'html',
+        title: 'Preview',
+        entry: 'preview.html',
+        renderer: 'html',
+        exports: ['html'],
+      },
+    });
+  }
+
+  it('turns off tweaks when manual edit is enabled so picker actions disappear', () => {
+    render(
+      <FileViewer
+        projectId="project-1"
+        file={htmlPreviewFile()}
+        liveHtml='<html><body><main data-od-id="hero">Hero</main></body></html>'
+      />,
+    );
+
+    const tweaksToggle = screen.getByTestId('board-mode-toggle');
+    const manualEditToggle = screen.getByTestId('manual-edit-mode-toggle');
+
+    fireEvent.click(tweaksToggle);
+    expect(tweaksToggle.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('comment-mode-toggle')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Pods' })).toBeTruthy();
+
+    fireEvent.click(manualEditToggle);
+
+    expect(manualEditToggle.getAttribute('aria-pressed')).toBe('true');
+    expect(tweaksToggle.getAttribute('aria-pressed')).toBe('false');
+    expect(screen.queryByTestId('comment-mode-toggle')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Pods' })).toBeNull();
+  });
+
+  it('turns off manual edit when tweaks are enabled from edit mode', () => {
+    render(
+      <FileViewer
+        projectId="project-1"
+        file={htmlPreviewFile()}
+        liveHtml='<html><body><main data-od-id="hero">Hero</main></body></html>'
+      />,
+    );
+
+    const tweaksToggle = screen.getByTestId('board-mode-toggle');
+    const manualEditToggle = screen.getByTestId('manual-edit-mode-toggle');
+
+    fireEvent.click(manualEditToggle);
+    expect(manualEditToggle.getAttribute('aria-pressed')).toBe('true');
+
+    fireEvent.click(tweaksToggle);
+
+    expect(tweaksToggle.getAttribute('aria-pressed')).toBe('true');
+    expect(manualEditToggle.getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByTestId('comment-mode-toggle')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Pods' })).toBeTruthy();
+  });
+});
+
 describe('applyInspectOverridesToSource', () => {
   const base = `<!doctype html><html><head><title>X</title></head><body><main data-od-id="hero">Hi</main></body></html>`;
   const css = `[data-od-id="hero"] { color: #ff0000 !important }`;
@@ -1254,6 +1322,315 @@ function baseLiveArtifact(overrides: Partial<LiveArtifact> = {}): LiveArtifact {
   };
   return { ...artifact, ...overrides, document: overrides.document ?? artifact.document };
 }
+
+function baseLiveArtifactWorkspaceEntry(
+  overrides: Partial<LiveArtifactWorkspaceEntry> = {},
+): LiveArtifactWorkspaceEntry {
+  const entry: LiveArtifactWorkspaceEntry = {
+    kind: 'live-artifact',
+    tabId: 'live:la_1',
+    artifactId: 'la_1',
+    projectId: 'proj_1',
+    title: 'Launch Metrics',
+    slug: 'launch-metrics',
+    status: 'active',
+    refreshStatus: 'idle',
+    pinned: false,
+    preview: { type: 'html', entry: 'index.html' },
+    hasDocument: true,
+    updatedAt: '2026-04-29T12:00:00.000Z',
+  };
+  return { ...entry, ...overrides };
+}
+
+describe('LiveArtifactViewer', () => {
+  it('enters and exits in-tab presentation from the present menu', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+      if (url === '/api/live-artifacts/la_1?projectId=proj_1') {
+        return new Response(JSON.stringify({ artifact: baseLiveArtifact() }), { status: 200 });
+      }
+      if (url === '/api/live-artifacts/la_1/refreshes?projectId=proj_1') {
+        return new Response(JSON.stringify({ refreshes: [] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({}), { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { container } = render(
+      <LiveArtifactViewer
+        projectId="proj_1"
+        liveArtifact={baseLiveArtifactWorkspaceEntry()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /present/i })).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /present/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /in this tab/i }));
+
+    await waitFor(() => {
+      expect(container.querySelector('.live-artifact-viewer.is-tab-present')).toBeTruthy();
+    });
+    expect(screen.getByRole('button', { name: /exit fullscreen/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /exit fullscreen/i }));
+    await waitFor(() => {
+      expect(container.querySelector('.live-artifact-viewer.is-tab-present')).toBeNull();
+    });
+  });
+
+  it('keeps in-tab presentation off when fullscreen request fails', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+      if (url === '/api/live-artifacts/la_1?projectId=proj_1') {
+        return new Response(JSON.stringify({ artifact: baseLiveArtifact() }), { status: 200 });
+      }
+      if (url === '/api/live-artifacts/la_1/refreshes?projectId=proj_1') {
+        return new Response(JSON.stringify({ refreshes: [] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({}), { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { container } = render(
+      <LiveArtifactViewer
+        projectId="proj_1"
+        liveArtifact={baseLiveArtifactWorkspaceEntry()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /present/i })).toBeTruthy();
+    });
+
+    const requestFullscreen = vi.fn(() => Promise.reject(new Error('denied')));
+    const previewHost = container.querySelector('.live-artifact-preview-frame-host');
+    expect(previewHost).toBeTruthy();
+    Object.defineProperty(previewHost!, 'requestFullscreen', {
+      configurable: true,
+      value: requestFullscreen,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /present/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /fullscreen/i }));
+
+    await waitFor(() => {
+      expect(requestFullscreen).toHaveBeenCalled();
+    });
+    expect(container.querySelector('.live-artifact-viewer.is-tab-present')).toBeNull();
+    expect(screen.queryByRole('button', { name: /exit fullscreen/i })).toBeNull();
+  });
+
+  it('requests fullscreen without entering in-tab presentation when fullscreen succeeds', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+      if (url === '/api/live-artifacts/la_1?projectId=proj_1') {
+        return new Response(JSON.stringify({ artifact: baseLiveArtifact() }), { status: 200 });
+      }
+      if (url === '/api/live-artifacts/la_1/refreshes?projectId=proj_1') {
+        return new Response(JSON.stringify({ refreshes: [] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({}), { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { container } = render(
+      <LiveArtifactViewer
+        projectId="proj_1"
+        liveArtifact={baseLiveArtifactWorkspaceEntry()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /present/i })).toBeTruthy();
+    });
+
+    const requestFullscreen = vi.fn(() => Promise.resolve());
+    const previewHost = container.querySelector('.live-artifact-preview-frame-host');
+    expect(previewHost).toBeTruthy();
+    Object.defineProperty(previewHost!, 'requestFullscreen', {
+      configurable: true,
+      value: requestFullscreen,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /present/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /fullscreen/i }));
+
+    await waitFor(() => {
+      expect(requestFullscreen).toHaveBeenCalled();
+    });
+    expect(container.querySelector('.live-artifact-viewer.is-tab-present')).toBeNull();
+    expect(screen.queryByRole('button', { name: /exit fullscreen/i })).toBeNull();
+  });
+
+  it('opens the rendered preview in a new tab from the present menu', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+      if (url === '/api/live-artifacts/la_1?projectId=proj_1') {
+        return new Response(JSON.stringify({ artifact: baseLiveArtifact() }), { status: 200 });
+      }
+      if (url === '/api/live-artifacts/la_1/refreshes?projectId=proj_1') {
+        return new Response(JSON.stringify({ refreshes: [] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({}), { status: 404 });
+    });
+    const openMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('open', openMock);
+
+    render(
+      <LiveArtifactViewer
+        projectId="proj_1"
+        liveArtifact={baseLiveArtifactWorkspaceEntry()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /present/i })).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /present/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /new tab/i }));
+
+    expect(openMock).toHaveBeenCalledWith(
+      '/api/live-artifacts/la_1/preview?projectId=proj_1',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    expect(screen.queryByRole('button', { name: /exit fullscreen/i })).toBeNull();
+  });
+
+  it('renders the toolbar Open link as an external preview link', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+      if (url === '/api/live-artifacts/la_1?projectId=proj_1') {
+        return new Response(JSON.stringify({ artifact: baseLiveArtifact() }), { status: 200 });
+      }
+      if (url === '/api/live-artifacts/la_1/refreshes?projectId=proj_1') {
+        return new Response(JSON.stringify({ refreshes: [] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({}), { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <LiveArtifactViewer
+        projectId="proj_1"
+        liveArtifact={baseLiveArtifactWorkspaceEntry()}
+      />,
+    );
+
+    const openLink = await screen.findByRole('link', { name: /^open$/i });
+    expect(openLink.getAttribute('href')).toBe('/api/live-artifacts/la_1/preview?projectId=proj_1');
+    expect(openLink.getAttribute('target')).toBe('_blank');
+    expect(openLink.getAttribute('rel')).toContain('noreferrer');
+    expect(openLink.getAttribute('rel')).toContain('noopener');
+    expect(openLink.getAttribute('tabindex')).not.toBe('-1');
+  });
+
+  it('takes the toolbar Open link out of the tab order outside preview mode', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+      if (url === '/api/live-artifacts/la_1?projectId=proj_1') {
+        return new Response(JSON.stringify({ artifact: baseLiveArtifact() }), { status: 200 });
+      }
+      if (url === '/api/live-artifacts/la_1/refreshes?projectId=proj_1') {
+        return new Response(JSON.stringify({ refreshes: [] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({}), { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { container } = render(
+      <LiveArtifactViewer
+        projectId="proj_1"
+        liveArtifact={baseLiveArtifactWorkspaceEntry()}
+      />,
+    );
+
+    const openLink = await screen.findByRole('link', { name: /^open$/i });
+    expect(openLink.getAttribute('tabindex')).not.toBe('-1');
+
+    fireEvent.click(screen.getByRole('button', { name: /code/i }));
+
+    await waitFor(() => {
+      expect(container.querySelector('.ghost-link')?.getAttribute('tabindex')).toBe('-1');
+    });
+  });
+
+  it('restores the toolbar Open link to the tab order when returning to preview mode', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+      if (url === '/api/live-artifacts/la_1?projectId=proj_1') {
+        return new Response(JSON.stringify({ artifact: baseLiveArtifact() }), { status: 200 });
+      }
+      if (url === '/api/live-artifacts/la_1/refreshes?projectId=proj_1') {
+        return new Response(JSON.stringify({ refreshes: [] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({}), { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { container } = render(
+      <LiveArtifactViewer
+        projectId="proj_1"
+        liveArtifact={baseLiveArtifactWorkspaceEntry()}
+      />,
+    );
+
+    await screen.findByRole('link', { name: /^open$/i });
+
+    fireEvent.click(screen.getByRole('button', { name: /code/i }));
+
+    await waitFor(() => {
+      expect(container.querySelector('.ghost-link')?.getAttribute('tabindex')).toBe('-1');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /preview/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /^open$/i }).getAttribute('tabindex')).not.toBe('-1');
+    });
+  });
+
+  it('closes the present menu on Escape without tearing down the viewer', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+      if (url === '/api/live-artifacts/la_1?projectId=proj_1') {
+        return new Response(JSON.stringify({ artifact: baseLiveArtifact() }), { status: 200 });
+      }
+      if (url === '/api/live-artifacts/la_1/refreshes?projectId=proj_1') {
+        return new Response(JSON.stringify({ refreshes: [] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({}), { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <LiveArtifactViewer
+        projectId="proj_1"
+        liveArtifact={baseLiveArtifactWorkspaceEntry()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /present/i })).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /present/i }));
+    expect(screen.getByRole('menuitem', { name: /new tab/i })).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menuitem', { name: /new tab/i })).toBeNull();
+    });
+    expect(screen.getByRole('button', { name: /present/i })).toBeTruthy();
+  });
+});
 
 describe('LiveArtifactRefreshHistoryPanel', () => {
   it('renders a human-readable status instead of raw JSON when no history exists', () => {
