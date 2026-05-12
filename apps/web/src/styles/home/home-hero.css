@@ -286,59 +286,107 @@
 
 /* ------------------------------------------------------------
    Stage B of plugin-driven-flow-plan: Home intent rail.
-   A horizontal chip strip below the input card mirroring the
-   NewProject taxonomy plus migration shortcuts (Figma / folder /
-   template). Clicking a chip pre-applies the matching scenario
-   plugin (or dispatches to the folder / template flow) so Enter
-   behaves the same as the explicit "Use plugin" path.
+   Two flex sub-groups ("create" outputs vs. "migrate" sources)
+   separated by a hairline divider. The whole rail wraps cleanly
+   onto multiple rows on narrow viewports — no horizontal scroll.
+   Visual language matches the active-plugin chip inside the
+   input card (pill, accent-tint when selected), and the migrate
+   variant uses the page's --bg-subtle surface so secondary
+   intents recede without losing affordance.
    ------------------------------------------------------------ */
 .home-hero__rail {
   width: 100%;
   max-width: 720px;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
   justify-content: center;
-  padding: 2px;
+  gap: 8px 12px;
+  padding: 4px 2px 0;
+}
+.home-hero__rail-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.home-hero__rail-divider {
+  display: inline-block;
+  width: 1px;
+  height: 18px;
+  background: var(--border-soft);
+  border-radius: 1px;
+  flex: 0 0 auto;
 }
 .home-hero__rail-chip {
   appearance: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 11px;
+  padding: 5px 11px 5px 10px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--bg-panel);
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 12.5px;
+  font-weight: 500;
   line-height: 1;
+  letter-spacing: -0.005em;
   cursor: pointer;
-  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease, transform 120ms ease;
+  box-shadow: var(--shadow-xs);
+  transition: border-color 140ms ease, background-color 140ms ease,
+    color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+}
+.home-hero__rail-chip--migrate {
+  background: var(--bg-subtle);
+  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+}
+.home-hero__rail-chip-icon {
+  flex: 0 0 auto;
+  color: currentColor;
+  opacity: 0.82;
+  transition: opacity 140ms ease;
+}
+.home-hero__rail-chip-label {
+  white-space: nowrap;
 }
 .home-hero__rail-chip:hover:not(:disabled) {
   border-color: var(--border-strong);
   color: var(--text);
-  transform: translateY(-0.5px);
+  background: var(--bg-panel);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.home-hero__rail-chip:hover:not(:disabled) .home-hero__rail-chip-icon {
+  opacity: 1;
+}
+.home-hero__rail-chip:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  box-shadow: 0 0 0 3px var(--accent-tint);
 }
 .home-hero__rail-chip:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+  box-shadow: none;
+  transform: none;
 }
 .home-hero__rail-chip.is-active {
   background: var(--accent-tint);
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
   color: var(--accent);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--accent) 18%, transparent),
+    var(--shadow-xs);
+  transform: translateY(-1px);
+}
+.home-hero__rail-chip.is-active .home-hero__rail-chip-icon {
+  opacity: 1;
 }
 .home-hero__rail-chip.is-pending {
   opacity: 0.75;
-}
-.home-hero__rail-chip-icon {
-  flex: 0 0 auto;
-  color: currentColor;
-}
-.home-hero__rail-chip-label {
-  white-space: nowrap;
+  box-shadow: none;
 }
 
 @media (max-width: 900px) {
@@ -346,6 +394,13 @@
     font-size: 24px;
   }
   /* Plan §B follow-up: chip rail must never require horizontal
-     scrolling. Keep `flex-wrap: wrap` from the base rule so chips
-     fall onto a second row instead of hiding behind an overflow. */
+     scrolling. The base rule already wraps; on narrow viewports
+     the two groups stack onto separate rows, so the divider
+     becomes visual noise — hide it. */
+  .home-hero__rail-divider {
+    display: none;
+  }
+  .home-hero__rail {
+    gap: 6px 8px;
+  }
 }

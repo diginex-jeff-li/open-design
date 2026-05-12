@@ -72,7 +72,7 @@ sequenceDiagram
 
 ## Proposed implementation units
 
-- U1. **Home prefill and focus contract**
+- [x] U1. **Home prefill and focus contract**
 
   **Goal:** Add a reusable way to navigate to Home with a prefilled prompt and focus the textarea.
 
@@ -93,7 +93,7 @@ sequenceDiagram
   - Edge case: refreshing Home after the handoff does not repeatedly overwrite a user's edited prompt.
   - Integration: submitting the prefilled prompt still creates a project through the existing `PluginLoopSubmit` path.
 
-- U2. **Plugins create entry**
+- [x] U2. **Plugins create entry**
 
   **Goal:** Turn the Plugins tab `Create / Import` surface into two clear actions: guided create and import.
 
@@ -112,7 +112,7 @@ sequenceDiagram
   - Regression: GitHub/zip/folder import still installs and lands in `My plugins`.
   - Accessibility: the create action has a clear button label and does not masquerade as a disabled tab.
 
-- U3. **Plugin authoring scenario**
+- [x] U3. **Plugin authoring scenario**
 
   **Goal:** Give the agent a purpose-built plugin authoring context that asks for the right files and validation behavior.
 
@@ -133,7 +133,7 @@ sequenceDiagram
   - Integration: applying the scenario injects its local `SKILL.md` body into the run snapshot.
   - Regression: regular `od-new-generation` and migration scenarios are unaffected.
 
-- U4. **Generated folder visibility in project output**
+- [x] U4. **Generated folder visibility in project output**
 
   **Goal:** Let users inspect and select a generated plugin folder from the project workspace.
 
@@ -155,7 +155,7 @@ sequenceDiagram
   - Edge case: nested files remain selectable without losing their relative path.
   - Error path: malformed or partial plugin folders do not show a misleading install success action.
 
-- U5. **Install generated folder as My plugin**
+- [x] U5. **Install generated folder as My plugin**
 
   **Goal:** Add a one-click action that installs a daemon-visible generated folder into the user plugin registry.
 
@@ -181,7 +181,7 @@ sequenceDiagram
   - Security: `../` traversal or absolute paths outside the project root are rejected.
   - Integration: after install, `GET /api/plugins` includes the new record with non-`bundled` source kind.
 
-- U6. **Home rail create-plugin chip parity**
+- [x] U6. **Home rail create-plugin chip parity**
 
   **Goal:** Let the future Home rail entry use the same authoring flow without duplicating behavior.
 

@@ -81,6 +81,7 @@ describe('HomeHero intent rail', () => {
   });
 
   it('migration chips carry the right action discriminator', () => {
+    expect(findChip('create-plugin')?.action).toMatchObject({ kind: 'create-plugin' });
     expect(findChip('figma')?.action).toMatchObject({ kind: 'apply-figma-migration' });
     expect(findChip('folder')?.action).toMatchObject({ kind: 'import-folder' });
     expect(findChip('template')?.action).toMatchObject({ kind: 'open-template-picker' });
@@ -100,5 +101,24 @@ describe('HomeHero intent rail', () => {
     expect(findChip('prototype')?.action).toMatchObject({ pluginId: 'od-new-generation', projectKind: 'prototype' });
     expect(findChip('deck')?.action).toMatchObject({ pluginId: 'od-new-generation', projectKind: 'deck' });
     expect(findChip('other')?.action).toMatchObject({ pluginId: 'od-new-generation', projectKind: 'other' });
+  });
+
+  it('specialised category chips route to their bundled scenario plugin', () => {
+    // HyperFrames is the motion-graphics specialisation of Video,
+    // surfaced as a separate chip so users can target it directly
+    // instead of routing through the generic Video chip.
+    expect(findChip('hyperframes')?.action).toMatchObject({
+      kind: 'apply-scenario',
+      pluginId: 'example-hyperframes',
+      projectKind: 'video',
+    });
+    // Live artifact reuses od-new-generation's pipeline today but
+    // keeps a distinct chip id + label so the rail's active state
+    // tracks user intent independently from the Prototype chip.
+    expect(findChip('live-artifact')?.action).toMatchObject({
+      kind: 'apply-scenario',
+      pluginId: 'od-new-generation',
+      projectKind: 'prototype',
+    });
   });
 });

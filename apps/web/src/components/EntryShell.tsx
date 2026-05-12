@@ -37,6 +37,10 @@ import { EntryNavRail, type EntryView as EntryViewKind } from './EntryNavRail';
 import { GithubStarBadge } from './GithubStarBadge';
 import { formatStars, GITHUB_REPO_URL, useGithubStars } from './useGithubStars';
 import { HomeView } from './HomeView';
+import {
+  createPluginAuthoringHandoff,
+  type HomePromptHandoff,
+} from './home-hero/plugin-authoring';
 import { Icon } from './Icon';
 import { IntegrationsView, type IntegrationTab } from './IntegrationsView';
 import { InlineModelSwitcher } from './InlineModelSwitcher';
@@ -237,6 +241,7 @@ export function EntryShell({
   const [appearanceExpanded, setAppearanceExpanded] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [integrationTab, setIntegrationTab] = useState<IntegrationTab>(integrationInitialTab);
+  const [homePromptHandoff, setHomePromptHandoff] = useState<HomePromptHandoff | null>(null);
   const avatarMenuRef = useRef<HTMLDivElement | null>(null);
   // Star count + active-model summary are kept in render scope so
   // the dropdown's collapsed rows can mirror what the chips show
@@ -250,6 +255,11 @@ export function EntryShell({
 
   function changeView(next: EntryViewKind) {
     navigate({ kind: 'home', view: next });
+  }
+
+  function startPluginAuthoring() {
+    setHomePromptHandoff(createPluginAuthoringHandoff(Date.now()));
+    changeView('home');
   }
 
   useEffect(() => {
@@ -656,6 +666,7 @@ export function EntryShell({
                   void tab;
                   setNewProjectOpen(true);
                 }}
+                promptHandoff={homePromptHandoff}
               />
             ) : null}
             {view === 'projects' ? (
@@ -683,7 +694,9 @@ export function EntryShell({
                 onOpenOrbitSettings={() => onOpenSettings('orbit')}
               />
             ) : null}
-            {view === 'plugins' ? <PluginsView /> : null}
+            {view === 'plugins' ? (
+              <PluginsView onCreatePlugin={startPluginAuthoring} />
+            ) : null}
             {view === 'design-systems' ? (
               designSystemsLoading ? (
                 <CenteredLoader label={t('common.loading')} />

@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useT } from '../i18n';
 import type { Dict } from '../i18n/types';
 import { projectFileUrl } from '../providers/registry';
+import type { PluginInstallOutcome } from '../state/projects';
 import type { LiveArtifactWorkspaceEntry, ProjectFile, ProjectFileKind } from '../types';
+import { getPluginFolderCandidates } from './design-files/pluginFolders';
 import { Icon } from './Icon';
 import { LiveArtifactBadges } from './LiveArtifactBadges';
 
@@ -21,6 +23,7 @@ interface Props {
   onUploadFiles: (files: File[]) => void;
   onPaste: () => void;
   onNewSketch: () => void;
+  onInstallPluginFolder?: (relativePath: string) => Promise<PluginInstallOutcome>;
 }
 
 type Section = 'pages' | 'scripts' | 'images' | 'sketches' | 'other';
@@ -56,6 +59,7 @@ export function DesignFilesPanel({
   onUploadFiles,
   onPaste,
   onNewSketch,
+  onInstallPluginFolder,
 }: Props) {
   const t = useT();
   const [refreshing, setRefreshing] = useState(false);
@@ -70,6 +74,8 @@ export function DesignFilesPanel({
   const [isSectionExpansionPending, startSectionExpansion] = useTransition();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [installingFolder, setInstallingFolder] = useState<string | null>(null);
+  const [installNotice, setInstallNotice] = useState<string | null>(null);
 
   const grouped = useMemo(() => {
     const groups: Record<Section, ProjectFile[]> = {
@@ -85,6 +91,8 @@ export function DesignFilesPanel({
     }
     return groups;
   }, [files]);
+
+  const pluginFolders = useMemo(() => getPluginFolderCandidates(files), [files]);
 
   // Prune selections that no longer exist in the current file list
   // (e.g. after a refresh or delete within the same project).
@@ -224,6 +232,22 @@ export function DesignFilesPanel({
     if (dropped.length > 0) onUploadFiles(dropped);
   }
 
+  async function handleInstallPluginFolder(relativePath: string) {
+    if (!onInstallPluginFolder || installingFolder) return;
+    setInstallNotice(null);
+    setInstallingFolder(relativePath);
+    try {
+      const outcome = await onInstallPluginFolder(relativePath);
+      setInstallNotice(
+        outcome.message ??
+          (outcome.ok ? 'Installed plugin into My plugins.' : 'Plugin install failed.'),
+      );
+      if (outcome.ok) await onRefreshFiles();
+    } finally {
+      setInstallingFolder(null);
+    }
+  }
+
   return (
     <div className={`df-panel ${preview ? '' : 'no-preview'}`}>
       <div className="df-main">
@@ -326,6 +350,52 @@ export function DesignFilesPanel({
                         {relativeTime(Date.parse(artifact.updatedAt) || Date.now(), t)}
                       </span>
                     </button>
+                  ))}
+                </div>
+              ) : null}
+              {pluginFolders.length > 0 ? (
+                <div className="df-section" key="plugin-folders">
+                  <div className="df-section-label">
+                    Plugin folders
+                    <span className="df-section-count">{pluginFolders.length}</span>
+                  </div>
+                  {installNotice ? (
+                    <div className="df-inline-notice" role="status">{installNotice}</div>
+                  ) : null}
+                  {pluginFolders.map((folder) => (
+                    <div
+                      key={folder.path}
+                      className="df-row df-row-plugin-folder"
+                      data-testid={`design-plugin-folder-${folder.path}`}
+                    >
+                      <button
+                        type="button"
+                        className="df-row-folder-main"
+                        onClick={() => setPreview(folder.manifestPath)}
+                      >
+                        <span className="df-row-icon" data-kind="folder" aria-hidden>
+                          DIR
+                        </span>
+                        <span className="df-row-name-wrap">
+                          <span className="df-row-name">{folder.path}</span>
+                          <span className="df-row-sub">
+                            {folder.fileCount} files · ready to add to My plugins
+                          </span>
+                        </span>
+                      </button>
+                      <span className="df-row-time">{relativeTime(folder.updatedAt, t)}</span>
+                      {onInstallPluginFolder ? (
+                        <button
+                          type="button"
+                          className="df-plugin-install"
+                          data-testid={`design-plugin-folder-install-${folder.path}`}
+                          disabled={installingFolder !== null}
+                          onClick={() => void handleInstallPluginFolder(folder.path)}
+                        >
+                          {installingFolder === folder.path ? 'Adding…' : 'Add to My plugins'}
+                        </button>
+                      ) : null}
+                    </div>
                   ))}
                 </div>
               ) : null}

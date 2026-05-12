@@ -7149,6 +7149,58 @@ button.connector-action.is-loading {
 .df-row-live-artifact {
   grid-template-columns: 36px minmax(0, 1fr) auto;
 }
+.df-row-plugin-folder {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  cursor: default;
+}
+.df-row-folder-main {
+  appearance: none;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.df-plugin-install {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+}
+.df-plugin-install:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.df-plugin-install:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.df-inline-notice {
+  margin: 0 20px 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-size: 12px;
+}
 .df-row:hover { background: var(--bg-subtle); }
 .df-row.active { background: var(--blue-bg); color: var(--text); }
 .df-row.active .df-row-name { color: var(--text-strong); }

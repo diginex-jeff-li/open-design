@@ -12,6 +12,7 @@ import {
   uploadProjectFiles,
   writeProjectTextFile,
 } from '../providers/registry';
+import { installGeneratedPluginFolder } from '../state/projects';
 import {
   type ChatCommentAttachment,
   liveArtifactSummaryToWorkspaceEntry,
@@ -604,6 +605,9 @@ export function FileWorkspace({
             onUploadFiles={(picked) => void uploadFiles(picked)}
             onPaste={() => setShowPasteDialog(true)}
             onNewSketch={startNewSketch}
+            onInstallPluginFolder={(relativePath) =>
+              installGeneratedPluginFolder(projectId, relativePath)
+            }
           />
         ) : isActiveSketch && activeSketch && activeFile ? (
           activeSketch.loaded ? (

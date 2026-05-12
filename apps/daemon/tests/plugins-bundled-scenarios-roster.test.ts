@@ -31,6 +31,7 @@ const CANONICAL = new Map<string, { taskKind: string; pipelineStages: string[] }
 // project kinds (image / video / audio) onto these plugins.
 const SIBLINGS = new Map<string, { taskKind: string }>([
   ['od-media-generation', { taskKind: 'new-generation' }],
+  ['od-plugin-authoring', { taskKind: 'new-generation' }],
 ]);
 
 describe('plugins/_official/scenarios roster', () => {

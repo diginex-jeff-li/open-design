@@ -38,7 +38,7 @@ const PLUGINS_TABS: ReadonlyArray<{
   { id: 'team', label: 'Team / Enterprise', hint: 'Coming soon' },
 ];
 
-export function PluginsView() {
+export function PluginsView({ onCreatePlugin }: { onCreatePlugin?: () => void }) {
   const { locale } = useI18n();
   const [plugins, setPlugins] = useState<InstalledPluginRecord[]>([]);
   const [marketplaces, setMarketplaces] = useState<PluginMarketplace[]>([]);
@@ -63,6 +63,8 @@ export function PluginsView() {
 
   useEffect(() => {
     void refresh();
+    window.addEventListener('open-design:plugins-changed', refresh);
+    return () => window.removeEventListener('open-design:plugins-changed', refresh);
   }, []);
 
   const officialPlugins = useMemo(
@@ -123,12 +125,21 @@ export function PluginsView() {
           <button
             type="button"
             className="plugins-view__primary"
+            onClick={onCreatePlugin}
+            data-testid="plugins-create-button"
+          >
+            <Icon name="edit" size={13} />
+            <span>Create plugin</span>
+          </button>
+          <button
+            type="button"
+            className="plugins-view__secondary"
             onClick={() => setImportOpen(true)}
             aria-haspopup="dialog"
             data-testid="plugins-import-button"
           >
             <Icon name="plus" size={13} />
-            <span>Create / Import</span>
+            <span>Import plugin</span>
           </button>
           <div className="plugins-view__badge" aria-hidden="true">
             <Icon name="grid" size={15} />

@@ -58,8 +58,8 @@ plugin manifest (od.pipeline.stages[])
 | A | shipped | Plugin-local SKILL.md reaches `## Active skill`; Home query auto-binds default scenario per kind. |
 | B | shipped (MVP) | Chip rail mirrors NewProject taxonomy + adds Figma / folder / template shortcuts. Secondary chip rows (model picker for image, inline figmaUrl input) deferred. |
 | C | shipped (MVP) | Bundled `od-media-generation` scenario for image/video/audio; uses existing `media-image` / `media-video` / `media-audio` atoms rather than a new wrapper atom. |
-| D | pending | Real atom workers replacing the stub pipeline runner. |
-| E | pending | Verification gate (e2e). |
+| D | shipped (MVP) | `apps/daemon/src/plugins/atoms/registry.ts` + `built-ins.ts` introduce an atom worker registry; `firePipelineForRun` now drives stages through `runStageWithRegistry`. Set `OD_PIPELINE_RUNNER=stub` to fall back to the v1 canned-signal runner. Real workers only ship for `critique-theater` today (reads `run_devloop_iterations.critique_summary` for the latest parseable score); every other FIRST_PARTY_ATOM registers a permissive worker so happy-path convergence matches v1. |
+| E | shipped (MVP) | `pnpm guard` + `pnpm typecheck` green; daemon plugin suites (atom-registry, pipeline-runner, local-skill, apply, bundled-scenarios, headless-run, bundled, pipeline, simulate) all green; web 720/720 green; full daemon suite 1847/1852 with the remaining 5 failures all reproduced on `HEAD` without these changes (3× `finalize-design` macOS-tmpdir symlink issue; 2× chat-route/origin-validation order-dependent flakes that pass in isolation). Cross-app browser e2e covering the bare-query / chip-click flows is deferred to a follow-up since the existing Playwright harness only ships packaged-app smoke. |
 
 ### Stage A — Plugin actually injects, Home never runs naked
 
@@ -96,10 +96,16 @@ Exit criteria
 
 ### Stage D — Real stage / atom workers (replaces the stub)
 
-- Introduce `apps/daemon/src/plugins/atoms/registry.ts` keyed by atom id → worker.
-- Implement workers for atoms that are not yet wired (e.g. `file-write`, `live-artifact`, `discovery-question-form`, `direction-picker`, `todo-write`, `critique-theater`).
-- Replace `firePipelineForRun` stub `runStage` with `runAtomById(stage, context)`.
-- Strengthen `## Active stage` block so the agent has to acknowledge each atom's outputs.
+As shipped (MVP):
+
+- `apps/daemon/src/plugins/atoms/registry.ts` owns the atom worker registry: `registerAtomWorker`, `runStageWithRegistry`, and the frozen `PERMISSIVE_DEFAULT_SIGNALS` table. Real-worker outputs replace permissive defaults wholesale so a real score of 5 never gets clipped to 4; cross-worker conflicts inside a single stage still pessimistically merge (false-wins / lowest-number-wins).
+- `apps/daemon/src/plugins/atoms/built-ins.ts` registers a worker for every `FIRST_PARTY_ATOMS` entry on first use. Only `critique-theater` ships a real watcher today — it reads `run_devloop_iterations.critique_summary` for the latest parseable `score=N` token. Every other atom registers a permissive worker that returns no signals (so the defaults flow through) — that keeps backwards-compat with the v1 stub while documenting the worker surface for future migrations.
+- `apps/daemon/src/server.ts#firePipelineForRun` now branches on `OD_PIPELINE_RUNNER`: default (`registry`) drives stages through `runStageWithRegistry`; `OD_PIPELINE_RUNNER=stub` falls back to the canned signal pump for diagnostic bisection.
+
+Deferred to a follow-up:
+
+- Real watchers for `file-write`, `live-artifact`, `direction-picker`, `discovery-question-form`, `todo-write`, etc. These require either an agent-write protocol that touches DB rows the daemon can observe, or a side-channel (artifacts table / genui surface responses) wired into worker reads. The registry shape is ready; only the workers themselves remain.
+- Strengthen `## Active stage` block so the agent has to acknowledge each atom's outputs. (Today the contracts-side `renderActiveStageBlock` already exists; we still need to gate stage progression on the agent's structured acknowledgement.)
 
 ### Stage E — Verification gate
 

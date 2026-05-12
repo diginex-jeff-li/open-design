@@ -28,6 +28,15 @@ import { runPipelineForRun } from '../src/plugins/pipeline-runner.js';
 import { listIterationsForRun } from '../src/plugins/pipeline.js';
 import { respondSurface } from '../src/genui/registry.js';
 import { findPendingByRunAndSurfaceId } from '../src/genui/store.js';
+import {
+  clearAtomWorkers,
+  registerAtomWorker,
+  runStageWithRegistry,
+} from '../src/plugins/atoms/registry.js';
+import {
+  registerBuiltInAtomWorkers,
+  resetBuiltInAtomWorkersForTests,
+} from '../src/plugins/atoms/built-ins.js';
 
 let db: Database.Database;
 let tmpDir: string;
@@ -148,6 +157,104 @@ describe('pipeline-runner: stage events + devloop persistence', () => {
     expect(outcomes[0]?.converged).toBe(true);
     expect(outcomes[0]?.termination).toBe('until-satisfied');
     expect(listIterationsForRun(db, 'run-2')).toHaveLength(3);
+  });
+});
+
+describe('pipeline-runner: Stage D registry runner integration', () => {
+  beforeEach(() => {
+    clearAtomWorkers();
+    resetBuiltInAtomWorkersForTests();
+    registerBuiltInAtomWorkers();
+  });
+
+  // Drives the same pipeline the daemon uses (critique-theater
+  // atom + critique.score until), but with the registry runner as
+  // the stage worker. Each iteration emulates an agent that writes
+  // its critique back into run_devloop_iterations, then yields. The
+  // built-in critique-theater worker reads the latest row on the
+  // next iteration and surfaces it as `critique.score`. Convergence
+  // happens once the agent's latest score crosses the threshold.
+  it('drives convergence through a registered atom worker that overrides permissive defaults', async () => {
+    // Replace the built-in critique-theater with a test-only worker
+    // so the integration test is independent of the audit-log read
+    // path. Threshold sits above the permissive default (4) so the
+    // worker's signal alone determines convergence.
+    registerAtomWorker({
+      id:  'critique-theater',
+      run: ({ iteration }) => ({
+        // Ramps from 2 → 5 across iterations so the loop iterates
+        // a known number of times before converging.
+        signals: { 'critique.score': iteration >= 2 ? 5 : 2 },
+        note:    `synthetic score for iteration ${iteration}`,
+      }),
+    });
+    const snap = snapshotWith({
+      pipeline: {
+        stages: [{
+          id: 'critique',
+          atoms: ['critique-theater'],
+          repeat: true,
+          until: 'critique.score >= 5 || iterations >= 8',
+        }],
+      },
+    });
+
+    const outcomes = await runPipelineForRun({
+      db,
+      runId: 'run-stage-d',
+      projectId: 'project-1',
+      conversationId: 'conv-A',
+      snapshot: snap,
+      pipeline: snap.pipeline!,
+      env: { maxIterations: 8 },
+      runStage: async ({ stage, iteration, snapshot: snap2 }) => runStageWithRegistry({
+        db,
+        runId: 'run-stage-d',
+        projectId: 'project-1',
+        conversationId: 'conv-A',
+        stage,
+        iteration,
+        snapshot: snap2,
+      }),
+    });
+    expect(outcomes).toHaveLength(1);
+    expect(outcomes[0]?.converged).toBe(true);
+    // Iter 0: worker returns 2 → 2 < 5 (fail).
+    // Iter 1: worker returns 2 → 2 < 5 (fail).
+    // Iter 2: worker returns 5 → 5 >= 5 (pass).
+    expect(outcomes[0]?.iterations).toBe(3);
+    expect(outcomes[0]?.termination).toBe('until-satisfied');
+  });
+
+  it('falls through to permissive defaults when no atom worker contradicts them', async () => {
+    const snap = snapshotWith({
+      pipeline: {
+        stages: [{ id: 'compose', atoms: ['unknown-atom'] }],
+      },
+    });
+    const outcomes = await runPipelineForRun({
+      db,
+      runId: 'run-permissive',
+      projectId: 'project-1',
+      conversationId: 'conv-A',
+      snapshot: snap,
+      pipeline: snap.pipeline!,
+      env: { maxIterations: 3 },
+      runStage: async ({ stage, iteration, snapshot: snap2 }) => {
+        return runStageWithRegistry({
+          db,
+          runId: 'run-permissive',
+          projectId: 'project-1',
+          conversationId: 'conv-A',
+          stage,
+          iteration,
+          snapshot:  snap2,
+        });
+      },
+    });
+    expect(outcomes[0]?.converged).toBe(true);
+    expect(outcomes[0]?.iterations).toBe(1);
+    expect(outcomes[0]?.termination).toBe('no-loop');
   });
 });
 

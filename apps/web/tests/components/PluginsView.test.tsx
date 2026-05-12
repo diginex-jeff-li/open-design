@@ -137,6 +137,16 @@ afterEach(() => {
 });
 
 describe('PluginsView', () => {
+  it('starts guided plugin creation from the Plugins hero', async () => {
+    const onCreatePlugin = vi.fn();
+    render(<PluginsView onCreatePlugin={onCreatePlugin} />);
+
+    fireEvent.click(await screen.findByTestId('plugins-create-button'));
+
+    expect(onCreatePlugin).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Create or import a plugin' })).toBeNull();
+  });
+
   it('groups community and user-installed plugins while keeping marketplaces coming soon', async () => {
     render(<PluginsView />);
 

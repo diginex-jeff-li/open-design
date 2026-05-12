@@ -23,6 +23,10 @@ import { useI18n } from '../i18n';
 import type { Project } from '../types';
 import { HomeHero } from './HomeHero';
 import type { HomeHeroChip } from './home-hero/chips';
+import {
+  PLUGIN_AUTHORING_PROMPT,
+  type HomePromptHandoff,
+} from './home-hero/plugin-authoring';
 import { PluginDetailsModal } from './PluginDetailsModal';
 import { PluginsHomeSection } from './PluginsHomeSection';
 import type { PluginLoopSubmit } from './PluginLoopHome';
@@ -52,6 +56,7 @@ interface Props {
   // through so the dispatcher can stay declarative.
   onImportFolder?: () => Promise<void> | void;
   onOpenNewProject?: (tab: 'template') => void;
+  promptHandoff?: HomePromptHandoff | null;
 }
 
 export function HomeView({
@@ -62,29 +67,51 @@ export function HomeView({
   onViewAllProjects,
   onImportFolder,
   onOpenNewProject,
+  promptHandoff,
 }: Props) {
   const { locale } = useI18n();
   const [plugins, setPlugins] = useState<InstalledPluginRecord[]>([]);
   const [pluginsLoading, setPluginsLoading] = useState(true);
   const [pendingApplyId, setPendingApplyId] = useState<string | null>(null);
   const [pendingChipId, setPendingChipId] = useState<string | null>(null);
+  const [pendingAuthoringChipId, setPendingAuthoringChipId] = useState<string | null>(null);
   const [active, setActive] = useState<ActivePlugin | null>(null);
   const [prompt, setPrompt] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [detailsRecord, setDetailsRecord] = useState<InstalledPluginRecord | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const consumedHandoffIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    void listPlugins().then((rows) => {
-      if (cancelled) return;
-      setPlugins(rows);
-      setPluginsLoading(false);
-    });
+    const load = () => {
+      void listPlugins().then((rows) => {
+        if (cancelled) return;
+        setPlugins(rows);
+        setPluginsLoading(false);
+      });
+    };
+    load();
+    window.addEventListener('open-design:plugins-changed', load);
     return () => {
       cancelled = true;
+      window.removeEventListener('open-design:plugins-changed', load);
     };
   }, []);
+
+  useEffect(() => {
+    if (!promptHandoff || consumedHandoffIdRef.current === promptHandoff.id) return;
+    consumedHandoffIdRef.current = promptHandoff.id;
+    setActive(null);
+    setError(null);
+    setPrompt(promptHandoff.prompt);
+    if (promptHandoff.focus) {
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+    if (promptHandoff.source === 'plugin-authoring') {
+      setPendingAuthoringChipId('plugin-authoring');
+    }
+  }, [promptHandoff]);
 
   const contextItemCount = useMemo(
     () => active?.result.contextItems?.length ?? 0,
@@ -132,6 +159,30 @@ export function HomeView({
     setPrompt('');
   }
 
+  function queuePluginAuthoring(chipId: string | null) {
+    setActive(null);
+    setPrompt(PLUGIN_AUTHORING_PROMPT);
+    setPendingAuthoringChipId(chipId ?? 'plugin-authoring');
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  useEffect(() => {
+    if (!pendingAuthoringChipId || pluginsLoading) return;
+    const record = plugins.find((plugin) => plugin.id === 'od-plugin-authoring');
+    setPendingAuthoringChipId(null);
+    if (!record) {
+      setError(
+        'Bundled scenario "od-plugin-authoring" is not installed. Reinstall the daemon to restore the default plugin set.',
+      );
+      return;
+    }
+    void usePlugin(record, PLUGIN_AUTHORING_PROMPT, {
+      projectKind: 'other',
+      chipId: pendingAuthoringChipId === 'plugin-authoring' ? undefined : pendingAuthoringChipId,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAuthoringChipId, pluginsLoading, plugins]);
+
   // Stage B of plugin-driven-flow-plan: the chip rail dispatcher.
   // Pure UI-state mapping — the heavy lifting (apply / import) is
   // delegated back to existing handlers. Migration chips that don't
@@ -154,6 +205,10 @@ export function HomeView({
           projectKind: chip.action.projectKind,
           chipId: chip.id,
         });
+        return;
+      }
+      case 'create-plugin': {
+        queuePluginAuthoring(chip.id);
         return;
       }
       case 'import-folder': {
@@ -202,6 +257,7 @@ export function HomeView({
         pluginsLoading={pluginsLoading}
         pendingPluginId={pendingApplyId}
         pendingChipId={pendingChipId}
+        submitDisabled={Boolean(pendingApplyId) || Boolean(pendingAuthoringChipId)}
         onPickPlugin={(record, nextPrompt) => void usePlugin(record, nextPrompt)}
         onPickChip={pickChip}
         contextItemCount={contextItemCount}

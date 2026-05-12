@@ -56,9 +56,11 @@ import {
   MissingInputError,
   pluginPromptBlock,
   pruneExpiredSnapshots,
+  registerBuiltInAtomWorkers,
   registerBundledPlugins,
   resolvePluginSnapshot,
   runPipelineForRun,
+  runStageWithRegistry,
   startSnapshotGc,
   uninstallPlugin,
 } from './plugins/index.js';
@@ -1088,6 +1090,34 @@ function sendApiError(res, status, code, message, init = {}) {
   return res
     .status(status)
     .json(createCompatApiErrorResponse(code, message, init));
+}
+
+function normalizeProjectPluginFolderPath(input) {
+  const value = String(input ?? '').replace(/\\/g, '/').trim();
+  if (!value || value.includes('\0') || value.startsWith('/') || /^[A-Za-z]:\//.test(value)) {
+    throw new Error('plugin folder path must be a relative project path');
+  }
+  const parts = value.split('/').filter(Boolean);
+  if (parts.length === 0 || parts.some((part) => part === '.' || part === '..')) {
+    throw new Error('plugin folder path must not contain traversal segments');
+  }
+  return parts.join('/');
+}
+
+async function resolveProjectChildDirectory(projectRoot, relativePath) {
+  const rootReal = await fs.promises.realpath(projectRoot);
+  const candidate = path.resolve(projectRoot, relativePath);
+  const real = await fs.promises.realpath(candidate);
+  if (!real.startsWith(rootReal + path.sep) && real !== rootReal) {
+    throw new Error('plugin folder path escapes project dir');
+  }
+  const st = await fs.promises.stat(real);
+  if (!st.isDirectory()) {
+    const err = new Error('plugin folder path is not a directory');
+    err.code = 'ENOTDIR';
+    throw err;
+  }
+  return real;
 }
 
 const CLOUDFLARE_PAGES_PROJECT_METADATA_KEY = 'cloudflarePagesProjectName';
@@ -5749,6 +5779,47 @@ export async function startServer({
     }
   });
 
+  app.post('/api/projects/:id/plugins/install-folder', async (req, res) => {
+    try {
+      const project = getProject(db, req.params.id);
+      if (!project) {
+        sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
+        return;
+      }
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const relativePath = normalizeProjectPluginFolderPath(body.path);
+      const projectRoot = resolveProjectDir(PROJECTS_DIR, req.params.id, project.metadata);
+      const folder = await resolveProjectChildDirectory(projectRoot, relativePath);
+      const warnings = [];
+      const log = [];
+      let plugin = null;
+      let message = 'Install finished.';
+      for await (const ev of installPlugin(db, { source: folder })) {
+        if (ev.message) log.push(ev.message);
+        if (Array.isArray(ev.warnings)) warnings.splice(0, warnings.length, ...ev.warnings);
+        if (ev.kind === 'success') {
+          plugin = ev.plugin;
+          message = `Installed ${ev.plugin.title}.`;
+          break;
+        }
+        if (ev.kind === 'error') {
+          message = ev.message;
+          break;
+        }
+      }
+      res.status(plugin ? 200 : 400).json({ ok: Boolean(plugin), plugin, warnings, message, log });
+    } catch (err) {
+      const code = err && err.code;
+      const status = code === 'ENOENT' || code === 'ENOTDIR' ? 404 : 400;
+      sendApiError(
+        res,
+        status,
+        status === 404 ? 'PLUGIN_FOLDER_NOT_FOUND' : 'BAD_REQUEST',
+        String(err?.message || err),
+      );
+    }
+  });
+
   app.get('/api/projects/:id/search', async (req, res) => {
     try {
       const query = String(req.query.q ?? '');
@@ -6620,13 +6691,14 @@ export async function startServer({
     return { prompt, activeSkillDir, critiqueShouldRun };
   };
 
-  // Plan §3.I1 / spec §10.1: fire the pipeline schedule on a run's
-  // SSE stream. Synchronous first emit (the first
+  // Plan §3.I1 / §3.D / spec §10.1: fire the pipeline schedule on a
+  // run's SSE stream. Synchronous first emit (the first
   // pipeline_stage_started event lands before the agent process
-  // starts) + async tail. Stub stage runner converges any non-loop
-  // stage in one iteration; loop stages stop at the
-  // OD_MAX_DEVLOOP_ITERATIONS ceiling. Errors are swallowed (logged)
-  // so a bad pipeline never blocks the agent run.
+  // starts) + async tail. Stage D wires the atom-worker registry as
+  // the default stage runner; set OD_PIPELINE_RUNNER=stub to fall
+  // back to the canned v1 stub for diagnostic bisection or replay
+  // of pre-Stage-D runs. Errors are swallowed (logged) so a bad
+  // pipeline never blocks the agent run.
   const firePipelineForRun = (args) => {
     const { run, snapshot, runs, db: dbHandle } = args;
     if (!snapshot?.pipeline?.stages?.length) return;
@@ -6637,20 +6709,43 @@ export async function startServer({
     const emitGenui = (evt) => {
       try { runs.emit(run, evt.kind, evt); } catch {/* ignore */}
     };
-    // Stub stage runner: synchronously returns a converged signal so
-    // the scheduler advances immediately. Phase 4's atom migration
-    // swaps this for a real per-stage worker that drives the agent.
-    const runStage = ({ iteration }) => ({
-      signals: {
-        'critique.score':  iteration >= 0 ? 4 : 0,
-        'preview.ok':      true,
-        'user.confirmed':  true,
-      },
-    });
+    const projectIdForRun = run.projectId
+      ?? snapshot.resolvedContext?.items?.[0]?.id
+      ?? 'project-unknown';
+    const runnerMode = process.env.OD_PIPELINE_RUNNER === 'stub'
+      ? 'stub'
+      : 'registry';
+    let runStage;
+    if (runnerMode === 'stub') {
+      runStage = ({ iteration }) => ({
+        signals: {
+          'critique.score':  iteration >= 0 ? 4 : 0,
+          'preview.ok':      true,
+          'user.confirmed':  true,
+        },
+      });
+    } else {
+      registerBuiltInAtomWorkers();
+      runStage = async ({ stage, iteration, snapshot: stageSnapshot }) => {
+        const outcome = await runStageWithRegistry({
+          db:             dbHandle,
+          runId:          run.id,
+          projectId:      projectIdForRun,
+          conversationId: run.conversationId ?? null,
+          stage,
+          iteration,
+          snapshot:       stageSnapshot,
+        });
+        return {
+          signals:         outcome.signals,
+          critiqueSummary: outcome.critiqueSummary,
+        };
+      };
+    }
     void runPipelineForRun({
       db: dbHandle,
       runId:           run.id,
-      projectId:       run.projectId ?? snapshot.resolvedContext?.items?.[0]?.id ?? 'project-unknown',
+      projectId:       projectIdForRun,
       conversationId:  run.conversationId ?? null,
       snapshot,
       pipeline:        snapshot.pipeline,

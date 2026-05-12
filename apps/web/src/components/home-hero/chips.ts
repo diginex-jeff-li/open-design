@@ -22,9 +22,22 @@ import type { ProjectKind } from '@open-design/contracts';
 import type { DefaultScenarioPluginId } from '@open-design/contracts';
 import type { IconName } from '../Icon';
 
+// Plugin ids the chip rail can dispatch to. Most chips route to a
+// `DefaultScenarioPluginId` so the same fallback table the daemon
+// uses for naked Home queries stays the source of truth. Specialised
+// chips (HyperFrames lives under `plugins/_official/examples/hyperframes/`
+// and surfaces as the `example-hyperframes` bundled plugin id) bypass
+// the default table by carrying their own plugin id directly. The
+// curated union keeps typo safety while letting the rail evolve
+// independently of the default-binding mapping.
+export type ChipScenarioPluginId =
+  | DefaultScenarioPluginId
+  | 'example-hyperframes';
+
 export type ChipAction =
-  | { kind: 'apply-scenario'; pluginId: DefaultScenarioPluginId; projectKind: ProjectKind }
+  | { kind: 'apply-scenario'; pluginId: ChipScenarioPluginId; projectKind: ProjectKind }
   | { kind: 'apply-figma-migration'; pluginId: 'od-figma-migration'; projectKind: ProjectKind }
+  | { kind: 'create-plugin' }
   | { kind: 'import-folder' }
   | { kind: 'open-template-picker' };
 
@@ -53,6 +66,19 @@ export const HOME_HERO_CHIPS: ReadonlyArray<HomeHeroChip> = [
     action: { kind: 'apply-scenario', pluginId: 'od-new-generation', projectKind: 'prototype' },
   },
   {
+    id: 'live-artifact',
+    label: 'Live artifact',
+    icon: 'pencil',
+    group: 'create',
+    hint: 'Build an interactive HTML/CSS/JS artifact you can preview live.',
+    // No dedicated scenario plugin yet — the live-artifact authoring
+    // flow shares od-new-generation's pipeline (file-write + live-
+    // artifact atoms). We still surface it as a separate chip so the
+    // user can pick their target surface up front instead of routing
+    // through Prototype + a metadata flip.
+    action: { kind: 'apply-scenario', pluginId: 'od-new-generation', projectKind: 'prototype' },
+  },
+  {
     id: 'deck',
     label: 'Slide deck',
     icon: 'present',
@@ -74,6 +100,18 @@ export const HOME_HERO_CHIPS: ReadonlyArray<HomeHeroChip> = [
     action: { kind: 'apply-scenario', pluginId: 'od-media-generation', projectKind: 'video' },
   },
   {
+    id: 'hyperframes',
+    label: 'HyperFrames',
+    icon: 'orbit',
+    group: 'create',
+    hint: 'Author HTML-based motion: captions, audio-reactive visuals, scene transitions.',
+    // HyperFrames is its own bundled scenario (motion-graphics
+    // specialisation of Video). It surfaces in PluginsHomeSection's
+    // primary category list, so the rail picks it up too rather than
+    // hiding the specialised bucket behind the generic Video chip.
+    action: { kind: 'apply-scenario', pluginId: 'example-hyperframes', projectKind: 'video' },
+  },
+  {
     id: 'audio',
     label: 'Audio',
     icon: 'mic',
@@ -86,6 +124,14 @@ export const HOME_HERO_CHIPS: ReadonlyArray<HomeHeroChip> = [
     icon: 'sparkles',
     group: 'create',
     action: { kind: 'apply-scenario', pluginId: 'od-new-generation', projectKind: 'other' },
+  },
+  {
+    id: 'create-plugin',
+    label: 'Create plugin',
+    icon: 'edit',
+    group: 'create',
+    hint: 'Author a reusable Open Design plugin and add it to My plugins.',
+    action: { kind: 'create-plugin' },
   },
   {
     id: 'figma',

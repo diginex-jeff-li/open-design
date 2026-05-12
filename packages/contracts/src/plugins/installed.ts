@@ -49,6 +49,22 @@ export const PluginInstallSourceSchema = z.object({
 
 export type PluginInstallSource = z.infer<typeof PluginInstallSourceSchema>;
 
+export const PluginInstallOutcomeSchema = z.object({
+  ok:       z.boolean(),
+  plugin:   InstalledPluginRecordSchema.nullable().optional(),
+  warnings: z.array(z.string()),
+  message:  z.string().optional(),
+  log:      z.array(z.string()),
+});
+
+export type PluginInstallOutcome = z.infer<typeof PluginInstallOutcomeSchema>;
+
+export const ProjectPluginFolderInstallRequestSchema = z.object({
+  path: z.string().min(1),
+});
+
+export type ProjectPluginFolderInstallRequest = z.infer<typeof ProjectPluginFolderInstallRequestSchema>;
+
 // Re-export TrustTier so consumers can pull every plugin contract from one
 // barrel without hopping through marketplace.ts.
 export type { TrustTier };

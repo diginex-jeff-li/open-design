@@ -11,6 +11,8 @@ import type {
   ImportFolderRequest,
   ImportFolderResponse,
   InstalledPluginRecord,
+  PluginInstallOutcome,
+  ProjectPluginFolderInstallRequest,
 } from '@open-design/contracts';
 import { randomUUID } from '../utils/uuid';
 import type {
@@ -21,6 +23,8 @@ import type {
   ProjectMetadata,
   ProjectTemplate,
 } from '../types';
+
+export type { PluginInstallOutcome } from '@open-design/contracts';
 
 export async function listProjects(): Promise<Project[]> {
   try {
@@ -365,14 +369,6 @@ export async function listPlugins(): Promise<InstalledPluginRecord[]> {
   }
 }
 
-export interface PluginInstallOutcome {
-  ok: boolean;
-  plugin?: InstalledPluginRecord;
-  warnings: string[];
-  message?: string;
-  log: string[];
-}
-
 interface PluginInstallEvent {
   kind?: 'progress' | 'success' | 'error';
   phase?: string;
@@ -442,6 +438,35 @@ export async function uploadPluginFolder(files: File[]): Promise<PluginInstallOu
     form.append('paths', relativePath);
   }
   return postPluginUpload('/api/plugins/upload-folder', form);
+}
+
+export async function installGeneratedPluginFolder(
+  projectId: string,
+  relativePath: string,
+): Promise<PluginInstallOutcome> {
+  try {
+    const request: ProjectPluginFolderInstallRequest = { path: relativePath };
+    const resp = await fetch(
+      `/api/projects/${encodeURIComponent(projectId)}/plugins/install-folder`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      },
+    );
+    const outcome = await readPluginInstallOutcome(resp);
+    if (outcome.ok && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('open-design:plugins-changed'));
+    }
+    return outcome;
+  } catch (err) {
+    return {
+      ok: false,
+      warnings: [],
+      message: (err as Error).message,
+      log: [],
+    };
+  }
 }
 
 export async function upgradePlugin(id: string): Promise<PluginInstallOutcome> {
@@ -524,6 +549,32 @@ async function postPluginUpload(url: string, form: FormData): Promise<PluginInst
       log: [],
     };
   }
+}
+
+async function readPluginInstallOutcome(resp: Response): Promise<PluginInstallOutcome> {
+  const json = (await resp.json()) as Partial<PluginInstallOutcome> & {
+    error?: string | { message?: string };
+  };
+  if (resp.ok && json.ok) {
+    return {
+      ok: true,
+      ...(json.plugin ? { plugin: json.plugin } : {}),
+      warnings: json.warnings ?? [],
+      message: json.message ?? 'Plugin installed.',
+      log: json.log ?? [],
+    };
+  }
+  const message =
+    json.message ??
+    (typeof json.error === 'string' ? json.error : json.error?.message) ??
+    resp.statusText;
+  return {
+    ok: false,
+    ...(json.plugin ? { plugin: json.plugin } : {}),
+    warnings: json.warnings ?? [],
+    message,
+    log: json.log ?? [],
+  };
 }
 
 function getUploadRelativePath(file: File): string {

@@ -31,6 +31,7 @@ interface Props {
   pluginsLoading: boolean;
   pendingPluginId: string | null;
   pendingChipId: string | null;
+  submitDisabled?: boolean;
   onPickPlugin: (record: InstalledPluginRecord, nextPrompt: string | null) => void;
   onPickChip: (chip: HomeHeroChip) => void;
   contextItemCount: number;
@@ -49,6 +50,7 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
     pluginsLoading,
     pendingPluginId,
     pendingChipId,
+    submitDisabled = false,
     onPickPlugin,
     onPickChip,
     contextItemCount,
@@ -57,7 +59,7 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
   ref,
 ) {
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const canSubmit = prompt.trim().length > 0;
+  const canSubmit = prompt.trim().length > 0 && !submitDisabled;
   const placeholder = activePluginTitle
     ? 'Edit the example query or write your own…'
     : 'What do you want to design? Type a prompt, @search a plugin, or pick one below…';
