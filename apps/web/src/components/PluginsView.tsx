@@ -33,7 +33,7 @@ const PLUGINS_TABS: ReadonlyArray<{
   disabled?: boolean;
 }> = [
   { id: 'community', label: 'Community', hint: 'Official catalog' },
-  { id: 'mine', label: 'My plugins', hint: 'Coming soon', disabled: true },
+  { id: 'mine', label: 'My plugins', hint: 'User-installed' },
   { id: 'marketplaces', label: 'Marketplaces', hint: 'Coming soon', disabled: true },
   { id: 'team', label: 'Team / Enterprise', hint: 'Coming soon' },
 ];
@@ -81,6 +81,7 @@ export function PluginsView() {
     if (outcome.ok) {
       setImportOpen(false);
       await refresh();
+      setActiveTab('mine');
     }
     return outcome;
   }

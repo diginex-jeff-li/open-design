@@ -412,6 +412,18 @@ export function EntryShell({
             </span>
             <span>Follow @nexudotio</span>
           </a>
+          <a
+            className="avatar-item"
+            href="https://discord.gg/BYShPgWpq"
+            target="_blank"
+            rel="noreferrer noopener"
+            onClick={() => setAvatarMenuOpen(false)}
+          >
+            <span className="avatar-item-icon" aria-hidden>
+              <Icon name="external-link" size={14} />
+            </span>
+            <span>Join Discord</span>
+          </a>
           <div style={{ height: 1, background: 'var(--border-soft)', margin: '4px 6px' }} />
           <button
             type="button"

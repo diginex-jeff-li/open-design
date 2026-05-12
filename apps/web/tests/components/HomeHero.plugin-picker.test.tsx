@@ -2,17 +2,22 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { InstalledPluginRecord } from '@open-design/contracts';
+import type { InstalledPluginRecord, PluginSourceKind, TrustTier } from '@open-design/contracts';
 import { HomeHero } from '../../src/components/HomeHero';
 
-function makePlugin(id: string, title: string): InstalledPluginRecord {
+function makePlugin(
+  id: string,
+  title: string,
+  sourceKind: PluginSourceKind = 'bundled',
+  trust: TrustTier = 'bundled',
+): InstalledPluginRecord {
   return {
     id,
     title,
     version: '1.0.0',
-    sourceKind: 'bundled',
+    sourceKind,
     source: '/tmp',
-    trust: 'bundled',
+    trust,
     capabilitiesGranted: ['prompt:inject'],
     manifest: {
       name: id,
@@ -32,7 +37,7 @@ afterEach(() => {
 });
 
 describe('HomeHero plugin picker', () => {
-  it('opens plugin search from an @ token and returns the prompt without that token', () => {
+  it('opens plugin search from an @ token across community and my plugins', () => {
     const onPromptChange = vi.fn();
     const onPickPlugin = vi.fn();
     render(
@@ -42,7 +47,10 @@ describe('HomeHero plugin picker', () => {
         onSubmit={() => undefined}
         activePluginTitle={null}
         onClearActivePlugin={() => undefined}
-        pluginOptions={[makePlugin('sample-plugin', 'Sample Plugin')]}
+        pluginOptions={[
+          makePlugin('sample-plugin', 'Sample Plugin'),
+          makePlugin('sample-user-plugin', 'Sample User Plugin', 'github', 'restricted'),
+        ]}
         pluginsLoading={false}
         pendingPluginId={null}
         onPickPlugin={onPickPlugin}
@@ -52,10 +60,12 @@ describe('HomeHero plugin picker', () => {
     );
 
     expect(screen.getByTestId('home-hero-plugin-picker')).toBeTruthy();
-    fireEvent.mouseDown(screen.getByRole('option', { name: /sample plugin/i }));
+    expect(screen.getByText('Community')).toBeTruthy();
+    expect(screen.getByText('My plugin')).toBeTruthy();
+    fireEvent.mouseDown(screen.getByRole('option', { name: /sample user plugin/i }));
 
     expect(onPickPlugin).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'sample-plugin' }),
+      expect.objectContaining({ id: 'sample-user-plugin' }),
       'Make',
     );
   });

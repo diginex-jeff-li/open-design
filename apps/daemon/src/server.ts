@@ -3810,12 +3810,23 @@ export async function startServer({
   // boot walker (apps/daemon/src/plugins/bundled.ts) is the only writer
   // of source_kind='bundled', so this function never grants the
   // privilege to user-installed scenarios.
+  //
+  // Plan §3.O1 / §C-stage of plugin-driven-flow-plan: more than one
+  // bundled scenario may share a `taskKind` (e.g. `od-media-generation`
+  // also claims `new-generation` so the kind → scenario map can route
+  // image / video / audio projects to it). The pipeline-fallback
+  // resolver expects ONE scenario per taskKind, so this function
+  // dedupes and prefers the canonical id `od-<taskKind>` as the
+  // pipeline-fallback winner. Non-canonical scenarios still install
+  // and run through their explicit pluginId path; they just don't get
+  // to hijack a consumer plugin that omitted `od.pipeline`.
   function collectBundledScenarios() {
-    const out: Array<{
+    type ScenarioEntry = {
       id: string;
       taskKind: 'new-generation' | 'figma-migration' | 'code-migration' | 'tune-collab';
       pipeline: NonNullable<NonNullable<import('@open-design/contracts').PluginManifest['od']>['pipeline']>;
-    }> = [];
+    };
+    const byTaskKind = new Map<ScenarioEntry['taskKind'], ScenarioEntry>();
     try {
       const all = listInstalledPlugins(db);
       for (const row of all) {
@@ -3823,17 +3834,21 @@ export async function startServer({
         const od = row.manifest.od;
         if (!od || od.kind !== 'scenario') continue;
         if (!od.pipeline || !Array.isArray(od.pipeline.stages) || od.pipeline.stages.length === 0) continue;
-        const taskKind = (od.taskKind ?? 'new-generation') as 'new-generation' | 'figma-migration' | 'code-migration' | 'tune-collab';
+        const taskKind = (od.taskKind ?? 'new-generation') as ScenarioEntry['taskKind'];
         if (taskKind !== 'new-generation' && taskKind !== 'figma-migration' &&
             taskKind !== 'code-migration' && taskKind !== 'tune-collab') continue;
-        out.push({ id: row.id, taskKind, pipeline: od.pipeline });
+        const entry: ScenarioEntry = { id: row.id, taskKind, pipeline: od.pipeline };
+        const existing = byTaskKind.get(taskKind);
+        if (!existing || entry.id === `od-${taskKind}`) {
+          byTaskKind.set(taskKind, entry);
+        }
       }
     } catch {
       // On a fresh install the table may not exist yet; surface no
       // scenarios rather than crash the apply path.
       return [];
     }
-    return out;
+    return Array.from(byTaskKind.values());
   }
 
   app.post('/api/plugins/:id/apply', async (req, res) => {

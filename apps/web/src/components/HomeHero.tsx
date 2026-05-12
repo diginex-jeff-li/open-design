@@ -192,7 +192,7 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
                     <span>{plugin.manifest?.description ?? plugin.id}</span>
                   </span>
                   <span className="home-hero__plugin-option-meta">
-                    {pendingPluginId === plugin.id ? 'Applying…' : plugin.sourceKind}
+                    {pendingPluginId === plugin.id ? 'Applying…' : getPluginSourceLabel(plugin)}
                   </span>
                 </button>
               ))
@@ -252,4 +252,8 @@ function replaceMentionToken(value: string, mention: PluginMention): string | nu
   const after = value.slice(mention.end).trimStart();
   const next = [before, after].filter(Boolean).join(' ').trim();
   return next.length > 0 ? next : null;
+}
+
+function getPluginSourceLabel(plugin: InstalledPluginRecord): string {
+  return plugin.sourceKind === 'bundled' ? 'Community' : 'My plugin';
 }

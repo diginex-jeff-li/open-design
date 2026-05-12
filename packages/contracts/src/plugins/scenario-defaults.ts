@@ -22,6 +22,7 @@ export type TaskKind = AppliedPluginSnapshot['taskKind'];
 // the web shell and the daemon resolver.
 export type DefaultScenarioPluginId =
   | 'od-new-generation'
+  | 'od-media-generation'
   | 'od-figma-migration'
   | 'od-code-migration'
   | 'od-tune-collab';
@@ -30,13 +31,9 @@ export const DEFAULT_SCENARIO_PLUGIN_BY_KIND: Record<ProjectKind, DefaultScenari
   prototype: 'od-new-generation',
   deck:      'od-new-generation',
   template:  'od-new-generation',
-  // image / video / audio fall back to `od-new-generation` until the
-  // Stage C scenario (`od-media-generation`) lands. Keeping them
-  // explicit in the map (instead of using `as Record<...>` shortcuts)
-  // documents the eventual migration target.
-  image:     'od-new-generation',
-  video:     'od-new-generation',
-  audio:     'od-new-generation',
+  image:     'od-media-generation',
+  video:     'od-media-generation',
+  audio:     'od-media-generation',
   other:     'od-new-generation',
 };
 

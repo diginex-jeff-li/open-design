@@ -137,7 +137,7 @@ afterEach(() => {
 });
 
 describe('PluginsView', () => {
-  it('shows community plugins and marks unfinished plugin areas as coming soon', async () => {
+  it('groups community and user-installed plugins while keeping marketplaces coming soon', async () => {
     render(<PluginsView />);
 
     await waitFor(() => expect(screen.getAllByText('Official Plugin').length).toBeGreaterThan(0));
@@ -145,13 +145,12 @@ describe('PluginsView', () => {
 
     const myPluginsTab = screen.getByTestId('plugins-tab-mine');
     const marketplacesTab = screen.getByTestId('plugins-tab-marketplaces');
-    expect(myPluginsTab.getAttribute('aria-disabled')).toBe('true');
+    expect(myPluginsTab.getAttribute('aria-disabled')).toBeNull();
     expect(marketplacesTab.getAttribute('aria-disabled')).toBe('true');
-    expect(screen.getAllByText('Coming soon').length).toBeGreaterThanOrEqual(2);
 
     fireEvent.click(myPluginsTab);
-    expect(screen.getAllByText('Official Plugin').length).toBeGreaterThan(0);
-    expect(screen.queryByText('User Plugin')).toBeNull();
+    expect(screen.getAllByText('User Plugin').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Official Plugin')).toBeNull();
   });
 
   it('installs from a supported source string', async () => {
@@ -171,6 +170,8 @@ describe('PluginsView', () => {
       ),
     );
     expect(await screen.findByText('Installed New Plugin.')).toBeTruthy();
+    expect(screen.getByTestId('plugins-tab-mine').getAttribute('aria-selected')).toBe('true');
+    expect(screen.getAllByText('User Plugin').length).toBeGreaterThan(0);
   });
 
   it('uploads zip and folder plugins from the import dialog', async () => {

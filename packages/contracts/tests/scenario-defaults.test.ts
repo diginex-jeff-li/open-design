@@ -17,9 +17,9 @@ describe('defaultScenarioPluginIdForKind', () => {
       prototype: 'od-new-generation',
       deck:      'od-new-generation',
       template:  'od-new-generation',
-      image:     'od-new-generation',
-      video:     'od-new-generation',
-      audio:     'od-new-generation',
+      image:     'od-media-generation',
+      video:     'od-media-generation',
+      audio:     'od-media-generation',
       other:     'od-new-generation',
     };
     for (const [kind, pluginId] of Object.entries(expected)) {
