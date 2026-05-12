@@ -3,9 +3,9 @@
 // Renders one plugin's manifest, capability checklist, declared GenUI
 // surfaces and connector requirements, plus a "Use this plugin"
 // button that hydrates a fresh ApplyResult. The user lands back on
-// Home with the brief / chip strip / inputs form pre-filled (the
-// PluginsSection on NewProjectPanel renders the same applied state
-// because applyPlugin returns the exact ApplyResult).
+// Home where the PluginLoopHome surface (or ChatComposer once a
+// project is created) consumes the applied snapshot — applyPlugin
+// returns the exact ApplyResult those hosts already hydrate from.
 
 import { useEffect, useState } from 'react';
 import type { ApplyResult, InstalledPluginRecord } from '@open-design/contracts';
@@ -87,10 +87,10 @@ export function PluginDetailView(props: Props) {
       return;
     }
     setApplied(result);
-    // Navigate to Home so the existing inline rail / NewProjectPanel
-    // surfaces the applied snapshot. Phase 2B ChatComposer mount then
-    // picks it up automatically inside an existing project.
-    navigate({ kind: 'home' });
+    // Navigate to Home so the PluginLoopHome surface picks up the
+    // applied snapshot. Inside an existing project, the ChatComposer
+    // mount of PluginsSection consumes the same ApplyResult.
+    navigate({ kind: 'home', view: 'home' });
   };
 
   return (

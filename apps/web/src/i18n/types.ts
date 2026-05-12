@@ -320,6 +320,22 @@ export interface Dict {
   'entry.openSettingsAria': string;
   'entry.resizeAria': string;
   'entry.loadingWorkspace': string;
+  // Left nav rail (icon-only) — surface labels also serve as tooltips
+  'entry.navNewProject': string;
+  'entry.navHome': string;
+  'entry.navProjects': string;
+  'entry.navDesignSystems': string;
+  // Bottom-of-rail help menu
+  'entry.helpAria': string;
+  'entry.helpMenuAria': string;
+  'entry.helpGetHelp': string;
+  'entry.helpSubmitFeature': string;
+  'entry.helpWhatsNew': string;
+  'entry.helpDownloadDesktop': string;
+  // GitHub star pill in the top bar
+  'entry.githubStarLabel': string;
+  'entry.githubStarTitle': string;
+  'entry.githubStarAria': string;
 
   // Connectors tab
   'connectors.title': string;
@@ -654,6 +670,25 @@ export interface Dict {
   'avatar.modelLabel': string;
   'avatar.reasoningLabel': string;
   'avatar.customSuffix': string;
+
+  // Inline CLI / model switcher (entry topbar)
+  'inlineSwitcher.chipTitle': string;
+  'inlineSwitcher.chipCli': string;
+  'inlineSwitcher.chipByok': string;
+  'inlineSwitcher.modelDefault': string;
+  'inlineSwitcher.noAgent': string;
+  'inlineSwitcher.modeLabel': string;
+  'inlineSwitcher.agentLabel': string;
+  'inlineSwitcher.providerLabel': string;
+  'inlineSwitcher.modelLabel': string;
+  'inlineSwitcher.useCli': string;
+  'inlineSwitcher.useByok': string;
+  'inlineSwitcher.daemonOffline': string;
+  'inlineSwitcher.noAgentsDetected': string;
+  'inlineSwitcher.openSettingsForModel': string;
+  'inlineSwitcher.missingApiKey': string;
+  'inlineSwitcher.openFullSettings': string;
+  'inlineSwitcher.customSuffix': string;
 
   // Project view / chat pane / composer
   'project.backToProjects': string;

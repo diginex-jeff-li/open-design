@@ -23,7 +23,7 @@ import {
 } from '../../src/providers/registry';
 import { listProjects, listTemplates } from '../../src/state/projects';
 
-const useRouteMock = vi.fn(() => ({ kind: 'home' as const }));
+const useRouteMock = vi.fn(() => ({ kind: 'home' as const, view: 'home' as const }));
 
 vi.mock('../../src/router', () => ({
   navigate: vi.fn(),

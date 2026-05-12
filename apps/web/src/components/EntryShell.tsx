@@ -11,9 +11,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ConnectorDetail } from '@open-design/contracts';
 import { LOCALE_LABEL, LOCALES, useI18n, useT, type Locale } from '../i18n';
+import { navigate, useRoute } from '../router';
 import type {
+  AgentInfo,
+  ApiProtocol,
+  AppConfig,
   DesignSystemSummary,
+  ExecMode,
   Project,
+  ProjectKind,
   ProjectMetadata,
   ProjectTemplate,
   PromptTemplateSummary,
@@ -26,25 +32,29 @@ import { DesignSystemsTab } from './DesignSystemsTab';
 import { EntryNavRail, type EntryView as EntryViewKind } from './EntryNavRail';
 import { HomeView } from './HomeView';
 import { Icon } from './Icon';
+import { InlineModelSwitcher } from './InlineModelSwitcher';
 import { NewProjectModal } from './NewProjectModal';
 import type { CreateInput } from './NewProjectPanel';
 import type { PluginLoopSubmit } from './PluginLoopHome';
 
-// Persisted under a redesign-scoped key so a future rebase against
-// upstream's tab-based EntryView storage cannot collide on values.
-const ENTRY_SHELL_VIEW_STORAGE_KEY = 'open-design:entry-view';
+// Default scenario plugin for each project kind. The modal-based
+// create flow no longer surfaces a plugin picker — every submission
+// transparently binds the matching scenario so the project lands in a
+// running pipeline. Add a row here when a kind-specific scenario
+// plugin ships; until then everything routes through od-new-generation
+// which already adapts on metadata.kind.
+const DEFAULT_SCENARIO_PLUGIN_BY_KIND: Record<ProjectKind, string | null> = {
+  prototype: 'od-new-generation',
+  deck: 'od-new-generation',
+  template: 'od-new-generation',
+  image: 'od-new-generation',
+  video: 'od-new-generation',
+  audio: 'od-new-generation',
+  other: 'od-new-generation',
+};
 
-function loadInitialView(): EntryViewKind {
-  if (typeof window === 'undefined') return 'home';
-  try {
-    const stored = window.localStorage.getItem(ENTRY_SHELL_VIEW_STORAGE_KEY);
-    if (stored === 'home' || stored === 'projects' || stored === 'design-systems') {
-      return stored;
-    }
-  } catch {
-    /* ignore */
-  }
-  return 'home';
+function defaultPluginIdForKind(metadata: ProjectMetadata): string | null {
+  return DEFAULT_SCENARIO_PLUGIN_BY_KIND[metadata.kind] ?? null;
 }
 
 interface Props {
@@ -59,6 +69,20 @@ interface Props {
   skillsLoading?: boolean;
   designSystemsLoading?: boolean;
   projectsLoading?: boolean;
+  // Execution / model-switching context. Threaded down from `App` so the
+  // top-bar `InlineModelSwitcher` can render the active mode/agent/model
+  // and persist changes through the same callbacks the project view uses.
+  config: AppConfig;
+  agents: AgentInfo[];
+  daemonLive: boolean;
+  onModeChange: (mode: ExecMode) => void;
+  onAgentChange: (id: string) => void;
+  onAgentModelChange: (
+    id: string,
+    choice: { model?: string; reasoning?: string },
+  ) => void;
+  onApiProtocolChange: (protocol: ApiProtocol) => void;
+  onApiModelChange: (model: string) => void;
   onCreateProject: (
     input: CreateInput & {
       pendingPrompt?: string;
@@ -98,6 +122,14 @@ export function EntryShell({
   skillsLoading = false,
   designSystemsLoading = false,
   projectsLoading = false,
+  config,
+  agents,
+  daemonLive,
+  onModeChange,
+  onAgentChange,
+  onAgentModelChange,
+  onApiProtocolChange,
+  onApiModelChange,
   onCreateProject,
   onImportClaudeDesign,
   onImportFolder,
@@ -109,7 +141,12 @@ export function EntryShell({
 }: Props) {
   const t = useT();
   const { locale, setLocale } = useI18n();
-  const [view, setView] = useState<EntryViewKind>(() => loadInitialView());
+  // Each entry sub-view (home / projects / design-systems) is its own
+  // URL now, so the browser back/forward buttons work and a deep link
+  // to /design-systems lands on that section. We derive the active
+  // view from the route rather than keeping it in component state.
+  const route = useRoute();
+  const view: EntryViewKind = route.kind === 'home' ? route.view : 'home';
   const [previewSystemId, setPreviewSystemId] = useState<string | null>(null);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [languageExpanded, setLanguageExpanded] = useState(false);
@@ -117,12 +154,7 @@ export function EntryShell({
   const avatarMenuRef = useRef<HTMLDivElement | null>(null);
 
   function changeView(next: EntryViewKind) {
-    setView(next);
-    try {
-      window.localStorage.setItem(ENTRY_SHELL_VIEW_STORAGE_KEY, next);
-    } catch {
-      /* ignore */
-    }
+    navigate({ kind: 'home', view: next });
   }
 
   const previewSystem = useMemo(
@@ -131,7 +163,18 @@ export function EntryShell({
   );
 
   function handleCreate(input: CreateInput) {
-    onCreateProject(input);
+    // The NewProjectModal no longer asks the user to pick a plugin.
+    // Each project kind is silently bound to its default scenario
+    // pipeline at creation time so the user lands in a running flow
+    // without having to reason about pipeline internals. The mapping
+    // is intentionally explicit so future kind-specific scenarios
+    // (e.g. a deck- or image-specialized pipeline) can take over a
+    // single row without touching the form.
+    const pluginId = defaultPluginIdForKind(input.metadata);
+    onCreateProject({
+      ...input,
+      ...(pluginId ? { pluginId } : {}),
+    });
   }
 
   // Plan §3.F5 — the home prompt-loop submit path. The user picks a
@@ -292,8 +335,25 @@ export function EntryShell({
           onNewProject={() => setNewProjectOpen(true)}
         />
         <main className="entry-main entry-main--scroll">
-          <div className="entry-main__topbar">{avatarMenu}</div>
-          <div className="entry-main__inner">
+          <div className="entry-main__topbar">
+            <InlineModelSwitcher
+              config={config}
+              agents={agents}
+              daemonLive={daemonLive}
+              onModeChange={onModeChange}
+              onAgentChange={onAgentChange}
+              onAgentModelChange={onAgentModelChange}
+              onApiProtocolChange={onApiProtocolChange}
+              onApiModelChange={onApiModelChange}
+              onOpenSettings={onOpenSettings}
+            />
+            {avatarMenu}
+          </div>
+          <div
+            className={`entry-main__inner${
+              view === 'home' ? '' : ' entry-main__inner--wide'
+            }`}
+          >
             {view === 'home' ? (
               <HomeView
                 projects={projects}

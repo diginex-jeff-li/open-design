@@ -7,7 +7,10 @@ import {
 } from '../media/models';
 import type {
   AgentInfo,
+  ApiProtocol,
+  AppConfig,
   DesignSystemSummary,
+  ExecMode,
   Project,
   ProjectKind,
   ProjectMetadata,
@@ -34,6 +37,19 @@ interface Props {
   promptTemplates: PromptTemplateSummary[];
   defaultDesignSystemId: string | null;
   agents: AgentInfo[];
+  // Execution / model-switching context forwarded to the EntryShell so the
+  // sticky top-bar can expose the active CLI/BYOK + model and persist
+  // changes through the same channels as the project view.
+  config: AppConfig;
+  daemonLive: boolean;
+  onModeChange: (mode: ExecMode) => void;
+  onAgentChange: (id: string) => void;
+  onAgentModelChange: (
+    id: string,
+    choice: { model?: string; reasoning?: string },
+  ) => void;
+  onApiProtocolChange: (protocol: ApiProtocol) => void;
+  onApiModelChange: (model: string) => void;
   // Per-resource loading flags. Each tab gates its own content on whichever
   // flag matches the data it renders, so a slow `/api/agents` probe does
   // not block tabs that don't need agents. Templates are not gated here —
@@ -180,7 +196,14 @@ export function EntryView({
   templates,
   promptTemplates,
   defaultDesignSystemId,
-  agents: _agents,
+  agents,
+  config,
+  daemonLive,
+  onModeChange,
+  onAgentChange,
+  onAgentModelChange,
+  onApiProtocolChange,
+  onApiModelChange,
   skillsLoading = false,
   designSystemsLoading = false,
   projectsLoading = false,
@@ -256,6 +279,14 @@ export function EntryView({
       skillsLoading={skillsLoading}
       designSystemsLoading={designSystemsLoading}
       projectsLoading={projectsLoading}
+      config={config}
+      agents={agents}
+      daemonLive={daemonLive}
+      onModeChange={onModeChange}
+      onAgentChange={onAgentChange}
+      onAgentModelChange={onAgentModelChange}
+      onApiProtocolChange={onApiProtocolChange}
+      onApiModelChange={onApiModelChange}
       onCreateProject={onCreateProject}
       onImportClaudeDesign={onImportClaudeDesign}
       {...(onImportFolder ? { onImportFolder } : {})}

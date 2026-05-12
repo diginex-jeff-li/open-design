@@ -8,6 +8,8 @@ import { migrateCustomPetAtlas } from './components/pet/pets';
 import { ProjectView } from './components/ProjectView';
 import {
   SettingsDialog,
+  switchApiProtocolConfig,
+  updateCurrentApiProtocolConfig,
   type SettingsSection,
 } from './components/SettingsDialog';
 import {
@@ -44,6 +46,7 @@ import {
 import { liveArtifactTabId } from './types';
 import type {
   AgentInfo,
+  ApiProtocol,
   AppConfig,
   AppVersionInfo,
   DesignSystemSummary,
@@ -464,6 +467,33 @@ export function App() {
     [config],
   );
 
+  // BYOK protocol switch — also flips `mode` to 'api' so the user does
+  // not have to take a second step after picking a provider from the
+  // inline switcher. The helper preserves any per-protocol fields the
+  // user had previously configured for the target protocol.
+  const handleApiProtocolChange = useCallback(
+    (protocol: ApiProtocol) => {
+      const next = switchApiProtocolConfig(config, protocol);
+      saveConfig(next);
+      void syncConfigToDaemon(next);
+      setConfig(next);
+    },
+    [config],
+  );
+
+  // BYOK model picker — patches `model` (and the per-protocol shadow
+  // copy) without touching apiKey/baseUrl so the user can swap models
+  // mid-session without retyping their key.
+  const handleApiModelChange = useCallback(
+    (model: string) => {
+      const next = updateCurrentApiProtocolConfig(config, { model });
+      saveConfig(next);
+      void syncConfigToDaemon(next);
+      setConfig(next);
+    },
+    [config],
+  );
+
   const handleChangeDefaultDesignSystem = useCallback(
     (designSystemId: string) => {
       const next = { ...config, designSystemId };
@@ -581,12 +611,12 @@ export function App() {
     if (!ok) return;
     setProjects((curr) => curr.filter((p) => p.id !== id));
     if (route.kind === 'project' && route.projectId === id) {
-      navigate({ kind: 'home' });
+      navigate({ kind: 'home', view: 'home' });
     }
   }, [route]);
 
   const handleBack = useCallback(() => {
-    navigate({ kind: 'home' });
+    navigate({ kind: 'home', view: 'home' });
   }, []);
 
   const handleClearPendingPrompt = useCallback(() => {
@@ -633,7 +663,7 @@ export function App() {
       if (cancelled) return;
       setProjects(list);
       if (!list.find((p) => p.id === route.projectId)) {
-        navigate({ kind: 'home' }, { replace: true });
+        navigate({ kind: 'home', view: 'home' }, { replace: true });
       }
     })();
     return () => {
@@ -773,6 +803,13 @@ export function App() {
           promptTemplates={promptTemplates}
           defaultDesignSystemId={config.designSystemId}
           agents={agents}
+          config={config}
+          daemonLive={daemonLive}
+          onModeChange={handleModeChange}
+          onAgentChange={handleAgentChange}
+          onAgentModelChange={handleAgentModelChange}
+          onApiProtocolChange={handleApiProtocolChange}
+          onApiModelChange={handleApiModelChange}
           skillsLoading={skillsLoading}
           designSystemsLoading={dsLoading}
           projectsLoading={projectsLoading}

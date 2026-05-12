@@ -15724,9 +15724,10 @@ body.entry-resizing { cursor: col-resize; user-select: none; }
 }
 
 /* Plugins section composite — wraps InlinePluginsRail + ContextChipStrip +
-   PluginInputsForm. Used inline on NewProjectPanel (wide variant) and
-   above ChatComposer (strip variant). Each variant is tuned for its
-   host: strip is a slim horizontal scroller, wide is a 2-column grid. */
+   PluginInputsForm. Mounted above ChatComposer (strip variant). The
+   NewProjectPanel mount has been removed: that flow now binds the
+   default scenario plugin transparently at create time, so the wide
+   variant has no remaining host. */
 .plugins-section {
   display: flex;
   flex-direction: column;
@@ -15798,49 +15799,6 @@ body.entry-resizing { cursor: col-resize; user-select: none; }
 .inline-plugins-rail--strip .inline-plugins-rail__desc,
 .inline-plugins-rail--strip .inline-plugins-rail__trust {
   display: none;
-}
-
-/* Wide rail — used by NewProjectPanel (legacy) and any other host
-   that wants the full card layout. PluginLoopHome ships its own
-   `plugin-loop-home__grid` and does not use this. */
-.inline-plugins-rail--wide {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 8px;
-}
-.inline-plugins-rail--wide .inline-plugins-rail__card {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm, 6px);
-  background: var(--bg);
-  color: var(--text);
-  font-size: 12px;
-  text-align: left;
-  cursor: pointer;
-}
-.inline-plugins-rail--wide .inline-plugins-rail__card:hover:not(:disabled) {
-  border-color: var(--accent);
-}
-.inline-plugins-rail--wide .inline-plugins-rail__title {
-  font-weight: 600;
-  font-size: 12.5px;
-}
-.inline-plugins-rail--wide .inline-plugins-rail__desc {
-  color: var(--text-muted);
-  font-size: 11.5px;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.inline-plugins-rail--wide .inline-plugins-rail__trust {
-  font-size: 10.5px;
-  color: var(--text-muted);
-  text-transform: capitalize;
 }
 
 .inline-plugins-rail__error {

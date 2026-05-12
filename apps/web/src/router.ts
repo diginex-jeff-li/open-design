@@ -5,25 +5,37 @@
 
 import { useEffect, useState } from 'react';
 
+// Entry-shell sub-views. The home/project landing renders one of three
+// columns and each sub-view now owns a top-level path so the browser
+// back/forward buttons work, deep links are shareable, and per-tab
+// state isn't trapped behind a `useState` boundary.
+export type EntryHomeView = 'home' | 'projects' | 'design-systems';
+
 export type Route =
-  | { kind: 'home' }
+  | { kind: 'home'; view: EntryHomeView }
   | { kind: 'project'; projectId: string; fileName: string | null }
   | { kind: 'marketplace' }
   | { kind: 'marketplace-detail'; pluginId: string };
 
 export function parseRoute(pathname: string): Route {
   const parts = pathname.replace(/\/+$/, '').split('/').filter(Boolean);
-  if (parts.length === 0) return { kind: 'home' };
-  if (parts[0] === 'projects' && parts[1]) {
-    const projectId = decodeURIComponent(parts[1]);
-    if (parts[2] === 'files' && parts[3]) {
-      return {
-        kind: 'project',
-        projectId,
-        fileName: decodeURIComponent(parts.slice(3).join('/')),
-      };
+  if (parts.length === 0) return { kind: 'home', view: 'home' };
+  if (parts[0] === 'projects') {
+    if (parts[1]) {
+      const projectId = decodeURIComponent(parts[1]);
+      if (parts[2] === 'files' && parts[3]) {
+        return {
+          kind: 'project',
+          projectId,
+          fileName: decodeURIComponent(parts.slice(3).join('/')),
+        };
+      }
+      return { kind: 'project', projectId, fileName: null };
     }
-    return { kind: 'project', projectId, fileName: null };
+    return { kind: 'home', view: 'projects' };
+  }
+  if (parts[0] === 'design-systems') {
+    return { kind: 'home', view: 'design-systems' };
   }
   // Phase 2B / spec §11.6 — marketplace deep UI routes. Two paths:
   //   /marketplace            → catalog grid (MarketplaceView)
@@ -36,11 +48,15 @@ export function parseRoute(pathname: string): Route {
     }
     return { kind: 'marketplace' };
   }
-  return { kind: 'home' };
+  return { kind: 'home', view: 'home' };
 }
 
 export function buildPath(route: Route): string {
-  if (route.kind === 'home') return '/';
+  if (route.kind === 'home') {
+    if (route.view === 'projects') return '/projects';
+    if (route.view === 'design-systems') return '/design-systems';
+    return '/';
+  }
   if (route.kind === 'marketplace') return '/marketplace';
   if (route.kind === 'marketplace-detail') return `/marketplace/${encodeURIComponent(route.pluginId)}`;
   const id = encodeURIComponent(route.projectId);

@@ -33,7 +33,32 @@ describe('router /marketplace', () => {
   });
 
   it('does not break the home / project routes', () => {
-    expect(parseRoute('/')).toEqual({ kind: 'home' });
+    expect(parseRoute('/')).toEqual({ kind: 'home', view: 'home' });
     expect(parseRoute('/projects/abc')).toEqual({ kind: 'project', projectId: 'abc', fileName: null });
+  });
+});
+
+describe('router entry sub-views', () => {
+  it('parses /projects (no id) as the projects entry view', () => {
+    expect(parseRoute('/projects')).toEqual({ kind: 'home', view: 'projects' });
+    expect(parseRoute('/projects/')).toEqual({ kind: 'home', view: 'projects' });
+  });
+
+  it('parses /design-systems as the design-systems entry view', () => {
+    expect(parseRoute('/design-systems')).toEqual({ kind: 'home', view: 'design-systems' });
+  });
+
+  it('still parses /projects/<id> as a project detail route', () => {
+    expect(parseRoute('/projects/abc')).toEqual({ kind: 'project', projectId: 'abc', fileName: null });
+  });
+
+  it('round-trips entry sub-views through buildPath', () => {
+    for (const route of [
+      { kind: 'home', view: 'home' } as Route,
+      { kind: 'home', view: 'projects' } as Route,
+      { kind: 'home', view: 'design-systems' } as Route,
+    ]) {
+      expect(parseRoute(buildPath(route))).toEqual(route);
+    }
   });
 });
