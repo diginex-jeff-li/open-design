@@ -619,6 +619,7 @@ export interface Dict {
   'newproj.tabLiveArtifact': string;
   'newproj.tabDeck': string;
   'newproj.tabTemplate': string;
+  'newproj.tabMedia': string;
   'newproj.tabOther': string;
   'newproj.titlePrototype': string;
   'newproj.titleLiveArtifact': string;
@@ -627,6 +628,7 @@ export interface Dict {
   'newproj.titleImage': string;
   'newproj.titleVideo': string;
   'newproj.titleAudio': string;
+  'newproj.titleMedia': string;
   'newproj.titleOther': string;
   'newproj.namePlaceholder': string;
   'newproj.fidelityLabel': string;
@@ -677,9 +679,12 @@ export interface Dict {
   'newproj.surfaceVideo': string;
   'newproj.surfaceAudio': string;
   'newproj.modelLabel': string;
+  'newproj.modelSearch': string;
+  'newproj.modelEmpty': string;
+  'newproj.modelRecommended': string;
+  'newproj.modelMissingTitle': string;
+  'newproj.modelMissingSub': string;
   'newproj.aspectLabel': string;
-  'newproj.imageStyleLabel': string;
-  'newproj.imageStylePlaceholder': string;
   'newproj.videoLengthLabel': string;
   'newproj.videoLengthSeconds': string;
   'newproj.audioKindLabel': string;

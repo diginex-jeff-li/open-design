@@ -123,10 +123,12 @@ test('new project tabs switch visible form sections and preserve drafts', async 
   await expect(page.locator('.newproj-title')).toContainText('New prototype');
   await expect(page.getByTestId('new-project-name')).toHaveValue('Prototype draft survives');
 
-  // Playwright auto-scrolls the tab into view; the explicit scroll-arrow
-  // button was removed when the newproj tabs adopted the folder-tab pattern.
-  await page.getByTestId('new-project-tab-image').click();
-  await expect(page.getByTestId('new-project-tab-image')).toHaveAttribute('aria-selected', 'true');
+  // Playwright auto-scrolls the tab into view; the consolidated media flow
+  // keeps image/video/audio as inner segmented surfaces.
+  await page.getByTestId('new-project-tab-media').click();
+  await expect(page.getByTestId('new-project-tab-media')).toHaveAttribute('aria-selected', 'true');
+  await page.getByTestId('new-project-media-surface-image').click();
+  await expect(page.getByTestId('new-project-media-surface-image')).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.newproj-title')).toContainText('New image');
   await expect(page.getByTestId('design-system-picker')).toHaveCount(0);
   await expect(page.getByText('Model', { exact: true })).toBeVisible();
