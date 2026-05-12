@@ -16,6 +16,7 @@ import type {
   AgentInfo,
   ApiProtocol,
   AppConfig,
+  AppTheme,
   DesignSystemSummary,
   ExecMode,
   Project,
@@ -67,6 +68,29 @@ const DEFAULT_SCENARIO_PLUGIN_BY_KIND: Record<ProjectKind, string | null> = {
 function defaultPluginIdForKind(metadata: ProjectMetadata): string | null {
   return DEFAULT_SCENARIO_PLUGIN_BY_KIND[metadata.kind] ?? null;
 }
+
+// Theme options exposed in the avatar-popover appearance submenu.
+// Mirrors the segmented control in `SettingsDialog` so the same three
+// choices (System / Light / Dark) are available from both surfaces.
+type AppearanceThemeLabel =
+  | 'settings.themeSystem'
+  | 'settings.themeLight'
+  | 'settings.themeDark';
+
+const APPEARANCE_THEMES: ReadonlyArray<{
+  value: AppTheme;
+  labelKey: AppearanceThemeLabel;
+}> = [
+  { value: 'system', labelKey: 'settings.themeSystem' },
+  { value: 'light', labelKey: 'settings.themeLight' },
+  { value: 'dark', labelKey: 'settings.themeDark' },
+];
+
+const APPEARANCE_LABEL: Record<AppTheme, AppearanceThemeLabel> = {
+  system: 'settings.themeSystem',
+  light: 'settings.themeLight',
+  dark: 'settings.themeDark',
+};
 
 type Translator = ReturnType<typeof useT>;
 
@@ -135,6 +159,10 @@ interface Props {
   ) => void;
   onApiProtocolChange: (protocol: ApiProtocol) => void;
   onApiModelChange: (model: string) => void;
+  // Quick theme switch from the avatar-popover dropdown. Lets the user
+  // flip between system / light / dark without opening the full Settings
+  // dialog. App owns persistence; this component just calls the callback.
+  onThemeChange: (theme: AppTheme) => void;
   onCreateProject: (
     input: CreateInput & {
       pendingPrompt?: string;
@@ -183,6 +211,7 @@ export function EntryShell({
   onAgentModelChange,
   onApiProtocolChange,
   onApiModelChange,
+  onThemeChange,
   onCreateProject,
   onImportClaudeDesign,
   onImportFolder,
@@ -203,6 +232,7 @@ export function EntryShell({
   const [previewSystemId, setPreviewSystemId] = useState<string | null>(null);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [languageExpanded, setLanguageExpanded] = useState(false);
+  const [appearanceExpanded, setAppearanceExpanded] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [useEverywhereOpen, setUseEverywhereOpen] = useState(false);
   const avatarMenuRef = useRef<HTMLDivElement | null>(null);
@@ -286,6 +316,7 @@ export function EntryShell({
   useEffect(() => {
     if (!avatarMenuOpen) {
       setLanguageExpanded(false);
+      setAppearanceExpanded(false);
       return;
     }
     const onClick = (e: MouseEvent) => {
@@ -419,6 +450,62 @@ export function EntryShell({
                     </span>
                     <span>{LOCALE_LABEL[code]}</span>
                     <span className="avatar-item-meta">{code}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+          {/* Appearance — system / light / dark. Mirrors the language
+              picker: a toggle row that expands a nested radio group so
+              the dropdown can host quick theme switching without
+              opening the full Settings dialog. The active theme is
+              echoed in the meta slot so the row reads as status when
+              collapsed. */}
+          <button
+            type="button"
+            className="avatar-item"
+            aria-haspopup="menu"
+            aria-expanded={appearanceExpanded}
+            onClick={() => setAppearanceExpanded((v) => !v)}
+            data-testid="entry-avatar-appearance"
+          >
+            <span className="avatar-item-icon" aria-hidden>
+              <Icon name="sun-moon" size={14} />
+            </span>
+            <span>{t('settings.appearance')}</span>
+            <span className="avatar-item-meta">
+              {t(APPEARANCE_LABEL[config.theme ?? 'system'])}
+            </span>
+            <Icon
+              name={appearanceExpanded ? 'chevron-down' : 'chevron-right'}
+              size={11}
+              className="avatar-item-chevron"
+            />
+          </button>
+          {appearanceExpanded ? (
+            <div
+              className="avatar-language-list"
+              role="group"
+              aria-label={t('settings.appearance')}
+            >
+              {APPEARANCE_THEMES.map(({ value, labelKey }) => {
+                const active = (config.theme ?? 'system') === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={active}
+                    className={`avatar-item avatar-item--lang${active ? ' is-active' : ''}`}
+                    onClick={() => {
+                      onThemeChange(value);
+                      setAvatarMenuOpen(false);
+                    }}
+                  >
+                    <span className="avatar-item-icon" aria-hidden>
+                      {active ? <Icon name="check" size={14} /> : null}
+                    </span>
+                    <span>{t(labelKey)}</span>
                   </button>
                 );
               })}

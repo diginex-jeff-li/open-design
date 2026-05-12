@@ -9,6 +9,7 @@ import type {
   AgentInfo,
   ApiProtocol,
   AppConfig,
+  AppTheme,
   DesignSystemSummary,
   ExecMode,
   Project,
@@ -50,6 +51,10 @@ interface Props {
   ) => void;
   onApiProtocolChange: (protocol: ApiProtocol) => void;
   onApiModelChange: (model: string) => void;
+  // Quick theme switch invoked from the avatar-popover dropdown so the
+  // user can flip light/dark/system without opening the full Settings
+  // dialog. Persistence happens in `App`; this component just forwards.
+  onThemeChange: (theme: AppTheme) => void;
   // Per-resource loading flags. Each tab gates its own content on whichever
   // flag matches the data it renders, so a slow `/api/agents` probe does
   // not block tabs that don't need agents. Templates are not gated here —
@@ -204,6 +209,7 @@ export function EntryView({
   onAgentModelChange,
   onApiProtocolChange,
   onApiModelChange,
+  onThemeChange,
   skillsLoading = false,
   designSystemsLoading = false,
   projectsLoading = false,
@@ -287,6 +293,7 @@ export function EntryView({
       onAgentModelChange={onAgentModelChange}
       onApiProtocolChange={onApiProtocolChange}
       onApiModelChange={onApiModelChange}
+      onThemeChange={onThemeChange}
       onCreateProject={onCreateProject}
       onImportClaudeDesign={onImportClaudeDesign}
       {...(onImportFolder ? { onImportFolder } : {})}

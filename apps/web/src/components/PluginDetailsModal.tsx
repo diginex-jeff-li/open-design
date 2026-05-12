@@ -25,6 +25,7 @@ import type {
 } from '@open-design/contracts';
 import { Icon } from './Icon';
 import { authorInitials, derivePluginSourceLinks } from '../runtime/plugin-source';
+import { PluginPreviewHero } from './plugin-details/PluginPreviewHero';
 
 interface Props {
   record: InstalledPluginRecord;
@@ -170,6 +171,47 @@ export function PluginDetailsModal({
                 </span>
               ) : null}
             </div>
+            {hasAuthorBlock ? (
+              <div
+                className="plugin-details-modal__byline"
+                data-testid="plugin-details-author"
+              >
+                <AuthorAvatar
+                  name={links.authorName}
+                  avatarUrl={links.authorAvatarUrl}
+                />
+                <div className="plugin-details-modal__byline-meta">
+                  {links.authorName ? (
+                    <div className="plugin-details-modal__byline-name">
+                      <span className="plugin-details-modal__byline-prefix">by</span>
+                      <span className="plugin-details-modal__author-name">
+                        {links.authorName}
+                      </span>
+                    </div>
+                  ) : null}
+                  <div className="plugin-details-modal__byline-links">
+                    {links.authorProfileUrl ? (
+                      <ExternalLink
+                        href={links.authorProfileUrl}
+                        icon="github"
+                        testId="plugin-details-author-profile"
+                      >
+                        {githubProfileLabel(links.authorProfileUrl)}
+                      </ExternalLink>
+                    ) : null}
+                    {links.homepageUrl ? (
+                      <ExternalLink
+                        href={links.homepageUrl}
+                        icon="external-link"
+                        testId="plugin-details-author-homepage"
+                      >
+                        Homepage
+                      </ExternalLink>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
           <button
             ref={closeRef}
@@ -184,6 +226,14 @@ export function PluginDetailsModal({
         </header>
 
         <div className="plugin-details-modal__body">
+          {examples.length > 0 ? (
+            <PluginPreviewHero
+              pluginId={record.id}
+              pluginTitle={record.title}
+              examples={examples}
+            />
+          ) : null}
+
           {description ? (
             <Section title="About">
               <p className="plugin-details-modal__description">
@@ -492,80 +542,6 @@ export function PluginDetailsModal({
                     {c}
                   </code>
                 ))}
-              </div>
-            </Section>
-          ) : null}
-
-          {examples.length > 0 ? (
-            <Section
-              title="Example outputs"
-              count={examples.length}
-              hint="Open in a new tab to see what runs from this plugin look like."
-            >
-              <ul className="plugin-details-modal__examples">
-                {examples.map((e, idx) => {
-                  const base =
-                    e.path.split(/[\\/]/).filter(Boolean).pop() ?? `${idx}`;
-                  const stem = base.replace(/\.[^.]+$/, '');
-                  const name = e.title ?? stem;
-                  return (
-                    <li key={`${e.path}-${idx}`}>
-                      <a
-                        href={`/api/plugins/${encodeURIComponent(record.id)}/example/${encodeURIComponent(stem)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="plugin-details-modal__example-link"
-                      >
-                        <span>{name}</span>
-                        <Icon name="external-link" size={12} />
-                      </a>
-                    </li>
-                  );
-                })}
-              </ul>
-            </Section>
-          ) : null}
-
-          {hasAuthorBlock ? (
-            <Section
-              title="Author"
-              hint="Who maintains this plugin and where to follow them."
-            >
-              <div
-                className="plugin-details-modal__author"
-                data-testid="plugin-details-author"
-              >
-                <AuthorAvatar
-                  name={links.authorName}
-                  avatarUrl={links.authorAvatarUrl}
-                />
-                <div className="plugin-details-modal__author-meta">
-                  {links.authorName ? (
-                    <div className="plugin-details-modal__author-name">
-                      {links.authorName}
-                    </div>
-                  ) : null}
-                  <div className="plugin-details-modal__author-links">
-                    {links.authorProfileUrl ? (
-                      <ExternalLink
-                        href={links.authorProfileUrl}
-                        icon="github"
-                        testId="plugin-details-author-profile"
-                      >
-                        {githubProfileLabel(links.authorProfileUrl)}
-                      </ExternalLink>
-                    ) : null}
-                    {links.homepageUrl ? (
-                      <ExternalLink
-                        href={links.homepageUrl}
-                        icon="external-link"
-                        testId="plugin-details-author-homepage"
-                      >
-                        Homepage
-                      </ExternalLink>
-                    ) : null}
-                  </div>
-                </div>
               </div>
             </Section>
           ) : null}

@@ -441,6 +441,22 @@ export function App() {
     [config],
   );
 
+  // Quick theme switch from the settings dropdown in the entry view.
+  // Skips the full SettingsDialog round-trip so the appearance flip
+  // feels instantaneous; the live preview comes for free because the
+  // `useLayoutEffect` above re-runs `applyAppearanceToDocument` the
+  // moment `config.theme` changes. We still persist to localStorage
+  // and the daemon so the choice survives reloads.
+  const handleThemeChange = useCallback(
+    (theme: AppConfig['theme']) => {
+      const next = { ...config, theme };
+      saveConfig(next);
+      void syncConfigToDaemon(next);
+      setConfig(next);
+    },
+    [config],
+  );
+
   const handleAgentChange = useCallback(
     (agentId: string) => {
       const next = { ...config, agentId };
@@ -810,6 +826,7 @@ export function App() {
           onAgentModelChange={handleAgentModelChange}
           onApiProtocolChange={handleApiProtocolChange}
           onApiModelChange={handleApiModelChange}
+          onThemeChange={handleThemeChange}
           skillsLoading={skillsLoading}
           designSystemsLoading={dsLoading}
           projectsLoading={projectsLoading}
