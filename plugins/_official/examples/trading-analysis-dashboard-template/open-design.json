@@ -43,7 +43,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Create a Wall-Street-grade trading analysis dashboard template with a left rail, risk cockpit, market charts, live/demo mode, and realistic dense data. Keep it single-file HTML.",
+      "query": {
+        "en": "Create a Wall-Street-grade trading analysis dashboard template with a left rail, risk cockpit, market charts, live/demo mode, and realistic dense data. Keep it single-file HTML.",
+        "zh-CN": "使用这个插件完成以下任务：Create a Wall-Street-grade trading analysis dashboard template with a left rail, risk cockpit, market charts, live/demo mode, and realistic dense data. Keep it single-file HTML."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

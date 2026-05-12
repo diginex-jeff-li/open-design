@@ -44,7 +44,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Design a launch email for a sporty running shoe brand — masthead, hero, big headline lockup, specs grid, CTA.",
+      "query": {
+        "en": "Design a launch email for a sporty running shoe brand — masthead, hero, big headline lockup, specs grid, CTA.",
+        "zh-CN": "使用这个插件完成以下任务：Design a launch email for a sporty running shoe brand — masthead, hero, big headline lockup, specs grid, CTA."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

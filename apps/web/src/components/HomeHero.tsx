@@ -7,7 +7,8 @@
 // composed with the recent-projects strip and plugins section
 // without owning their data lifecycles.
 
-import { forwardRef } from 'react';
+import { forwardRef, useMemo, useState } from 'react';
+import type { InstalledPluginRecord } from '@open-design/contracts';
 import { Icon } from './Icon';
 
 export interface HomeHeroSubmitHandler {
@@ -20,6 +21,10 @@ interface Props {
   onSubmit: HomeHeroSubmitHandler;
   activePluginTitle: string | null;
   onClearActivePlugin: () => void;
+  pluginOptions: InstalledPluginRecord[];
+  pluginsLoading: boolean;
+  pendingPluginId: string | null;
+  onPickPlugin: (record: InstalledPluginRecord, nextPrompt: string | null) => void;
   contextItemCount: number;
   error: string | null;
 }
@@ -31,15 +36,45 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
     onSubmit,
     activePluginTitle,
     onClearActivePlugin,
+    pluginOptions,
+    pluginsLoading,
+    pendingPluginId,
+    onPickPlugin,
     contextItemCount,
     error,
   },
   ref,
 ) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const canSubmit = prompt.trim().length > 0;
   const placeholder = activePluginTitle
     ? 'Edit the example query or write your own…'
-    : 'What do you want to design? Type a prompt, or pick a plugin below…';
+    : 'What do you want to design? Type a prompt, @search a plugin, or pick one below…';
+  const mention = getPluginMention(prompt);
+  const pickerOptions = useMemo(() => {
+    if (!mention) return [];
+    const q = mention.query.toLowerCase();
+    return pluginOptions
+      .filter((plugin) => {
+        if (!q) return true;
+        return [
+          plugin.title,
+          plugin.id,
+          plugin.manifest?.description ?? '',
+          ...(plugin.manifest?.tags ?? []),
+        ]
+          .join(' ')
+          .toLowerCase()
+          .includes(q);
+      })
+      .slice(0, 6);
+  }, [mention, pluginOptions]);
+  const pickerOpen = Boolean(mention) && (pluginsLoading || pickerOptions.length > 0);
+
+  function pickPlugin(record: InstalledPluginRecord) {
+    const nextPrompt = mention ? replaceMentionToken(prompt, mention) : null;
+    onPickPlugin(record, nextPrompt);
+  }
 
   return (
     <section className="home-hero" data-testid="home-hero">
@@ -83,8 +118,29 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
           className="home-hero__input"
           data-testid="home-hero-input"
           value={prompt}
-          onChange={(e) => onPromptChange(e.target.value)}
+          onChange={(e) => {
+            onPromptChange(e.target.value);
+            setSelectedIndex(0);
+          }}
           onKeyDown={(e) => {
+            if (pickerOpen && pickerOptions.length > 0) {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setSelectedIndex((idx) => (idx + 1) % pickerOptions.length);
+                return;
+              }
+              if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setSelectedIndex((idx) => (idx - 1 + pickerOptions.length) % pickerOptions.length);
+                return;
+              }
+              if (e.key === 'Tab') {
+                e.preventDefault();
+                const selected = pickerOptions[selectedIndex] ?? pickerOptions[0];
+                if (selected) pickPlugin(selected);
+                return;
+              }
+            }
             if (
               e.key === 'Enter' &&
               !e.shiftKey &&
@@ -93,12 +149,56 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
               !e.altKey
             ) {
               e.preventDefault();
+              if (pickerOpen && pickerOptions.length > 0) {
+                const selected = pickerOptions[selectedIndex] ?? pickerOptions[0];
+                if (selected) pickPlugin(selected);
+                return;
+              }
               if (canSubmit) onSubmit();
             }
           }}
           placeholder={placeholder}
           rows={3}
+          aria-controls={pickerOpen ? 'home-hero-plugin-picker' : undefined}
+          aria-expanded={pickerOpen}
         />
+        {pickerOpen ? (
+          <div
+            id="home-hero-plugin-picker"
+            className="home-hero__plugin-picker"
+            role="listbox"
+            aria-label="Plugin search results"
+            data-testid="home-hero-plugin-picker"
+          >
+            {pluginsLoading ? (
+              <div className="home-hero__plugin-picker-empty">Loading plugins…</div>
+            ) : (
+              pickerOptions.map((plugin, idx) => (
+                <button
+                  key={plugin.id}
+                  type="button"
+                  role="option"
+                  aria-selected={idx === selectedIndex}
+                  className={`home-hero__plugin-option${idx === selectedIndex ? ' is-active' : ''}`}
+                  onMouseEnter={() => setSelectedIndex(idx)}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    pickPlugin(plugin);
+                  }}
+                  disabled={pendingPluginId !== null}
+                >
+                  <span className="home-hero__plugin-option-main">
+                    <span>{plugin.title}</span>
+                    <span>{plugin.manifest?.description ?? plugin.id}</span>
+                  </span>
+                  <span className="home-hero__plugin-option-meta">
+                    {pendingPluginId === plugin.id ? 'Applying…' : plugin.sourceKind}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        ) : null}
         <div className="home-hero__input-foot">
           <span className="home-hero__hint">
             <kbd>↵</kbd> to run · <kbd>Shift</kbd>+<kbd>↵</kbd> for new line
@@ -125,3 +225,31 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
     </section>
   );
 });
+
+interface PluginMention {
+  start: number;
+  end: number;
+  query: string;
+}
+
+function getPluginMention(value: string): PluginMention | null {
+  const start = value.lastIndexOf('@');
+  if (start < 0) return null;
+  const before = value[start - 1];
+  if (before && !/\s/.test(before)) return null;
+  const tail = value.slice(start + 1);
+  const match = /^[^\s@]*/.exec(tail);
+  if (!match) return null;
+  return {
+    start,
+    end: start + 1 + match[0].length,
+    query: match[0],
+  };
+}
+
+function replaceMentionToken(value: string, mention: PluginMention): string | null {
+  const before = value.slice(0, mention.start).trimEnd();
+  const after = value.slice(mention.end).trimStart();
+  const next = [before, after].filter(Boolean).join(' ').trim();
+  return next.length > 0 ? next : null;
+}

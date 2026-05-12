@@ -46,7 +46,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Design 'The Creator's Style & Format Guide' — cover page and one inside spread, lifestyle creator brand.",
+      "query": {
+        "en": "Design 'The Creator's Style & Format Guide' — cover page and one inside spread, lifestyle creator brand.",
+        "zh-CN": "使用这个插件完成以下任务：Design 'The Creator's Style & Format Guide' — cover page and one inside spread, lifestyle creator brand."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

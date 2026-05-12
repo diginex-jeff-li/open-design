@@ -2,6 +2,7 @@
 import type { DesktopExportPdfInput, DesktopExportPdfResult } from '@open-design/sidecar-proto';
 import express from 'express';
 import multer from 'multer';
+import JSZip from 'jszip';
 import { execFile, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -10,6 +11,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import net from 'node:net';
+import { defaultScenarioPluginIdForKind } from '@open-design/contracts';
 import {
   composeSystemPrompt,
   renderCodexImagegenOverride,
@@ -1574,6 +1576,16 @@ const importUpload = multer({
   limits: { fileSize: 100 * 1024 * 1024 },
 });
 
+const PLUGIN_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
+const pluginUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: PLUGIN_UPLOAD_MAX_BYTES,
+    files: 500,
+    fieldSize: 2 * 1024 * 1024,
+  },
+});
+
 // Project-scoped multi-file upload. Lands files directly in the project
 // folder (flat — same shape FileWorkspace expects), so the composer's
 // pasted/dropped/picked images become referenceable filenames the agent
@@ -2741,23 +2753,62 @@ export async function startServer({
       // failures land on a 4xx here; the project is left in place because
       // it is already inserted (the snapshot resolver runs after — re-
       // applying via /api/plugins/:id/apply is the recovery path).
+      //
+      // Stage A of plugin-driven-flow-plan: when neither field is set
+      // we fall back to the bundled scenario plugin for the project's
+      // kind, so a "naked" Home query still binds a snapshot instead of
+      // dropping into the legacy plugin-less agent path. The fallback
+      // is best-effort — if the bundled scenario is not installed (for
+      // example a stripped-down packaged build) we silently skip and
+      // the project is created without a snapshot, matching the legacy
+      // behaviour.
       let projectAppliedSnapshot = null;
-      if (req.body && (req.body.pluginId || req.body.appliedPluginSnapshotId)) {
+      const explicitPlugin =
+        req.body && (req.body.pluginId || req.body.appliedPluginSnapshotId);
+      let resolveBody = req.body;
+      if (!explicitPlugin && metadata && typeof metadata === 'object') {
+        const fallbackPluginId = defaultScenarioPluginIdForKind(metadata.kind);
+        if (fallbackPluginId) {
+          const fallbackPlugin = getInstalledPlugin(db, fallbackPluginId);
+          if (fallbackPlugin) {
+            resolveBody = { ...req.body, pluginId: fallbackPluginId };
+          }
+        }
+      }
+      if (resolveBody && (resolveBody.pluginId || resolveBody.appliedPluginSnapshotId)) {
         try {
           const registry = await loadPluginRegistryView();
           const resolved = resolvePluginSnapshot({
             db,
-            body: req.body,
+            body: resolveBody,
             projectId: id,
             conversationId: cid,
             registry,
           });
           if (resolved && !resolved.ok) {
-            return res.status(resolved.status).json(resolved.body);
+            // Fallback bindings must never block project creation. The
+            // user did not explicitly request this plugin, so a
+            // capability / missing-input failure here means "skip the
+            // fallback and let the project exist without a snapshot",
+            // not "fail the whole create".
+            if (!explicitPlugin) {
+              console.warn(
+                `[plugins] default-scenario fallback skipped for project ${id}: ${resolved.body?.error?.code ?? 'unknown'}`,
+              );
+            } else {
+              return res.status(resolved.status).json(resolved.body);
+            }
+          } else {
+            projectAppliedSnapshot = resolved;
           }
-          projectAppliedSnapshot = resolved;
         } catch (err) {
-          return sendApiError(res, 500, 'PLUGIN_APPLY_FAILED', String(err));
+          if (!explicitPlugin) {
+            console.warn(
+              `[plugins] default-scenario fallback errored for project ${id}: ${err?.message ?? err}`,
+            );
+          } else {
+            return sendApiError(res, 500, 'PLUGIN_APPLY_FAILED', String(err));
+          }
         }
       }
       /** @type {import('@open-design/contracts').CreateProjectResponse} */
@@ -3450,6 +3501,157 @@ export async function startServer({
     }
   });
 
+  async function finishUploadedPluginInstall(stagedFolder, source) {
+    const warnings = [];
+    const log = [];
+    let plugin = null;
+    let message = 'Install finished.';
+    try {
+      const pluginRoot = await findUploadedPluginRoot(stagedFolder);
+      for await (const ev of installFromLocalFolder(db, {
+        source,
+        _stagedFolder: pluginRoot,
+        _stagedSourceKind: 'user',
+      })) {
+        if (ev.message) log.push(ev.message);
+        if (Array.isArray(ev.warnings)) warnings.splice(0, warnings.length, ...ev.warnings);
+        if (ev.kind === 'success') {
+          plugin = ev.plugin;
+          message = `Installed ${ev.plugin.title}.`;
+          break;
+        }
+        if (ev.kind === 'error') {
+          message = ev.message;
+          break;
+        }
+      }
+      return { ok: Boolean(plugin), plugin, warnings, message, log };
+    } finally {
+      await fs.promises.rm(stagedFolder, { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
+
+  async function findUploadedPluginRoot(stagedFolder) {
+    if (await folderLooksLikePlugin(stagedFolder)) return stagedFolder;
+    const entries = await fs.promises.readdir(stagedFolder, { withFileTypes: true });
+    const dirs = entries.filter((entry) => entry.isDirectory());
+    const files = entries.filter((entry) => entry.isFile());
+    if (files.length === 0 && dirs.length === 1) {
+      const nested = path.join(stagedFolder, dirs[0].name);
+      if (await folderLooksLikePlugin(nested)) return nested;
+    }
+    return stagedFolder;
+  }
+
+  async function folderLooksLikePlugin(folder) {
+    const names = ['open-design.json', 'SKILL.md', path.join('.claude-plugin', 'plugin.json')];
+    for (const name of names) {
+      if (fs.existsSync(path.join(folder, name))) return true;
+    }
+    return false;
+  }
+
+  function safeUploadRelativePath(input) {
+    const value = String(input || '').replace(/\\/g, '/');
+    if (!value || value.includes('\0') || value.startsWith('/') || /^[A-Za-z]:\//.test(value)) {
+      throw new Error('invalid upload path');
+    }
+    const parts = value.split('/').filter(Boolean);
+    if (parts.length === 0 || parts.some((part) => part === '.' || part === '..')) {
+      throw new Error(`unsafe upload path: ${value}`);
+    }
+    return parts.join(path.sep);
+  }
+
+  async function extractPluginZipToFolder(buffer, stagedFolder) {
+    if (buffer.length > PLUGIN_UPLOAD_MAX_BYTES) {
+      throw new Error('zip file too large');
+    }
+    const zip = await JSZip.loadAsync(buffer);
+    let totalBytes = 0;
+    const entries = Object.values(zip.files);
+    if (entries.length === 0) throw new Error('zip contains no files');
+    for (const entry of entries) {
+      if (entry.dir) continue;
+      const rel = safeUploadRelativePath(entry.name);
+      const unixMode = typeof entry.unixPermissions === 'number' ? entry.unixPermissions : 0;
+      if ((unixMode & 0o170000) === 0o120000) {
+        throw new Error(`zip entry is a symbolic link: ${entry.name}`);
+      }
+      const content = await entry.async('nodebuffer');
+      totalBytes += content.length;
+      if (totalBytes > PLUGIN_UPLOAD_MAX_BYTES) {
+        throw new Error('zip extracted size exceeds 50 MiB');
+      }
+      const dest = path.join(stagedFolder, rel);
+      await fs.promises.mkdir(path.dirname(dest), { recursive: true });
+      await fs.promises.writeFile(dest, content);
+    }
+  }
+
+  app.post('/api/plugins/upload-zip', (req, res) => {
+    pluginUpload.single('file')(req, res, async (err) => {
+      if (err) return sendMulterError(res, err);
+      try {
+        const file = req.file;
+        if (!file || !file.buffer) {
+          return res.status(400).json({ error: 'file is required' });
+        }
+        const stagedFolder = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'od-plugin-zip-'));
+        await extractPluginZipToFolder(file.buffer, stagedFolder);
+        const result = await finishUploadedPluginInstall(
+          stagedFolder,
+          `upload:zip:${decodeMultipartFilename(file.originalname || 'plugin.zip')}`,
+        );
+        res.status(result.ok ? 200 : 400).json(result);
+      } catch (uploadErr) {
+        res.status(400).json({
+          ok: false,
+          warnings: [],
+          message: String(uploadErr?.message || uploadErr),
+          log: [],
+        });
+      }
+    });
+  });
+
+  app.post('/api/plugins/upload-folder', (req, res) => {
+    pluginUpload.array('files', 500)(req, res, async (err) => {
+      if (err) return sendMulterError(res, err);
+      const stagedFolder = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'od-plugin-folder-'));
+      try {
+        const files = Array.isArray(req.files) ? req.files : [];
+        if (files.length === 0) {
+          return res.status(400).json({ error: 'files are required' });
+        }
+        const rawPaths = req.body?.paths;
+        const paths = Array.isArray(rawPaths) ? rawPaths : rawPaths ? [rawPaths] : [];
+        let totalBytes = 0;
+        for (let i = 0; i < files.length; i += 1) {
+          const file = files[i];
+          totalBytes += file.buffer.length;
+          if (totalBytes > PLUGIN_UPLOAD_MAX_BYTES) {
+            throw new Error('folder upload exceeds 50 MiB');
+          }
+          const rel = safeUploadRelativePath(paths[i] || file.originalname);
+          const dest = path.join(stagedFolder, rel);
+          await fs.promises.mkdir(path.dirname(dest), { recursive: true });
+          await fs.promises.writeFile(dest, file.buffer);
+        }
+        const result = await finishUploadedPluginInstall(stagedFolder, 'upload:folder');
+        res.status(result.ok ? 200 : 400).json(result);
+      } catch (uploadErr) {
+        await fs.promises.rm(stagedFolder, { recursive: true, force: true }).catch(() => undefined);
+        res.status(400).json({
+          ok: false,
+          warnings: [],
+          message: String(uploadErr?.message || uploadErr),
+          log: [],
+        });
+      }
+    });
+  });
+
   app.post('/api/plugins/install', async (req, res) => {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     let source = typeof body.source === 'string' ? body.source : '';
@@ -3642,9 +3844,10 @@ export async function startServer({
       const grantCaps = Array.isArray(body.grantCaps)
         ? body.grantCaps.filter((c) => typeof c === 'string')
         : [];
+      const locale = typeof body.locale === 'string' ? body.locale : undefined;
 
       const registry = await loadPluginRegistryView();
-      const computed = applyPlugin({ plugin, inputs, registry });
+      const computed = applyPlugin({ plugin, inputs, registry, locale });
       // Plan §3.B2 — apply-time grants are merged into the snapshot's
       // capabilitiesGranted so the §9 capability gate sees them, but
       // they are NOT written back to installed_plugins.capabilities_granted.
@@ -6237,6 +6440,37 @@ export async function startServer({
       }
     }
 
+    // Stage A of plugin-driven-flow-plan: when the run is bound to a
+    // plugin snapshot, prefer the plugin's local SKILL.md (declared via
+    // `od.context.skills[{ path: './SKILL.md' }]`) over the global
+    // skill. Without this override the agent loses the plugin's
+    // template / token / layout rules and falls back to generic prompt
+    // behaviour even though the user explicitly applied the plugin.
+    if (
+      typeof appliedPluginSnapshotId === 'string'
+      && appliedPluginSnapshotId.length > 0
+    ) {
+      try {
+        const snap = getSnapshot(db, appliedPluginSnapshotId);
+        if (snap?.pluginId) {
+          const plugin = getInstalledPlugin(db, snap.pluginId);
+          if (plugin) {
+            const { loadPluginLocalSkill } = await import('./plugins/local-skill.js');
+            const local = await loadPluginLocalSkill(plugin);
+            if (local) {
+              skillBody = local.body;
+              skillName = local.name;
+              activeSkillDir = local.dir;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(
+          `[plugins] pluginSkillBody load failed: ${err?.message ?? err}`,
+        );
+      }
+    }
+
     let craftBody;
     let craftSections;
     if (skillCraftRequires.length > 0) {
@@ -7579,6 +7813,14 @@ export async function startServer({
     // for missing-input / capability / not-found / stale, or an ok result
     // whose `snapshotId` is pinned onto the run object so downstream
     // code (system prompt block, tool tokens, replay) can reach it.
+    //
+    // Stage A of plugin-driven-flow-plan: when neither the body nor the
+    // project carries plugin info we fall back to the bundled scenario
+    // plugin for the project's `metadata.kind` so direct callers (CLI /
+    // SDK / agent-headless runs) get the same auto-binding the web
+    // create flow already produces. The fallback is silent — a bundled
+    // scenario that is not installed leaves the run plugin-less, which
+    // matches the legacy path.
     let resolvedSnapshot = null;
     if (typeof req.body?.projectId === 'string' && req.body.projectId) {
       let registryView;
@@ -7587,9 +7829,26 @@ export async function startServer({
       } catch (err) {
         return res.status(500).json({ error: String(err) });
       }
+      const explicitPlugin =
+        req.body && (req.body.pluginId || req.body.appliedPluginSnapshotId);
+      let runResolveBody = req.body;
+      if (!explicitPlugin) {
+        const projectRow = getProject(db, req.body.projectId);
+        const hasPin =
+          typeof projectRow?.appliedPluginSnapshotId === 'string'
+          && projectRow.appliedPluginSnapshotId.length > 0;
+        if (!hasPin) {
+          const fallbackPluginId = defaultScenarioPluginIdForKind(
+            projectRow?.metadata?.kind,
+          );
+          if (fallbackPluginId && getInstalledPlugin(db, fallbackPluginId)) {
+            runResolveBody = { ...req.body, pluginId: fallbackPluginId };
+          }
+        }
+      }
       const resolved = resolvePluginSnapshot({
         db,
-        body: req.body,
+        body: runResolveBody,
         projectId: req.body.projectId,
         conversationId: typeof req.body.conversationId === 'string'
           ? req.body.conversationId
@@ -7597,9 +7856,16 @@ export async function startServer({
         registry: registryView,
       });
       if (resolved && !resolved.ok) {
-        return res.status(resolved.status).json(resolved.body);
+        if (!explicitPlugin) {
+          console.warn(
+            `[plugins] default-scenario fallback skipped for run on project ${req.body.projectId}: ${resolved.body?.error?.code ?? 'unknown'}`,
+          );
+        } else {
+          return res.status(resolved.status).json(resolved.body);
+        }
+      } else {
+        resolvedSnapshot = resolved;
       }
-      resolvedSnapshot = resolved;
     }
     const meta = { ...(req.body || {}) };
     if (resolvedSnapshot?.ok) {

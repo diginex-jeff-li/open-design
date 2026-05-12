@@ -32,6 +32,9 @@ interface Props {
   pendingApplyId: string | null;
   onUse: (record: InstalledPluginRecord) => void;
   onOpenDetails: (record: InstalledPluginRecord) => void;
+  title?: string;
+  subtitle?: string;
+  emptyMessage?: string;
 }
 
 export function PluginsHomeSection({
@@ -41,6 +44,9 @@ export function PluginsHomeSection({
   pendingApplyId,
   onUse,
   onOpenDetails,
+  title = 'Community',
+  subtitle = 'Things you can do and tasks to complete — packaged as plugins. Pick one to load a starter prompt, or type freely above.',
+  emptyMessage = 'Catalog is empty. Bundled plugins ship with Open Design and should appear here automatically — try restarting the daemon if this persists.',
 }: Props) {
   const {
     visiblePlugins,
@@ -62,9 +68,9 @@ export function PluginsHomeSection({
     <section className="plugins-home" data-testid="plugins-home-section">
       <header className="plugins-home__head">
         <div className="plugins-home__heading">
-          <h2 className="plugins-home__title">Community</h2>
+          <h2 className="plugins-home__title">{title}</h2>
           <p className="plugins-home__subtitle">
-            Things you can do and tasks to complete — packaged as plugins. Pick one to load a starter prompt, or type freely above.
+            {subtitle}
           </p>
         </div>
         <div className="plugins-home__head-tools">
@@ -79,8 +85,7 @@ export function PluginsHomeSection({
         <div className="plugins-home__empty">Loading catalog…</div>
       ) : visiblePlugins.length === 0 ? (
         <div className="plugins-home__empty">
-          Catalog is empty. Bundled plugins ship with Open Design and should appear
-          here automatically — try restarting the daemon if this persists.
+          {emptyMessage}
         </div>
       ) : (
         <>

@@ -128,7 +128,8 @@ function pickPluginFields(body: Record<string, unknown> | null | undefined) {
     ? (body.grantCaps as unknown[])
         .filter((c): c is string => typeof c === 'string')
     : [];
-  return { pluginId, snapshotId, pluginInputs, grantCaps };
+  const locale = typeof body.locale === 'string' ? body.locale : undefined;
+  return { pluginId, snapshotId, pluginInputs, grantCaps, locale };
 }
 
 export function resolvePluginSnapshot(input: ResolveSnapshotInput): ResolveSnapshotResult {
@@ -213,6 +214,7 @@ export function resolvePluginSnapshot(input: ResolveSnapshotInput): ResolveSnaps
       registry: input.registry,
       activeProjectDesignSystem: input.activeProjectDesignSystem,
       connectorProbe: input.connectorProbe,
+      locale: fields.locale,
     });
   } catch (err) {
     if (err instanceof MissingInputError) {

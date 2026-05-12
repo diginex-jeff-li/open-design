@@ -46,7 +46,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Design a gamified life-management app — multi-screen mobile prototype: cover poster, today's quests with XP, and a quest detail. ‘Daily quests for becoming a better human.’",
+      "query": {
+        "en": "Design a gamified life-management app — multi-screen mobile prototype: cover poster, today's quests with XP, and a quest detail. ‘Daily quests for becoming a better human.’",
+        "zh-CN": "使用这个插件完成以下任务：Design a gamified life-management app — multi-screen mobile prototype: cover poster, today's quests with XP, and a quest detail. ‘Daily quests for becoming a better human.’"
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

@@ -29,7 +29,10 @@
       "poster": "https://cms-assets.youmind.com/media/1777453164857_ghcikd_HG9U5wnbYAE3-76.jpg"
     },
     "useCase": {
-      "query": "realistic skin texture, visible pores around nose and cheeks, natural slight unevenness, no filter quality, handheld phone camera feel, slight angle, casual framing, filmed in a real environment, soft window light from the left, natural indoor lighting, no harsh highlights"
+      "query": {
+        "en": "realistic skin texture, visible pores around nose and cheeks, natural slight unevenness, no filter quality, handheld phone camera feel, slight angle, casual framing, filmed in a real environment, soft window light from the left, natural indoor lighting, no harsh highlights",
+        "zh-CN": "使用这个插件完成以下任务：realistic skin texture, visible pores around nose and cheeks, natural slight unevenness, no filter quality, handheld phone camera feel, slight angle, casual framing, filmed in a real environment, soft window light from the left, natural indoor lighting, no harsh highlights"
+      }
     },
     "inputs": [
       {

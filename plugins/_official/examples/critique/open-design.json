@@ -46,7 +46,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Run a 5-dimension critique on the magazine-web-ppt deck I just generated — score philosophy / hierarchy / detail / function / innovation, give me Keep / Fix / Quick-wins.",
+      "query": {
+        "en": "Run a 5-dimension critique on the magazine-web-ppt deck I just generated — score philosophy / hierarchy / detail / function / innovation, give me Keep / Fix / Quick-wins.",
+        "zh-CN": "使用这个插件完成以下任务：Run a 5-dimension critique on the magazine-web-ppt deck I just generated — score philosophy / hierarchy / detail / function / innovation, give me Keep / Fix / Quick-wins."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

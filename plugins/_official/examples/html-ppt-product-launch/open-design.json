@@ -41,7 +41,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Make a product-launch keynote deck in HTML using the html-ppt-product-launch full-deck template (dark hero, warm orange accent, feature cards, pricing tiers). Confirm: product name + tagline, the 3 key features, and pricing tiers — then write the deck.",
+      "query": {
+        "en": "Make a product-launch keynote deck in HTML using the html-ppt-product-launch full-deck template (dark hero, warm orange accent, feature cards, pricing tiers). Confirm: product name + tagline, the 3 key features, and pricing tiers — then write the deck.",
+        "zh-CN": "使用这个插件完成以下任务：Make a product-launch keynote deck in HTML using the html-ppt-product-launch full-deck template (dark hero, warm orange accent, feature cards, pricing tiers). Confirm: product name + tagline, the 3 key features, and pricing tiers — then write the deck."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

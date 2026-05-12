@@ -28,7 +28,10 @@
       "video": "https://customer-qs6wnyfuv0gcybzj.cloudflarestream.com/089e7cd70d20131d6d1b44741520eaee/downloads/default.mp4"
     },
     "useCase": {
-      "query": "apply the walking animation of @anim exactly as it is to @char7. the camera tracks the character exactly in place, camera angle does not change"
+      "query": {
+        "en": "apply the walking animation of @anim exactly as it is to @char7. the camera tracks the character exactly in place, camera angle does not change",
+        "zh-CN": "使用这个插件完成以下任务：apply the walking animation of @anim exactly as it is to @char7. the camera tracks the character exactly in place, camera angle does not change"
+      }
     },
     "inputs": [
       {

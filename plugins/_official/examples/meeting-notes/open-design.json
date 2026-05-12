@@ -42,7 +42,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Write up notes from a 60-minute Growth squad weekly — agenda, decisions, action items with owners, next meeting.",
+      "query": {
+        "en": "Write up notes from a 60-minute Growth squad weekly — agenda, decisions, action items with owners, next meeting.",
+        "zh-CN": "使用这个插件完成以下任务：Write up notes from a 60-minute Growth squad weekly — agenda, decisions, action items with owners, next meeting."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

@@ -43,7 +43,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Write a runbook for our auth service — alerts, dashboards, common procedures, on-call rotation.",
+      "query": {
+        "en": "Write a runbook for our auth service — alerts, dashboards, common procedures, on-call rotation.",
+        "zh-CN": "使用这个插件完成以下任务：Write a runbook for our auth service — alerts, dashboards, common procedures, on-call rotation."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

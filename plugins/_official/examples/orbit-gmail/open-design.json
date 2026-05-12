@@ -42,7 +42,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Generate today's Open Orbit Gmail briefing. Gmail is my only connected connector — pull yesterday's mail and render it as the opened Orbit Daily Digest email inside Gmail's reading view.",
+      "query": {
+        "en": "Generate today's Open Orbit Gmail briefing. Gmail is my only connected connector — pull yesterday's mail and render it as the opened Orbit Daily Digest email inside Gmail's reading view.",
+        "zh-CN": "使用这个插件完成以下任务：Generate today's Open Orbit Gmail briefing. Gmail is my only connected connector — pull yesterday's mail and render it as the opened Orbit Daily Digest email inside Gmail's reading view."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

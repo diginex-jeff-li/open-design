@@ -44,7 +44,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Sketch a hand-drawn wireframe v0.1 for a portal — four tabbed variants on graph paper, marker headlines, sticky-note annotations, hatched chart placeholders.",
+      "query": {
+        "en": "Sketch a hand-drawn wireframe v0.1 for a portal — four tabbed variants on graph paper, marker headlines, sticky-note annotations, hatched chart placeholders.",
+        "zh-CN": "使用这个插件完成以下任务：Sketch a hand-drawn wireframe v0.1 for a portal — four tabbed variants on graph paper, marker headlines, sticky-note annotations, hatched chart placeholders."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

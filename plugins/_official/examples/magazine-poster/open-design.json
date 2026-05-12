@@ -45,7 +45,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Design an editorial magazine-style poster — ‘You don't need a designer to ship your first draft anymore.’ Newsprint paper, six numbered sections.",
+      "query": {
+        "en": "Design an editorial magazine-style poster — ‘You don't need a designer to ship your first draft anymore.’ Newsprint paper, six numbered sections.",
+        "zh-CN": "使用这个插件完成以下任务：Design an editorial magazine-style poster — ‘You don't need a designer to ship your first draft anymore.’ Newsprint paper, six numbered sections."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

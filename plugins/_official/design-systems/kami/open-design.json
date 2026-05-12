@@ -18,7 +18,10 @@
     "scenario": "design",
     "surface": "web",
     "useCase": {
-      "query": "Generate a {{artifactKind}} using the kami (紙 / 纸) design system. Stay faithful to its colour palette, typography, spacing, iconography, and component vocabulary as documented in DESIGN.md."
+      "query": {
+        "en": "Use this plugin for the following Chinese-language task: Generate a {{artifactKind}} using the kami (紙 / 纸) design system. Stay faithful to its colour palette, typography, spacing, iconography, and component vocabulary as documented in DESIGN.md.",
+        "zh-CN": "Generate a {{artifactKind}} using the kami (紙 / 纸) design system. Stay faithful to its colour palette, typography, spacing, iconography, and component vocabulary as documented in DESIGN.md."
+      }
     },
     "inputs": [
       {

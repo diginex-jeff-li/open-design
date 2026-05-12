@@ -42,7 +42,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Generate today's Open Orbit Linear briefing. Linear is my only connected connector — pull yesterday's issue movement, cycle progress, status changes, and assignments and render them in Linear's native Inbox layout.",
+      "query": {
+        "en": "Generate today's Open Orbit Linear briefing. Linear is my only connected connector — pull yesterday's issue movement, cycle progress, status changes, and assignments and render them in Linear's native Inbox layout.",
+        "zh-CN": "使用这个插件完成以下任务：Generate today's Open Orbit Linear briefing. Linear is my only connected connector — pull yesterday's issue movement, cycle progress, status changes, and assignments and render them in Linear's native Inbox layout."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

@@ -252,7 +252,10 @@ Rules of authorship:
     },
 
     "useCase": {
-      "query": "Make a 12-slide investor deck for a Series A SaaS startup targeting {{audience}} on {{topic}}.",
+      "query": {
+        "en": "Make a 12-slide investor deck for a Series A SaaS startup targeting {{audience}} on {{topic}}.",
+        "zh-CN": "为一家面向 {{audience}}、主题是 {{topic}} 的 A 轮 SaaS 初创公司制作一份 12 页投资人 deck。"
+      },
       "exampleOutputs": [
         { "path": "./examples/b2b-saas/", "title": "B2B SaaS deck" }
       ]
@@ -344,7 +347,7 @@ Rules of authorship:
 - `od.kind` — registry classification (`skill` / `scenario` / `atom` / `bundle`).
 - `od.taskKind` — one of the four product scenarios (`new-generation` / `code-migration` / `figma-migration` / `tune-collab`, see §1 "Four product scenarios"). Drives marketplace filters, default input templates, and the recommended pipeline starting point.
 - `od.preview` — drives the marketplace card and detail page. `entry` is served sandboxed via the daemon (the existing `/api/skills/:id/example` plumbing extended to plugins).
-- `od.useCase.query` — the exact text that lands in the brief field on click-to-use. `{{var}}` placeholders bind to `od.inputs`.
+- `od.useCase.query` — the exact text that lands in the brief field on click-to-use. It may be a legacy string or a locale map keyed by BCP-47-style locale tags (for example `{ "en": "...", "zh-CN": "..." }`). Apply-time resolution tries the requested locale, base language, `en`, then the first available value. `{{var}}` placeholders bind to `od.inputs`.
 - `od.context.*` — typed chips that hydrate the `ContextChipStrip` above the input. Each entry compiles to a `ContextItem` (§5.2).
 - `od.context.atoms` — **unordered set** declaring the atoms a plugin needs. The daemon uses them in default order; intended for simple plugins that don't customize flow.
 - `od.pipeline` — **ordered pipeline** in which the plugin author explicitly composes atoms into stages, loops, and termination conditions (§10.1). When both `od.pipeline` and `od.context.atoms` are present, `pipeline` wins; `context.atoms` is treated only as chip-strip metadata.

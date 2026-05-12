@@ -28,7 +28,10 @@
       "poster": "https://cms-assets.youmind.com/media/1777453149026_gd2k50_HHCSvymboAAVscc.jpg"
     },
     "useCase": {
-      "query": "Inside an elevator, the metal walls have a slight cold reflection, and the ceiling lights are whitish but uneven. The space is enclosed and quiet. A {argument name=\"subject\" default=\"young Asian girl\"} stands in a corner position of the elevator, with a background of slightly distorted mirrors and floor lights."
+      "query": {
+        "en": "Inside an elevator, the metal walls have a slight cold reflection, and the ceiling lights are whitish but uneven. The space is enclosed and quiet. A {argument name=\"subject\" default=\"young Asian girl\"} stands in a corner position of the elevator, with a background of slightly distorted mirrors and floor lights.",
+        "zh-CN": "使用这个插件完成以下任务：Inside an elevator, the metal walls have a slight cold reflection, and the ceiling lights are whitish but uneven. The space is enclosed and quiet. A {argument name=\"subject\" default=\"young Asian girl\"} stands in a corner position of the elevator, with a background of slightly distorted mirrors and floor lights."
+      }
     },
     "inputs": [
       {

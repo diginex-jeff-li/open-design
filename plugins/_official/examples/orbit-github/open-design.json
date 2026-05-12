@@ -42,7 +42,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Generate today's Open Orbit GitHub briefing. GitHub is my only connected connector — pull yesterday's PRs, review requests, issues, CI runs, and merges and render them as a GitHub Notifications + PR-diff page.",
+      "query": {
+        "en": "Generate today's Open Orbit GitHub briefing. GitHub is my only connected connector — pull yesterday's PRs, review requests, issues, CI runs, and merges and render them as a GitHub Notifications + PR-diff page.",
+        "zh-CN": "使用这个插件完成以下任务：Generate today's Open Orbit GitHub briefing. GitHub is my only connected connector — pull yesterday's PRs, review requests, issues, CI runs, and merges and render them as a GitHub Notifications + PR-diff page."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

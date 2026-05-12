@@ -45,7 +45,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Create a sprite-based animation introducing trivia about Nintendo's history. Combine pixel mascots, animated text, and a Hanafuda accent. Use color and type that feel like the Nintendo brand.",
+      "query": {
+        "en": "Create a sprite-based animation introducing trivia about Nintendo's history. Combine pixel mascots, animated text, and a Hanafuda accent. Use color and type that feel like the Nintendo brand.",
+        "zh-CN": "使用这个插件完成以下任务：Create a sprite-based animation introducing trivia about Nintendo's history. Combine pixel mascots, animated text, and a Hanafuda accent. Use color and type that feel like the Nintendo brand."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

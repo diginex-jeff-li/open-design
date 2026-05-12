@@ -43,7 +43,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Design a 3-screen mobile onboarding flow for a meditation app — welcome, value props, sign-in.",
+      "query": {
+        "en": "Design a 3-screen mobile onboarding flow for a meditation app — welcome, value props, sign-in.",
+        "zh-CN": "使用这个插件完成以下任务：Design a 3-screen mobile onboarding flow for a meditation app — welcome, value props, sign-in."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

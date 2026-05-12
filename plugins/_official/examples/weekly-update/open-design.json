@@ -40,7 +40,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Make a weekly update deck for the Growth squad — what shipped, in flight, blocked, metrics, asks for next week.",
+      "query": {
+        "en": "Make a weekly update deck for the Growth squad — what shipped, in flight, blocked, metrics, asks for next week.",
+        "zh-CN": "使用这个插件完成以下任务：Make a weekly update deck for the Growth squad — what shipped, in flight, blocked, metrics, asks for next week."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

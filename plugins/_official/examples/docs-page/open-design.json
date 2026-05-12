@@ -43,7 +43,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "A documentation page — inline-start nav, scrollable article body, inline-end table of contents. Use when the brief mentions \"docs\", \"documentation\", \"guide\", \"API reference\", or \"tutorial\".",
+      "query": {
+        "en": "A documentation page — inline-start nav, scrollable article body, inline-end table of contents. Use when the brief mentions \"docs\", \"documentation\", \"guide\", \"API reference\", or \"tutorial\".",
+        "zh-CN": "使用这个插件完成以下任务：A documentation page — inline-start nav, scrollable article body, inline-end table of contents. Use when the brief mentions \"docs\", \"documentation\", \"guide\", \"API reference\", or \"tutorial\"."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

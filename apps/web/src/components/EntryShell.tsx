@@ -9,7 +9,10 @@
 // thin wrapper that passes data and callbacks through to this shell.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ConnectorDetail } from '@open-design/contracts';
+import {
+  defaultScenarioPluginIdForKind,
+  type ConnectorDetail,
+} from '@open-design/contracts';
 import { LOCALE_LABEL, LOCALES, useI18n, useT, type Locale } from '../i18n';
 import { navigate, useRoute } from '../router';
 import type {
@@ -20,7 +23,6 @@ import type {
   DesignSystemSummary,
   ExecMode,
   Project,
-  ProjectKind,
   ProjectMetadata,
   ProjectTemplate,
   PromptTemplateSummary,
@@ -39,6 +41,7 @@ import { Icon } from './Icon';
 import { IntegrationsView, type IntegrationTab } from './IntegrationsView';
 import { InlineModelSwitcher } from './InlineModelSwitcher';
 import { NewProjectModal } from './NewProjectModal';
+import { PluginsView } from './PluginsView';
 import type { CreateInput } from './NewProjectPanel';
 import type { PluginLoopSubmit } from './PluginLoopHome';
 import { TasksView } from './TasksView';
@@ -50,24 +53,13 @@ import { TasksView } from './TasksView';
 // markup — both surfaces are always present, and CSS toggles
 // `display` based on `--compact-topbar` breakpoint (900px).
 
-// Default scenario plugin for each project kind. The modal-based
-// create flow no longer surfaces a plugin picker — every submission
-// transparently binds the matching scenario so the project lands in a
-// running pipeline. Add a row here when a kind-specific scenario
-// plugin ships; until then everything routes through od-new-generation
-// which already adapts on metadata.kind.
-const DEFAULT_SCENARIO_PLUGIN_BY_KIND: Record<ProjectKind, string | null> = {
-  prototype: 'od-new-generation',
-  deck: 'od-new-generation',
-  template: 'od-new-generation',
-  image: 'od-new-generation',
-  video: 'od-new-generation',
-  audio: 'od-new-generation',
-  other: 'od-new-generation',
-};
-
+// Default scenario plugin for each project kind. The mapping lives in
+// `@open-design/contracts` so the daemon's `/api/projects` and
+// `/api/runs` fallbacks resolve to the same plugin id when no
+// `pluginId` is on the request body — plan §3.3 of
+// `specs/current/plugin-driven-flow-plan.md`.
 function defaultPluginIdForKind(metadata: ProjectMetadata): string | null {
-  return DEFAULT_SCENARIO_PLUGIN_BY_KIND[metadata.kind] ?? null;
+  return defaultScenarioPluginIdForKind(metadata.kind);
 }
 
 // Theme options exposed in the avatar-popover appearance submenu.
@@ -635,6 +627,7 @@ export function EntryShell({
                 onOpenOrbitSettings={() => onOpenSettings('orbit')}
               />
             ) : null}
+            {view === 'plugins' ? <PluginsView /> : null}
             {view === 'design-systems' ? (
               designSystemsLoading ? (
                 <CenteredLoader label={t('common.loading')} />

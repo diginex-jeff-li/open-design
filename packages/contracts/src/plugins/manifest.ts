@@ -36,6 +36,36 @@ export const InputFieldSchema = z.object({
 
 export type InputField = z.infer<typeof InputFieldSchema>;
 
+export const LocalizedTextSchema = z.record(z.string()).refine(
+  (value) => Object.keys(value).length > 0,
+  { message: 'Localized text must include at least one locale.' },
+);
+
+export type LocalizedText = string | z.infer<typeof LocalizedTextSchema>;
+
+export function resolveLocalizedText(
+  value: LocalizedText | undefined,
+  locale?: string,
+  fallbackLocale = 'en',
+): string {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+
+  const candidates = [
+    locale,
+    locale?.split('-')[0],
+    fallbackLocale,
+    fallbackLocale.split('-')[0],
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  for (const candidate of candidates) {
+    const resolved = value[candidate];
+    if (typeof resolved === 'string' && resolved.length > 0) return resolved;
+  }
+
+  return Object.values(value).find((text) => text.length > 0) ?? '';
+}
+
 export const PipelineStageSchema = z.object({
   id:        z.string().min(1),
   atoms:     z.array(z.string()),
@@ -137,7 +167,7 @@ export const PluginManifestSchema = z.object({
       gif:    z.string().optional(),
     }).passthrough().optional(),
     useCase: z.object({
-      query: z.string().optional(),
+      query: z.union([z.string(), LocalizedTextSchema]).optional(),
       exampleOutputs: z.array(z.object({
         path:  z.string(),
         title: z.string().optional(),

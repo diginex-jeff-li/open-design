@@ -75,6 +75,33 @@ describe('applyPlugin', () => {
     expect(result.result.appliedPlugin.inputs.audience).toBe('general');
   });
 
+  it('resolves localized use-case queries at apply time', () => {
+    const base = pluginFixture();
+    const result = applyPlugin({
+      plugin: {
+        ...base,
+        manifest: {
+          ...base.manifest,
+          od: {
+            ...base.manifest.od,
+            useCase: {
+              query: {
+                en: 'Generate a {{topic}} brief.',
+                'zh-CN': '生成一份关于 {{topic}} 的简报。',
+              },
+            },
+          },
+        },
+      },
+      inputs: { topic: 'design' },
+      registry: REGISTRY,
+      locale: 'zh-CN',
+    });
+
+    expect(result.result.query).toBe('生成一份关于 {{topic}} 的简报。');
+    expect(result.result.appliedPlugin.query).toBe('生成一份关于 {{topic}} 的简报。');
+  });
+
   it('grants trusted defaults plus required caps for a trusted plugin', () => {
     const result = applyPlugin({ plugin: pluginFixture(), inputs: { topic: 'design' }, registry: REGISTRY });
     for (const cap of TRUSTED_DEFAULT_CAPABILITIES) {

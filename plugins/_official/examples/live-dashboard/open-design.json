@@ -45,7 +45,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Build me a Notion-style team dashboard for Acme Studio. KPIs: total tasks, done this week, active members, docs in review. Wire it to the Notion connector and let it refresh on demand.",
+      "query": {
+        "en": "Build me a Notion-style team dashboard for Acme Studio. KPIs: total tasks, done this week, active members, docs in review. Wire it to the Notion connector and let it refresh on demand.",
+        "zh-CN": "使用这个插件完成以下任务：Build me a Notion-style team dashboard for Acme Studio. KPIs: total tasks, done this week, active members, docs in review. Wire it to the Notion connector and let it refresh on demand."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

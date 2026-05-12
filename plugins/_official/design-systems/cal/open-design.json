@@ -18,7 +18,10 @@
     "scenario": "design",
     "surface": "web",
     "useCase": {
-      "query": "Generate a {{artifactKind}} using the Cal.com design system. Stay faithful to its colour palette, typography, spacing, iconography, and component vocabulary as documented in DESIGN.md."
+      "query": {
+        "en": "Generate a {{artifactKind}} using the Cal.com design system. Stay faithful to its colour palette, typography, spacing, iconography, and component vocabulary as documented in DESIGN.md.",
+        "zh-CN": "使用这个插件完成以下任务：Generate a {{artifactKind}} using the Cal.com design system. Stay faithful to its colour palette, typography, spacing, iconography, and component vocabulary as documented in DESIGN.md."
+      }
     },
     "inputs": [
       {

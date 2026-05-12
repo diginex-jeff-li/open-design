@@ -45,7 +45,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Wrap this landing page with a tweak panel — accent color, type scale, density, light/dark — persist to localStorage so the user can refresh without losing their choice.",
+      "query": {
+        "en": "Wrap this landing page with a tweak panel — accent color, type scale, density, light/dark — persist to localStorage so the user can refresh without losing their choice.",
+        "zh-CN": "使用这个插件完成以下任务：Wrap this landing page with a tweak panel — accent color, type scale, density, light/dark — persist to localStorage so the user can refresh without losing their choice."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

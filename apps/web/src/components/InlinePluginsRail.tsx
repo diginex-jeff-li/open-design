@@ -12,6 +12,7 @@ import type {
   InstalledPluginRecord,
 } from '@open-design/contracts';
 import { applyPlugin, listPlugins } from '../state/projects';
+import { useI18n } from '../i18n';
 
 interface Props {
   // Active project the apply will be scoped to. Omit on Home (the
@@ -43,6 +44,7 @@ interface Props {
 }
 
 export function InlinePluginsRail(props: Props) {
+  const { locale } = useI18n();
   const [plugins, setPlugins] = useState<InstalledPluginRecord[]>([]);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +70,7 @@ export function InlinePluginsRail(props: Props) {
     setError(null);
     const result = await applyPlugin(record.id, {
       ...(props.projectId ? { projectId: props.projectId } : {}),
+      locale,
     });
     setPendingId(null);
     if (!result) {

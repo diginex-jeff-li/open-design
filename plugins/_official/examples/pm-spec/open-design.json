@@ -43,7 +43,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Write me a PRD for adding two-factor auth to our SaaS app — problem, scope, milestones, open questions.",
+      "query": {
+        "en": "Write me a PRD for adding two-factor auth to our SaaS app — problem, scope, milestones, open questions.",
+        "zh-CN": "使用这个插件完成以下任务：Write me a PRD for adding two-factor auth to our SaaS app — problem, scope, milestones, open questions."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

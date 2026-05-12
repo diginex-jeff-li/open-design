@@ -39,7 +39,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Single-file horizontal-swipe HTML deck. Built by copying the seed `assets/template.html` (which carries the proven 5-rule iframe nav script) and pasting slide layouts from `references/layouts.md`. Pitch decks, product overviews, study material — when you don't need the magazine aesthetic of `magazine-web-ppt`.",
+      "query": {
+        "en": "Single-file horizontal-swipe HTML deck. Built by copying the seed `assets/template.html` (which carries the proven 5-rule iframe nav script) and pasting slide layouts from `references/layouts.md`. Pitch decks, product overviews, study material — when you don't need the magazine aesthetic of `magazine-web-ppt`.",
+        "zh-CN": "使用这个插件完成以下任务：Single-file horizontal-swipe HTML deck. Built by copying the seed `assets/template.html` (which carries the proven 5-rule iframe nav script) and pasting slide layouts from `references/layouts.md`. Pitch decks, product overviews, study material — when you don't need the magazine aesthetic of `magazine-web-ppt`."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

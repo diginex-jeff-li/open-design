@@ -38,7 +38,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "5-second product reveal — ceramic coffee mug rotating on a soft\npaper backdrop, warm side-light from camera-left, micro dust motes\ndrifting through the beam. Cinematic, 16:9, slow drift on the camera.",
+      "query": {
+        "en": "5-second product reveal — ceramic coffee mug rotating on a soft\npaper backdrop, warm side-light from camera-left, micro dust motes\ndrifting through the beam. Cinematic, 16:9, slow drift on the camera.",
+        "zh-CN": "使用这个插件完成以下任务：5-second product reveal — ceramic coffee mug rotating on a soft\npaper backdrop, warm side-light from camera-left, micro dust motes\ndrifting through the beam. Cinematic, 16:9, slow drift on the camera."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

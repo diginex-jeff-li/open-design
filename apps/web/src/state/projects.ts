@@ -365,12 +365,152 @@ export async function listPlugins(): Promise<InstalledPluginRecord[]> {
   }
 }
 
+export interface PluginInstallOutcome {
+  ok: boolean;
+  plugin?: InstalledPluginRecord;
+  warnings: string[];
+  message?: string;
+  log: string[];
+}
+
+interface PluginInstallEvent {
+  kind?: 'progress' | 'success' | 'error';
+  phase?: string;
+  message?: string;
+  plugin?: InstalledPluginRecord;
+  warnings?: string[];
+}
+
+export async function installPluginSource(source: string): Promise<PluginInstallOutcome> {
+  const log: string[] = [];
+  try {
+    const resp = await fetch('/api/plugins/install', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source }),
+    });
+    if (!resp.ok) {
+      const message = await readErrorMessage(resp);
+      return { ok: false, warnings: [], message, log };
+    }
+    if (!resp.body) {
+      return {
+        ok: false,
+        warnings: [],
+        message: 'Install stream did not start.',
+        log,
+      };
+    }
+
+    let success: InstalledPluginRecord | undefined;
+    let warnings: string[] = [];
+    let errorMessage: string | undefined;
+    for await (const ev of readServerSentEvents(resp.body)) {
+      if (ev.message) log.push(ev.message);
+      if (ev.warnings) warnings = ev.warnings;
+      if (ev.kind === 'success') success = ev.plugin;
+      if (ev.kind === 'error') errorMessage = ev.message ?? 'Install failed.';
+    }
+    return {
+      ok: Boolean(success) && !errorMessage,
+      plugin: success,
+      warnings,
+      message: errorMessage ?? (success ? `Installed ${success.title}.` : 'Install finished.'),
+      log,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      warnings: [],
+      message: (err as Error).message,
+      log,
+    };
+  }
+}
+
+export async function upgradePlugin(id: string): Promise<PluginInstallOutcome> {
+  const log: string[] = [];
+  try {
+    const resp = await fetch(`/api/plugins/${encodeURIComponent(id)}/upgrade`, {
+      method: 'POST',
+    });
+    if (!resp.ok) {
+      const message = await readErrorMessage(resp);
+      return { ok: false, warnings: [], message, log };
+    }
+    if (!resp.body) {
+      return {
+        ok: false,
+        warnings: [],
+        message: 'Upgrade stream did not start.',
+        log,
+      };
+    }
+    let success: InstalledPluginRecord | undefined;
+    let warnings: string[] = [];
+    let errorMessage: string | undefined;
+    for await (const ev of readServerSentEvents(resp.body)) {
+      if (ev.message) log.push(ev.message);
+      if (ev.warnings) warnings = ev.warnings;
+      if (ev.kind === 'success') success = ev.plugin;
+      if (ev.kind === 'error') errorMessage = ev.message ?? 'Upgrade failed.';
+    }
+    return {
+      ok: Boolean(success) && !errorMessage,
+      plugin: success,
+      warnings,
+      message: errorMessage ?? (success ? `Upgraded ${success.title}.` : 'Upgrade finished.'),
+      log,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      warnings: [],
+      message: (err as Error).message,
+      log,
+    };
+  }
+}
+
+export async function uninstallPlugin(id: string): Promise<boolean> {
+  try {
+    const resp = await fetch(`/api/plugins/${encodeURIComponent(id)}/uninstall`, {
+      method: 'POST',
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+export interface PluginMarketplace {
+  id: string;
+  url: string;
+  trust: 'official' | 'trusted' | 'restricted';
+  manifest: {
+    name?: string;
+    plugins?: Array<{ name: string; source: string; description?: string }>;
+  };
+}
+
+export async function listPluginMarketplaces(): Promise<PluginMarketplace[]> {
+  try {
+    const resp = await fetch('/api/marketplaces');
+    if (!resp.ok) return [];
+    const json = (await resp.json()) as { marketplaces?: PluginMarketplace[] };
+    return json.marketplaces ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export async function applyPlugin(
   pluginId: string,
   options: {
     inputs?: Record<string, unknown>;
     projectId?: string;
     grantCaps?: string[];
+    locale?: string;
   } = {},
 ): Promise<ApplyResult | null> {
   try {
@@ -383,12 +523,66 @@ export async function applyPlugin(
           inputs: options.inputs ?? {},
           projectId: options.projectId,
           grantCaps: options.grantCaps ?? [],
+          locale: options.locale,
         }),
       },
     );
     if (!resp.ok) return null;
     const json = (await resp.json()) as ApplyResult & { ok?: boolean };
     return json;
+  } catch {
+    return null;
+  }
+}
+
+async function readErrorMessage(resp: Response): Promise<string> {
+  try {
+    const json = (await resp.json()) as {
+      error?: string | { message?: string };
+    };
+    if (typeof json.error === 'string') return json.error;
+    if (json.error?.message) return json.error.message;
+  } catch {
+    // Fall through to the status text below.
+  }
+  return resp.statusText || `HTTP ${resp.status}`;
+}
+
+async function* readServerSentEvents(
+  body: ReadableStream<Uint8Array>,
+): AsyncGenerator<PluginInstallEvent, void, void> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split(/\n\n/);
+      buffer = parts.pop() ?? '';
+      for (const part of parts) {
+        const event = parseServerSentEvent(part);
+        if (event) yield event;
+      }
+    }
+    buffer += decoder.decode();
+    const event = parseServerSentEvent(buffer);
+    if (event) yield event;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function parseServerSentEvent(raw: string): PluginInstallEvent | null {
+  const data = raw
+    .split('\n')
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).trimStart())
+    .join('\n');
+  if (!data) return null;
+  try {
+    return JSON.parse(data) as PluginInstallEvent;
   } catch {
     return null;
   }

@@ -41,7 +41,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Use the html-ppt-course-module template to build a 7-slide module deck. Confirm: module title, 3-5 learning objectives (these stick on the left rail), and the MCQ self-check question. Then assemble the deck with serif headings on warm paper.",
+      "query": {
+        "en": "Use the html-ppt-course-module template to build a 7-slide module deck. Confirm: module title, 3-5 learning objectives (these stick on the left rail), and the MCQ self-check question. Then assemble the deck with serif headings on warm paper.",
+        "zh-CN": "使用这个插件完成以下任务：Use the html-ppt-course-module template to build a 7-slide module deck. Confirm: module title, 3-5 learning objectives (these stick on the left rail), and the MCQ self-check question. Then assemble the deck with serif headings on warm paper."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

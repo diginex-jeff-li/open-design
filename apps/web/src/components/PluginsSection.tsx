@@ -39,6 +39,7 @@ import {
   applyPlugin,
   renderPluginBriefTemplate,
 } from '../state/projects';
+import { useI18n } from '../i18n';
 import { ContextChipStrip } from './ContextChipStrip';
 import { InlinePluginsRail } from './InlinePluginsRail';
 import { PluginInputsForm } from './PluginInputsForm';
@@ -91,6 +92,7 @@ export interface PluginsSectionHandle {
 
 export const PluginsSection = forwardRef<PluginsSectionHandle, Props>(
   function PluginsSection(props, ref) {
+    const { locale } = useI18n();
     const [applied, setApplied] = useState<ApplyResult | null>(null);
     const [activeRecord, setActiveRecord] = useState<InstalledPluginRecord | null>(null);
     const [pluginInputs, setPluginInputs] = useState<Record<string, unknown>>({});
@@ -141,6 +143,7 @@ export const PluginsSection = forwardRef<PluginsSectionHandle, Props>(
         applyById: async (pluginId, record = null) => {
           const result = await applyPlugin(pluginId, {
             ...(props.projectId ? { projectId: props.projectId } : {}),
+            locale,
           });
           if (!result) return null;
           handleApplied(record, result);
@@ -149,7 +152,7 @@ export const PluginsSection = forwardRef<PluginsSectionHandle, Props>(
         clear,
         getActiveRecord: () => activeRecord,
       }),
-      [props.projectId, handleApplied, clear, activeRecord],
+      [props.projectId, locale, handleApplied, clear, activeRecord],
     );
 
     const showRail = props.showRail ?? true;

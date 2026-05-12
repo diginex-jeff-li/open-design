@@ -2,7 +2,7 @@
 //
 // Renders a narrow icon-only column. The first slot is the brand
 // logo (clicking navigates to home), followed by primary
-// actions (new project, home, projects, tasks, design systems, integrations). A small
+// actions (new project, home, projects, tasks, plugins, design systems, integrations). A small
 // help launcher sits at the bottom and opens a popover with the
 // canonical "ask for help / submit a feature / what's new / download
 // desktop" external links. Language switching and other account-
@@ -14,7 +14,13 @@ import { EntryHelpMenu } from './EntryHelpMenu';
 import { Icon } from './Icon';
 import { useT } from '../i18n';
 
-export type EntryView = 'home' | 'projects' | 'tasks' | 'design-systems' | 'integrations';
+export type EntryView =
+  | 'home'
+  | 'projects'
+  | 'tasks'
+  | 'plugins'
+  | 'design-systems'
+  | 'integrations';
 
 interface Props {
   view: EntryView;
@@ -103,6 +109,15 @@ export function EntryNavRail({ view, onViewChange, onNewProject }: Props) {
           testId="entry-nav-tasks"
         >
           <Icon name="kanban" size={18} />
+        </NavButton>
+        <NavButton
+          active={view === 'plugins'}
+          ariaLabel="Plugins"
+          tooltip="Plugins"
+          onClick={() => onViewChange('plugins')}
+          testId="entry-nav-plugins"
+        >
+          <Icon name="grid" size={18} />
         </NavButton>
         <NavButton
           active={view === 'design-systems'}

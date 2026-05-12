@@ -16,6 +16,11 @@ describe('router /marketplace', () => {
     });
   });
 
+  it('parses /plugins as the entry-shell plugins tab', () => {
+    expect(parseRoute('/plugins')).toEqual({ kind: 'home', view: 'plugins' });
+    expect(parseRoute('/plugins/')).toEqual({ kind: 'home', view: 'plugins' });
+  });
+
   it('parses /plugins/<pluginId> as the same detail route (alias)', () => {
     expect(parseRoute('/plugins/sample-plugin')).toEqual({
       kind: 'marketplace-detail',
@@ -61,7 +66,9 @@ describe('router entry sub-views', () => {
       { kind: 'home', view: 'home' } as Route,
       { kind: 'home', view: 'projects' } as Route,
       { kind: 'home', view: 'tasks' } as Route,
+      { kind: 'home', view: 'plugins' } as Route,
       { kind: 'home', view: 'design-systems' } as Route,
+      { kind: 'home', view: 'integrations' } as Route,
     ]) {
       expect(parseRoute(buildPath(route))).toEqual(route);
     }

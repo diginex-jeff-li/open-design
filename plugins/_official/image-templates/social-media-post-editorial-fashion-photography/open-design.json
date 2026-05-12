@@ -27,7 +27,10 @@
       "poster": "https://cms-assets.youmind.com/media/1777453137877_aqjk7l_HHAumFda4AAVbjJ.jpg"
     },
     "useCase": {
-      "query": "A woman with {argument name=\"hair color\" default=\"long red hair\"} crouching in a minimalist studio setting with a {argument name=\"background color\" default=\"soft pink background\"}. She is wearing a {argument name=\"dress style\" default=\"fitted black dress\"} and black high heels. She holds a lit match in one hand, looking at it thoughtfully, while a small decorated cake with a single lit candle sits on the floor in front of her. The lighting is soft and warm, casting gentle highlights and subtle shadows, creating a moody, editorial atmosphere."
+      "query": {
+        "en": "A woman with {argument name=\"hair color\" default=\"long red hair\"} crouching in a minimalist studio setting with a {argument name=\"background color\" default=\"soft pink background\"}. She is wearing a {argument name=\"dress style\" default=\"fitted black dress\"} and black high heels. She holds a lit match in one hand, looking at it thoughtfully, while a small decorated cake with a single lit candle sits on the floor in front of her. The lighting is soft and warm, casting gentle highlights and subtle shadows, creating a moody, editorial atmosphere.",
+        "zh-CN": "使用这个插件完成以下任务：A woman with {argument name=\"hair color\" default=\"long red hair\"} crouching in a minimalist studio setting with a {argument name=\"background color\" default=\"soft pink background\"}. She is wearing a {argument name=\"dress style\" default=\"fitted black dress\"} and black high heels. She holds a lit match in one hand, looking at it thoughtfully, while a small decorated cake with a single lit candle sits on the floor in front of her. The lighting is soft and warm, casting gentle highlights and subtle shadows, creating a moody, editorial atmosphere."
+      }
     },
     "inputs": [
       {

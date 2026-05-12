@@ -40,7 +40,10 @@
       "entry": "./final/spritesheet.png"
     },
     "useCase": {
-      "query": "Hatch me a tiny pixel-art shiba pet — friendly, sitting upright, with a small pomegranate prop. Use the hatch-pet skill end-to-end."
+      "query": {
+        "en": "Hatch me a tiny pixel-art shiba pet — friendly, sitting upright, with a small pomegranate prop. Use the hatch-pet skill end-to-end.",
+        "zh-CN": "使用这个插件完成以下任务：Hatch me a tiny pixel-art shiba pet — friendly, sitting upright, with a small pomegranate prop. Use the hatch-pet skill end-to-end."
+      }
     },
     "context": {
       "skills": [

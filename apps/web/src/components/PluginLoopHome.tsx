@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type {
-  ApplyResult,
-  InstalledPluginRecord,
+import {
+  resolveLocalizedText,
+  type ApplyResult,
+  type InstalledPluginRecord,
 } from '@open-design/contracts';
 import {
   applyPlugin,
   listPlugins,
   renderPluginBriefTemplate,
 } from '../state/projects';
+import { useI18n } from '../i18n';
 import { Icon } from './Icon';
 import { PluginDetailsModal } from './PluginDetailsModal';
 import { authorInitials, derivePluginSourceLinks } from '../runtime/plugin-source';
@@ -31,6 +33,7 @@ interface ActivePlugin {
 }
 
 export function PluginLoopHome({ onSubmit }: Props) {
+  const { locale } = useI18n();
   const [plugins, setPlugins] = useState<InstalledPluginRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingApplyId, setPendingApplyId] = useState<string | null>(null);
@@ -68,7 +71,7 @@ export function PluginLoopHome({ onSubmit }: Props) {
   async function usePlugin(record: InstalledPluginRecord) {
     setPendingApplyId(record.id);
     setError(null);
-    const result = await applyPlugin(record.id, {});
+    const result = await applyPlugin(record.id, { locale });
     setPendingApplyId(null);
     if (!result) {
       setError(`Failed to apply ${record.title}. Make sure the daemon is reachable.`);
@@ -79,7 +82,7 @@ export function PluginLoopHome({ onSubmit }: Props) {
       if (field.default !== undefined) inputs[field.name] = field.default;
     }
     setActive({ record, result, inputs });
-    const query = result.query ?? record.manifest?.od?.useCase?.query ?? '';
+    const query = result.query || resolveLocalizedText(record.manifest?.od?.useCase?.query, locale);
     if (query) {
       setPrompt(renderPluginBriefTemplate(query, inputs));
     }

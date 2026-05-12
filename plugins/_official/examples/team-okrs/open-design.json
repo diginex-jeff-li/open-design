@@ -42,7 +42,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Build an OKR tracker for Q4 — three objectives, three key results each, progress bars, owners, status pills.",
+      "query": {
+        "en": "Build an OKR tracker for Q4 — three objectives, three key results each, progress bars, owners, status pills.",
+        "zh-CN": "使用这个插件完成以下任务：Build an OKR tracker for Q4 — three objectives, three key results each, progress bars, owners, status pills."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

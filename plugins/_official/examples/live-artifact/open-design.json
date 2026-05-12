@@ -42,7 +42,10 @@
       "entry": "./index.html"
     },
     "useCase": {
-      "query": "Create refreshable, auditable Open Design artifacts backed by connector or local data. Trigger when the user asks for live dashboards, refreshable reports, synced views, or reusable data-backed artifacts."
+      "query": {
+        "en": "Create refreshable, auditable Open Design artifacts backed by connector or local data. Trigger when the user asks for live dashboards, refreshable reports, synced views, or reusable data-backed artifacts.",
+        "zh-CN": "使用这个插件完成以下任务：Create refreshable, auditable Open Design artifacts backed by connector or local data. Trigger when the user asks for live dashboards, refreshable reports, synced views, or reusable data-backed artifacts."
+      }
     },
     "context": {
       "skills": [

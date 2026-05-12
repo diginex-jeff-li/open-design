@@ -43,7 +43,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Make me a kanban board for a 5-person growth squad mid-sprint — backlog, doing, review, done.",
+      "query": {
+        "en": "Make me a kanban board for a 5-person growth squad mid-sprint — backlog, doing, review, done.",
+        "zh-CN": "使用这个插件完成以下任务：Make me a kanban board for a 5-person growth squad mid-sprint — backlog, doing, review, done."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

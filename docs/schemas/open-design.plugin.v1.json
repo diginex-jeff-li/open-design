@@ -59,7 +59,12 @@
         "useCase": {
           "type": "object",
           "properties": {
-            "query": { "type": "string" },
+            "query": {
+              "oneOf": [
+                { "type": "string" },
+                { "$ref": "#/$defs/LocalizedText" }
+              ]
+            },
             "exampleOutputs": {
               "type": "array",
               "items": {
@@ -148,6 +153,11 @@
       "required": ["path"],
       "properties": { "path": { "type": "string", "minLength": 1 } },
       "additionalProperties": true
+    },
+    "LocalizedText": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "type": "string" }
     },
     "Reference": {
       "type": "object",

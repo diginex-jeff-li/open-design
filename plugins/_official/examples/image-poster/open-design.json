@@ -39,7 +39,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Editorial poster for an indie film festival — one bold abstract\nsilhouette over a warm, slightly grainy paper background; hand-set\nsans serif title at the top, festival dates and venue at the bottom\nin monospace. Muted ochre + ink palette.",
+      "query": {
+        "en": "Editorial poster for an indie film festival — one bold abstract\nsilhouette over a warm, slightly grainy paper background; hand-set\nsans serif title at the top, festival dates and venue at the bottom\nin monospace. Muted ochre + ink palette.",
+        "zh-CN": "使用这个插件完成以下任务：Editorial poster for an indie film festival — one bold abstract\nsilhouette over a warm, slightly grainy paper background; hand-set\nsans serif title at the top, festival dates and venue at the bottom\nin monospace. Muted ochre + ink palette."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

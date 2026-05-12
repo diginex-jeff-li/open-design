@@ -8,15 +8,17 @@
 // textarea can live centered in the hero.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type {
-  ApplyResult,
-  InstalledPluginRecord,
+import {
+  resolveLocalizedText,
+  type ApplyResult,
+  type InstalledPluginRecord,
 } from '@open-design/contracts';
 import {
   applyPlugin,
   listPlugins,
   renderPluginBriefTemplate,
 } from '../state/projects';
+import { useI18n } from '../i18n';
 import type { Project } from '../types';
 import { HomeHero } from './HomeHero';
 import { PluginDetailsModal } from './PluginDetailsModal';
@@ -45,6 +47,7 @@ export function HomeView({
   onOpenProject,
   onViewAllProjects,
 }: Props) {
+  const { locale } = useI18n();
   const [plugins, setPlugins] = useState<InstalledPluginRecord[]>([]);
   const [pluginsLoading, setPluginsLoading] = useState(true);
   const [pendingApplyId, setPendingApplyId] = useState<string | null>(null);
@@ -71,10 +74,10 @@ export function HomeView({
     [active],
   );
 
-  async function usePlugin(record: InstalledPluginRecord) {
+  async function usePlugin(record: InstalledPluginRecord, nextPrompt?: string | null) {
     setPendingApplyId(record.id);
     setError(null);
-    const result = await applyPlugin(record.id, {});
+    const result = await applyPlugin(record.id, { locale });
     setPendingApplyId(null);
     if (!result) {
       setError(`Failed to apply ${record.title}. Make sure the daemon is reachable.`);
@@ -85,8 +88,10 @@ export function HomeView({
       if (field.default !== undefined) inputs[field.name] = field.default;
     }
     setActive({ record, result, inputs });
-    const query = result.query ?? record.manifest?.od?.useCase?.query ?? '';
-    if (query) {
+    const query = result.query || resolveLocalizedText(record.manifest?.od?.useCase?.query, locale);
+    if (nextPrompt !== undefined && nextPrompt !== null) {
+      setPrompt(nextPrompt);
+    } else if (query) {
       setPrompt(renderPluginBriefTemplate(query, inputs));
     }
     setDetailsRecord(null);
@@ -119,6 +124,10 @@ export function HomeView({
         onSubmit={submit}
         activePluginTitle={active?.record.title ?? null}
         onClearActivePlugin={clearActive}
+        pluginOptions={plugins}
+        pluginsLoading={pluginsLoading}
+        pendingPluginId={pendingApplyId}
+        onPickPlugin={(record, nextPrompt) => void usePlugin(record, nextPrompt)}
         contextItemCount={contextItemCount}
         error={error}
       />

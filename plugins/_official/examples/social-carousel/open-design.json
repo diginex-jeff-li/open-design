@@ -44,7 +44,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Design a 3-card cinematic social carousel — ‘onwards.’, ‘to the next one.’, ‘looking ahead.’. 1080×1080 squares, drop-into-Instagram ready.",
+      "query": {
+        "en": "Design a 3-card cinematic social carousel — ‘onwards.’, ‘to the next one.’, ‘looking ahead.’. 1080×1080 squares, drop-into-Instagram ready.",
+        "zh-CN": "使用这个插件完成以下任务：Design a 3-card cinematic social carousel — ‘onwards.’, ‘to the next one.’, ‘looking ahead.’. 1080×1080 squares, drop-into-Instagram ready."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

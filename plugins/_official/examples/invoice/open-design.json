@@ -41,7 +41,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Create an invoice from a freelance design studio billing a client for a brand identity project — three line items, 10% retainer, 9% sales tax.",
+      "query": {
+        "en": "Create an invoice from a freelance design studio billing a client for a brand identity project — three line items, 10% retainer, 9% sales tax.",
+        "zh-CN": "使用这个插件完成以下任务：Create an invoice from a freelance design studio billing a client for a brand identity project — three line items, 10% retainer, 9% sales tax."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

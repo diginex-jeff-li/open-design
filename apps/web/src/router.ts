@@ -9,7 +9,13 @@ import { useEffect, useState } from 'react';
 // columns and each sub-view now owns a top-level path so the browser
 // back/forward buttons work, deep links are shareable, and per-tab
 // state isn't trapped behind a `useState` boundary.
-export type EntryHomeView = 'home' | 'projects' | 'tasks' | 'design-systems' | 'integrations';
+export type EntryHomeView =
+  | 'home'
+  | 'projects'
+  | 'tasks'
+  | 'plugins'
+  | 'design-systems'
+  | 'integrations';
 
 export type Route =
   | { kind: 'home'; view: EntryHomeView }
@@ -40,6 +46,9 @@ export function parseRoute(pathname: string): Route {
   if (parts[0] === 'tasks') {
     return { kind: 'home', view: 'tasks' };
   }
+  if (parts[0] === 'plugins' && !parts[1]) {
+    return { kind: 'home', view: 'plugins' };
+  }
   if (parts[0] === 'integrations') {
     return { kind: 'home', view: 'integrations' };
   }
@@ -61,6 +70,7 @@ export function buildPath(route: Route): string {
   if (route.kind === 'home') {
     if (route.view === 'projects') return '/projects';
     if (route.view === 'tasks') return '/tasks';
+    if (route.view === 'plugins') return '/plugins';
     if (route.view === 'design-systems') return '/design-systems';
     if (route.view === 'integrations') return '/integrations';
     return '/';

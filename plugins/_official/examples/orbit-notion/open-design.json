@@ -42,7 +42,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Generate today's Open Orbit Notion briefing. Notion is my only connected connector — pull yesterday's document edits, comments, @ mentions, and database row changes and render the digest as a native Notion page.",
+      "query": {
+        "en": "Generate today's Open Orbit Notion briefing. Notion is my only connected connector — pull yesterday's document edits, comments, @ mentions, and database row changes and render the digest as a native Notion page.",
+        "zh-CN": "使用这个插件完成以下任务：Generate today's Open Orbit Notion briefing. Notion is my only connected connector — pull yesterday's document edits, comments, @ mentions, and database row changes and render the digest as a native Notion page."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

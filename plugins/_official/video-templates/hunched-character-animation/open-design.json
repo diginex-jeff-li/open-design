@@ -28,7 +28,10 @@
       "video": "https://customer-qs6wnyfuv0gcybzj.cloudflarestream.com/d3d5dcaf102414a8cceca23d60b5c0d0/downloads/default.mp4"
     },
     "useCase": {
-      "query": "create a walking animation for this hunched over character. the character stays in place"
+      "query": {
+        "en": "create a walking animation for this hunched over character. the character stays in place",
+        "zh-CN": "使用这个插件完成以下任务：create a walking animation for this hunched over character. the character stays in place"
+      }
     },
     "inputs": [
       {

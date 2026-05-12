@@ -43,7 +43,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Create a FlowAI-style team management dashboard with Team Members, Team Details and Activity Log tabs, KPI cards, a member table with status badges, a role-distribution bar chart, an online-presence sparkline, top contributors, light/dark mode, and CSV export.",
+      "query": {
+        "en": "Create a FlowAI-style team management dashboard with Team Members, Team Details and Activity Log tabs, KPI cards, a member table with status badges, a role-distribution bar chart, an online-presence sparkline, top contributors, light/dark mode, and CSV export.",
+        "zh-CN": "使用这个插件完成以下任务：Create a FlowAI-style team management dashboard with Team Members, Team Details and Activity Log tabs, KPI cards, a member table with status badges, a role-distribution bar chart, an online-presence sparkline, top contributors, light/dark mode, and CSV export."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

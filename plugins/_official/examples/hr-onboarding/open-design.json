@@ -41,7 +41,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Build a 30-day onboarding plan for a new product designer joining a 40-person startup.",
+      "query": {
+        "en": "Build a 30-day onboarding plan for a new product designer joining a 40-person startup.",
+        "zh-CN": "使用这个插件完成以下任务：Build a 30-day onboarding plan for a new product designer joining a 40-person startup."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

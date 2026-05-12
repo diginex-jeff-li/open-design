@@ -46,7 +46,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "A 5-second product reveal: a minimal high-end product on a clean cream\nsurface, soft side light, slow camera push-in, restrained motion, no\ntext overlays."
+      "query": {
+        "en": "A 5-second product reveal: a minimal high-end product on a clean cream\nsurface, soft side light, slow camera push-in, restrained motion, no\ntext overlays.",
+        "zh-CN": "使用这个插件完成以下任务：A 5-second product reveal: a minimal high-end product on a clean cream\nsurface, soft side light, slow camera push-in, restrained motion, no\ntext overlays."
+      }
     },
     "context": {
       "skills": [

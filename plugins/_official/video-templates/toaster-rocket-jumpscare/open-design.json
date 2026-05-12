@@ -29,7 +29,10 @@
       "video": "https://customer-qs6wnyfuv0gcybzj.cloudflarestream.com/fbf9f399fd8f4905a62661966d937ba8/downloads/default.mp4"
     },
     "useCase": {
-      "query": "A realistic shot of an old man in a cozy kitchen being jumpscared when his toaster launches the bread five feet into the air like a rocket. Handheld \"home video\" style capturing his genuine look of shock and the bread hitting the ceiling.A realistic shot of an old man in a cozy kitchen being jumpscared when his toaster launches the bread five feet into the air like a rocket. Handheld \"home video\" style capturing his genuine look of shock and the bread hitting the ceiling."
+      "query": {
+        "en": "A realistic shot of an old man in a cozy kitchen being jumpscared when his toaster launches the bread five feet into the air like a rocket. Handheld \"home video\" style capturing his genuine look of shock and the bread hitting the ceiling.A realistic shot of an old man in a cozy kitchen being jumpscared when his toaster launches the bread five feet into the air like a rocket. Handheld \"home video\" style capturing his genuine look of shock and the bread hitting the ceiling.",
+        "zh-CN": "使用这个插件完成以下任务：A realistic shot of an old man in a cozy kitchen being jumpscared when his toaster launches the bread five feet into the air like a rocket. Handheld \"home video\" style capturing his genuine look of shock and the bread hitting the ceiling.A realistic shot of an old man in a cozy kitchen being jumpscared when his toaster launches the bread five feet into the air like a rocket. Handheld \"home video\" style capturing his genuine look of shock and the bread hitting the ceiling."
+      }
     },
     "inputs": [
       {

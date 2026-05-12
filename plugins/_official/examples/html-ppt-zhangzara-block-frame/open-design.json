@@ -47,7 +47,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "BlockFrame — Neobrutalist deck with pastel-neon color blocks and chunky black borders. Anything that should feel pop-graphic and design-led: indie SaaS launches, agency credentials, creative reviews, brand redesigns.",
+      "query": {
+        "en": "BlockFrame — Neobrutalist deck with pastel-neon color blocks and chunky black borders. Anything that should feel pop-graphic and design-led: indie SaaS launches, agency credentials, creative reviews, brand redesigns.",
+        "zh-CN": "使用这个插件完成以下任务：BlockFrame — Neobrutalist deck with pastel-neon color blocks and chunky black borders. Anything that should feel pop-graphic and design-led: indie SaaS launches, agency credentials, creative reviews, brand redesigns."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

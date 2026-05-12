@@ -44,7 +44,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Design ‘mutuals’ — a dating site for X posters. Daily digest dashboard with stats, mutual-matches bar chart, and a community ticker.",
+      "query": {
+        "en": "Design ‘mutuals’ — a dating site for X posters. Daily digest dashboard with stats, mutual-matches bar chart, and a community ticker.",
+        "zh-CN": "使用这个插件完成以下任务：Design ‘mutuals’ — a dating site for X posters. Daily digest dashboard with stats, mutual-matches bar chart, and a community ticker."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

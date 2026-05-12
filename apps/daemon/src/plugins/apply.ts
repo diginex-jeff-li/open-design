@@ -21,6 +21,7 @@ import {
 } from '@open-design/plugin-runtime';
 import {
   renderPluginBlock,
+  resolveLocalizedText,
   type AppliedPluginSnapshot,
   type ApplyResult,
   type InstalledPluginRecord,
@@ -64,6 +65,9 @@ export interface ApplyInput {
   // `od.context.designSystem.primary: true` without a concrete ref get
   // bound to this id at apply time.
   activeProjectDesignSystem?: { id: string; title?: string } | undefined;
+  // UI locale used to resolve localized manifest strings. Snapshots store
+  // the resolved string so historical runs never change when translations do.
+  locale?: string | undefined;
   // Sync probe over the connector catalog + status maps. When supplied,
   // apply resolves `od.connectors.*` against the live catalog and
   // auto-derives an `oauth-prompt` GenUI surface for any not-yet-connected
@@ -154,9 +158,7 @@ export function applyPlugin(input: ApplyInput): ApplyComputed {
     projectMetadata.craftRequires = manifest.od!.context!.craft!.slice();
   }
 
-  const queryText = typeof manifest.od?.useCase?.query === 'string'
-    ? manifest.od.useCase.query
-    : '';
+  const queryText = resolveLocalizedText(manifest.od?.useCase?.query, input.locale);
 
   const appliedAt = Date.now();
   const snapshot: AppliedPluginSnapshot = {
@@ -258,10 +260,48 @@ function buildAssetRefs(manifest: PluginManifest): PluginAssetRef[] {
   return out;
 }
 
+// Pick a global skill id from od.context.skills[]. Two ref shapes are
+// accepted:
+//
+//   - `{ ref: 'skill-id' }` — registry id; returned as-is.
+//   - `{ path: 'subdir/SKILL.md' }` — plugin-local file; returned as
+//     undefined so the project record never stores a non-existent skill
+//     id like 'SKILL.md'. Plugin-local SKILL.md bodies are sourced
+//     directly by the daemon at prompt-compose time from the installed
+//     plugin's fsPath (see server.ts) — they do NOT roam into the
+//     global skills registry.
 function pickFirstSkillId(manifest: PluginManifest): string | undefined {
   for (const ref of manifest.od?.context?.skills ?? []) {
-    const id = (ref?.ref ?? ref?.path ?? '').trim();
-    if (id) return id.startsWith('./') ? id.slice(2) : id;
+    if (typeof ref?.ref === 'string' && ref.ref.trim().length > 0) {
+      return ref.ref.trim();
+    }
+    const rawPath = typeof ref?.path === 'string' ? ref.path.trim() : '';
+    if (!rawPath) continue;
+    if (isPluginLocalPath(rawPath)) continue;
+    return rawPath;
+  }
+  return undefined;
+}
+
+function isPluginLocalPath(value: string): boolean {
+  return (
+    value.startsWith('./') ||
+    value.startsWith('../') ||
+    value.includes('/')
+  );
+}
+
+// Return the first plugin-local skill ref path (relative to plugin
+// fsPath), if any. Used by the daemon prompt composer to read a
+// plugin's SKILL.md body without re-walking the manifest. Mirrors the
+// detection inside `pickFirstSkillId` so the two stay in lockstep.
+export function pickFirstLocalSkillPath(manifest: PluginManifest): string | undefined {
+  for (const ref of manifest.od?.context?.skills ?? []) {
+    if (typeof ref?.ref === 'string' && ref.ref.trim().length > 0) continue;
+    const rawPath = typeof ref?.path === 'string' ? ref.path.trim() : '';
+    if (!rawPath) continue;
+    if (!isPluginLocalPath(rawPath)) continue;
+    return rawPath;
   }
   return undefined;
 }

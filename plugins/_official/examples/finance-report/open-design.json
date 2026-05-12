@@ -43,7 +43,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Build me a Q3 financial report for an early-stage SaaS — MRR, burn, gross margin, top accounts.",
+      "query": {
+        "en": "Build me a Q3 financial report for an early-stage SaaS — MRR, burn, gross margin, top accounts.",
+        "zh-CN": "使用这个插件完成以下任务：Build me a Q3 financial report for an early-stage SaaS — MRR, burn, gross margin, top accounts."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

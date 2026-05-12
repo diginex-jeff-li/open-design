@@ -42,7 +42,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Make a waitlist page for a design tool — clean, minimal, with a custom logo and one call-to-action.",
+      "query": {
+        "en": "Make a waitlist page for a design tool — clean, minimal, with a custom logo and one call-to-action.",
+        "zh-CN": "使用这个插件完成以下任务：Make a waitlist page for a design tool — clean, minimal, with a custom logo and one call-to-action."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

@@ -35,6 +35,23 @@ describe('parseManifest', () => {
       expect((result.manifest as Record<string, unknown>).futureField).toEqual({ hello: 'world' });
     }
   });
+
+  it('accepts localized use-case queries', () => {
+    const result = parseManifest(JSON.stringify({
+      name: 'sample-plugin',
+      version: '1.0.0',
+      od: {
+        useCase: {
+          query: {
+            en: 'Make a brief.',
+            'zh-CN': '写一份简报。',
+          },
+        },
+      },
+    }));
+
+    expect(result.ok).toBe(true);
+  });
 });
 
 describe('parseMarketplace', () => {

@@ -11,12 +11,14 @@ import { useEffect, useState } from 'react';
 import type { ApplyResult, InstalledPluginRecord } from '@open-design/contracts';
 import { applyPlugin } from '../state/projects';
 import { navigate } from '../router';
+import { useI18n } from '../i18n';
 
 interface Props {
   pluginId: string;
 }
 
 export function PluginDetailView(props: Props) {
+  const { locale } = useI18n();
   const [plugin, setPlugin] = useState<InstalledPluginRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
@@ -80,7 +82,7 @@ export function PluginDetailView(props: Props) {
   const onUse = async () => {
     setApplying(true);
     setError(null);
-    const result = await applyPlugin(plugin.id);
+    const result = await applyPlugin(plugin.id, { locale });
     setApplying(false);
     if (!result) {
       setError('Apply failed. Make sure the daemon is reachable.');

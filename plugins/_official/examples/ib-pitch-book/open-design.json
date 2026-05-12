@@ -45,7 +45,10 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Build a 10-page strategic alternatives review pitch book for the Board of\nNorthPeak Industries (NYSE: NPK). Include trading comps, precedent\ntransactions, valuation football field, DCF sensitivity, and a\nrecommended process timeline.",
+      "query": {
+        "en": "Build a 10-page strategic alternatives review pitch book for the Board of\nNorthPeak Industries (NYSE: NPK). Include trading comps, precedent\ntransactions, valuation football field, DCF sensitivity, and a\nrecommended process timeline.",
+        "zh-CN": "使用这个插件完成以下任务：Build a 10-page strategic alternatives review pitch book for the Board of\nNorthPeak Industries (NYSE: NPK). Include trading comps, precedent\ntransactions, valuation football field, DCF sensitivity, and a\nrecommended process timeline."
+      },
       "exampleOutputs": [
         {
           "path": "./example.html",

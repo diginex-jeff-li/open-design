@@ -252,7 +252,10 @@ my-plugin/
     },
 
     "useCase": {
-      "query": "Make a 12-slide investor deck for a Series A SaaS startup targeting {{audience}} on {{topic}}.",
+      "query": {
+        "en": "Make a 12-slide investor deck for a Series A SaaS startup targeting {{audience}} on {{topic}}.",
+        "zh-CN": "为一家面向 {{audience}}、主题是 {{topic}} 的 A 轮 SaaS 初创公司制作一份 12 页投资人 deck。"
+      },
       "exampleOutputs": [
         { "path": "./examples/b2b-saas/", "title": "B2B SaaS deck" }
       ]
@@ -344,7 +347,7 @@ my-plugin/
 - `od.kind`：registry 里的分类（`skill` / `scenario` / `atom` / `bundle`）。
 - `od.taskKind`：四类产品场景之一（`new-generation` / `code-migration` / `figma-migration` / `tune-collab`，§1「四类产品场景」）。决定 marketplace filter、初始 inputs 模板、推荐 pipeline 起点。
 - `od.preview`：驱动 marketplace 卡片和详情页。`entry` 通过 daemon 以 sandboxed 方式服务（扩展现有 `/api/skills/:id/example` plumbing）。
-- `od.useCase.query`：一键使用时进入 brief 字段的精确文本。`{{var}}` placeholder 绑定到 `od.inputs`。
+- `od.useCase.query`：一键使用时进入 brief 字段的精确文本。它可以是兼容旧 manifest 的字符串，也可以是按 BCP-47 风格 locale key 组织的文本映射（例如 `{ "en": "...", "zh-CN": "..." }`）。apply 时会依次尝试请求的 locale、基础语言、`en`，最后回退到第一个可用值。`{{var}}` placeholder 绑定到 `od.inputs`。
 - `od.context.*`：用于填充输入框上方 `ContextChipStrip` 的类型化 chips。每一项都会编译成一个 `ContextItem`（§5.2）。
 - `od.context.atoms`：**无序集合**——声明插件需要的 atoms。daemon 仅以默认顺序使用它们；用于不需要自定义流程的简单插件。
 - `od.pipeline`：**有序管线**——插件作者显式编排 atoms 的 stages、循环、终止条件（§10.1）。当 `od.pipeline` 与 `od.context.atoms` 同时出现时，pipeline 优先；context.atoms 仅作为 chip strip 展示。
