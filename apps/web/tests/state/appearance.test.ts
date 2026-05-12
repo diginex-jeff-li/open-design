@@ -2,8 +2,10 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  DEFAULT_ACCENT_COLOR,
   applyAppearanceToDocument,
   normalizeAccentColor,
+  resolveAccentColor,
 } from '../../src/state/appearance';
 
 describe('normalizeAccentColor', () => {
@@ -15,6 +17,13 @@ describe('normalizeAccentColor', () => {
     expect(normalizeAccentColor('blue')).toBeNull();
     expect(normalizeAccentColor('#123')).toBeNull();
     expect(normalizeAccentColor('#12345g')).toBeNull();
+  });
+});
+
+describe('resolveAccentColor', () => {
+  it('falls back to the first appearance color for missing or invalid values', () => {
+    expect(resolveAccentColor(undefined)).toBe(DEFAULT_ACCENT_COLOR);
+    expect(resolveAccentColor('blue')).toBe(DEFAULT_ACCENT_COLOR);
   });
 });
 
@@ -62,12 +71,12 @@ describe('applyAppearanceToDocument', () => {
     expect(document.documentElement.style.getPropertyValue('--accent-hover')).toContain('#ef4444');
   });
 
-  it('clears accent overrides when no valid accent is configured', () => {
+  it('falls back to the default accent when no valid accent is configured', () => {
     document.documentElement.style.setProperty('--accent', '#4f46e5');
 
     applyAppearanceToDocument({ theme: 'system', accentColor: 'not-a-color' });
 
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
-    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe(DEFAULT_ACCENT_COLOR);
   });
 });

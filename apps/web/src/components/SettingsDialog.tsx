@@ -65,8 +65,11 @@ import { ConnectorsBrowser } from './ConnectorsBrowser';
 import { MemoryModelInline } from './MemoryModelInline';
 import { MemorySection } from './MemorySection';
 import {
+  ACCENT_SWATCHES,
+  DEFAULT_ACCENT_COLOR,
   applyAppearanceToDocument,
   normalizeAccentColor,
+  resolveAccentColor,
 } from '../state/appearance';
 import { isAutosaveDraftOnlyChange } from '../App';
 import {
@@ -635,18 +638,26 @@ export function SettingsDialog({
 }: Props) {
   const { t, locale, setLocale } = useI18n();
   const [cfg, setCfg] = useState<AppConfig>(initial);
+  const lastSavedAppearanceRef = useRef({
+    theme: initial.theme ?? 'system',
+    accentColor: resolveAccentColor(initial.accentColor),
+  });
 
-  // Revert the live theme preview when the dialog closes without saving.
-  // On Save, App's useLayoutEffect fires after unmount and applies the new
-  // saved theme, so this cleanup is effectively a no-op in that path.
-  useLayoutEffect(() => {
-    return () => {
-      applyAppearanceToDocument({
-        theme: initial.theme ?? 'system',
-        accentColor: initial.accentColor,
-      });
+  useEffect(() => {
+    lastSavedAppearanceRef.current = {
+      theme: initial.theme ?? 'system',
+      accentColor: resolveAccentColor(initial.accentColor),
     };
   }, [initial.theme, initial.accentColor]);
+
+  // Revert the live theme preview to the most recently persisted appearance.
+  // That is the initial appearance until autosave succeeds; after autosave,
+  // closing Settings must not roll the document back to stale colors.
+  useLayoutEffect(() => {
+    return () => {
+      applyAppearanceToDocument(lastSavedAppearanceRef.current);
+    };
+  }, []);
   const [showApiKey, setShowApiKey] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<SettingsSection>(initialSection);
@@ -1198,6 +1209,10 @@ export function SettingsDialog({
         try {
           await onPersist(snapshot, persistOptions);
           autosaveLastSavedRef.current = snapshot;
+          lastSavedAppearanceRef.current = {
+            theme: snapshot.theme ?? 'system',
+            accentColor: resolveAccentColor(snapshot.accentColor),
+          };
           if (persistOptions.forceMediaProviderSync) {
             lastSyncedMediaProvidersVersionRef.current = mediaProvidersVersion;
           }
@@ -4594,18 +4609,6 @@ const THEMES: Array<{ value: AppTheme; labelKey: 'settings.themeSystem' | 'setti
   { value: 'dark', labelKey: 'settings.themeDark' },
 ];
 
-const DEFAULT_ACCENT_COLOR = '#c96442';
-const ACCENT_SWATCHES = [
-  DEFAULT_ACCENT_COLOR,
-  '#2563eb',
-  '#7c3aed',
-  '#059669',
-  '#dc2626',
-  '#d97706',
-  '#0891b2',
-  '#db2777',
-] as const;
-
 function AppearanceSection({
   cfg,
   setCfg,
@@ -4615,19 +4618,19 @@ function AppearanceSection({
 }) {
   const { t } = useI18n();
   const current = cfg.theme ?? 'system';
-  const currentAccent = normalizeAccentColor(cfg.accentColor) ?? DEFAULT_ACCENT_COLOR;
+  const currentAccent = resolveAccentColor(cfg.accentColor);
 
   // Apply the draft theme immediately so the user sees a live preview
   // before hitting Save. SettingsDialog's cleanup reverts this on cancel.
   useLayoutEffect(() => {
     applyAppearanceToDocument({
       theme: current,
-      accentColor: cfg.accentColor,
+      accentColor: currentAccent,
     });
-  }, [current, cfg.accentColor]);
+  }, [current, currentAccent]);
 
-  const setAccentColor = (color: string | undefined) => {
-    setCfg((c) => ({ ...c, accentColor: color ? normalizeAccentColor(color) ?? c.accentColor : undefined }));
+  const setAccentColor = (color: string) => {
+    setCfg((c) => ({ ...c, accentColor: normalizeAccentColor(color) ?? c.accentColor ?? DEFAULT_ACCENT_COLOR }));
   };
 
   return (
@@ -4665,7 +4668,7 @@ function AppearanceSection({
                 aria-label={color === DEFAULT_ACCENT_COLOR ? 'Default accent color' : color}
                 aria-checked={active}
                 role="radio"
-                onClick={() => setAccentColor(color === DEFAULT_ACCENT_COLOR ? undefined : color)}
+                onClick={() => setAccentColor(color)}
               />
             );
           })}
