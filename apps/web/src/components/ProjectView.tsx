@@ -19,6 +19,7 @@ import {
   reattachDaemonRun,
   streamViaDaemon,
 } from '../providers/daemon';
+import { fetchElevenLabsVoiceOptions } from '../providers/elevenlabs-voices';
 import {
   deletePreviewComment,
   fetchPreviewComments,
@@ -34,6 +35,7 @@ import {
 import { useProjectFileEvents, type ProjectEvent } from '../providers/project-events';
 import {
   composeSystemPrompt,
+  type AudioVoiceOption,
   type MemorySystemPromptResponse,
   type ResearchOptions,
 } from '@open-design/contracts';
@@ -218,6 +220,14 @@ export function projectSplitClassName(workspaceFocused: boolean): string {
   return workspaceFocused ? 'split split-focus' : 'split';
 }
 
+function shouldFetchElevenLabsVoiceOptions(project: Project): boolean {
+  const metadata = project.metadata;
+  return metadata?.kind === 'audio'
+    && metadata.audioKind === 'speech'
+    && metadata.audioModel === 'elevenlabs-v3'
+    && !metadata.voice;
+}
+
 function projectEventToAgentEvent(evt: ProjectEvent): LiveArtifactEventItem['event'] | null {
   if (evt.type === 'file-changed') return null;
   if (evt.type === 'conversation-created') return null;
@@ -331,6 +341,7 @@ export function ProjectView({
   const [attachedComments, setAttachedComments] = useState<PreviewComment[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [audioVoiceOptionsError, setAudioVoiceOptionsError] = useState<string | null>(null);
   const [artifact, setArtifact] = useState<Artifact | null>(null);
   const [filesRefresh, setFilesRefresh] = useState(0);
   const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([]);
@@ -475,6 +486,7 @@ export function ProjectView({
     setAttachedComments([]);
     setStreaming(false);
     setError(null);
+    setAudioVoiceOptionsError(null);
     setArtifact(null);
     savedArtifactRef.current = null;
     pendingWritesRef.current.clear();
@@ -924,6 +936,22 @@ export function ProjectView({
     } catch {
       // Ignore; memory injection is best-effort.
     }
+    let audioVoiceOptions: AudioVoiceOption[] | undefined;
+    let audioVoiceOptionsLookupError: string | undefined;
+    if (shouldFetchElevenLabsVoiceOptions(project)) {
+      try {
+        audioVoiceOptions = await fetchElevenLabsVoiceOptions();
+        setAudioVoiceOptionsError(null);
+      } catch (err) {
+        const message = err instanceof Error
+          ? err.message
+          : 'ElevenLabs voice list could not be loaded.';
+        audioVoiceOptionsLookupError = message;
+        setAudioVoiceOptionsError(message);
+      }
+    } else {
+      setAudioVoiceOptionsError(null);
+    }
     return composeSystemPrompt({
       skillBody,
       skillName,
@@ -933,6 +961,8 @@ export function ProjectView({
       memoryBody,
       metadata: project.metadata,
       template,
+      audioVoiceOptions,
+      audioVoiceOptionsError: audioVoiceOptionsLookupError,
       streamFormat: config.mode === 'api' ? 'plain' : undefined,
       userInstructions: config.customInstructions,
       projectInstructions: project.customInstructions,
@@ -2569,7 +2599,7 @@ export function ProjectView({
               messages={messages}
               streaming={currentConversationStreaming}
               sendDisabled={currentConversationSendDisabled}
-              error={conversationLoadError ?? error}
+              error={conversationLoadError ?? error ?? audioVoiceOptionsError}
               projectId={project.id}
               projectFiles={projectFiles}
               projectFileNames={projectFileNames}

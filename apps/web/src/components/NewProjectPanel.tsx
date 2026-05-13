@@ -78,6 +78,8 @@ type PromptTemplatePick = {
   prompt: string;
 };
 
+const SFX_AUDIO_DURATIONS_SEC = AUDIO_DURATIONS_SEC.filter((sec) => sec <= 30);
+
 type TranslateFn = (key: keyof Dict, vars?: Record<string, string | number>) => string;
 
 type NewProjectPlatform = Exclude<ProjectPlatform, 'auto'>;
@@ -797,6 +799,9 @@ export function NewProjectPanel({
             onAudioKind={(kind) => {
               setAudioKind(kind);
               setAudioModel(DEFAULT_AUDIO_MODEL[kind]);
+              if (kind === 'sfx') {
+                setAudioDuration((duration) => Math.min(duration, SFX_AUDIO_DURATIONS_SEC.at(-1) ?? 30));
+              }
             }}
             onAudioModel={setAudioModel}
             onAudioDuration={setAudioDuration}
@@ -2025,12 +2030,16 @@ function MediaProjectOptions(props:
   }
 
   const models = supportedModels('audio', AUDIO_MODELS_BY_KIND[props.audioKind]);
+  const audioDurations = props.audioKind === 'sfx'
+    ? SFX_AUDIO_DURATIONS_SEC
+    : AUDIO_DURATIONS_SEC;
   return (
     <div className="newproj-media-options">
       <OptionCards
         label={t('newproj.audioKindLabel')}
         options={[
           { value: 'speech' as const, title: t('newproj.audioKindSpeech') },
+          { value: 'sfx' as const, title: t('newproj.audioKindSfx') },
         ]}
         value={props.audioKind}
         onChange={props.onAudioKind}
@@ -2045,7 +2054,7 @@ function MediaProjectOptions(props:
       <label className="newproj-label">
         <span>{t('newproj.audioDurationLabel')}</span>
         <select value={props.audioDuration} onChange={(e) => props.onAudioDuration(Number(e.target.value))}>
-          {AUDIO_DURATIONS_SEC.map((sec) => (
+          {audioDurations.map((sec) => (
             <option key={sec} value={sec}>{t('newproj.audioDurationSeconds', { n: sec })}</option>
           ))}
         </select>
@@ -2068,7 +2077,7 @@ export function supportedModels(surface: 'image' | 'video' | 'audio', models: Me
   const supportedProviders: Record<'image' | 'video' | 'audio', Set<string>> = {
     image: new Set(['openai', 'volcengine', 'grok', 'nanobanana']),
     video: new Set(['volcengine', 'hyperframes', 'grok']),
-    audio: new Set(['minimax', 'fishaudio']),
+    audio: new Set(['minimax', 'fishaudio', 'elevenlabs']),
   };
   return models.filter((model) => {
     const provider = findProvider(model.provider);
@@ -2464,7 +2473,9 @@ function buildMetadata(input: {
       audioKind: input.audioKind,
       audioModel: input.audioModel,
       audioDuration: input.audioDuration,
-      voice: input.voice.trim() || undefined,
+      ...(input.audioKind === 'speech' && input.voice.trim()
+        ? { voice: input.voice.trim() }
+        : {}),
       ...inspirations,
     };
   }
