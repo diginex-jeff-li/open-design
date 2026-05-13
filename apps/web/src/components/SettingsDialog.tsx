@@ -1645,7 +1645,7 @@ export function SettingsDialog({
               className={`settings-nav-item${activeSection === 'pet' ? ' active' : ''}`}
               onClick={() => setActiveSection('pet')}
             >
-              <Icon name="paw" size={18} />
+              <Icon name="sparkles" size={18} />
               <span>
                 <strong>{t('pet.navTitle')}</strong>
                 <small>{t('pet.navHint')}</small>
