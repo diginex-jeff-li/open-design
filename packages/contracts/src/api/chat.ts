@@ -42,28 +42,6 @@ export interface ChatRunCreateRequest extends ChatRequest {
 
 export type ChatRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled';
 
-export type ChatMessageFeedbackRating = 'positive' | 'negative';
-
-export type ChatMessageFeedbackReasonCode =
-  | 'matched_request'
-  | 'strong_visual'
-  | 'useful_structure'
-  | 'easy_to_continue'
-  | 'missed_request'
-  | 'weak_visual'
-  | 'incomplete_output'
-  | 'hard_to_use'
-  | 'other';
-
-export interface ChatMessageFeedback {
-  rating: ChatMessageFeedbackRating;
-  reasonCodes?: ChatMessageFeedbackReasonCode[];
-  customReason?: string;
-  reasonsSubmittedAt?: number;
-  createdAt: number;
-  updatedAt?: number;
-}
-
 export interface ChatRunCreateResponse {
   runId: string;
 }
@@ -156,7 +134,6 @@ export interface ChatMessage {
   attachments?: ChatAttachment[];
   commentAttachments?: ChatCommentAttachment[];
   producedFiles?: ProjectFile[];
-  feedback?: ChatMessageFeedback;
   /**
    * Request-only marker for the final assistant-message persistence pass.
    * The daemon does not store or return this field; it only uses it to

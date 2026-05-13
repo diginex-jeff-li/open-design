@@ -54,11 +54,7 @@ export const FR_SKILL_COPY: Record<string, { description?: string; examplePrompt
   },
   'eng-runbook': {
     examplePrompt:
-      "Rédigez un runbook pour notre service d'auth — alertes, dashboards, procédures standard, rotation on-call.",
-  },
-  'faq-page': {
-    examplePrompt:
-      'Une page FAQ avec sections accordéon pliables, recherche et filtrage par catégorie.',
+      'Rédigez un runbook pour notre service d’auth — alertes, dashboards, procédures standard, rotation on-call.',
   },
   'finance-report': {
     examplePrompt:

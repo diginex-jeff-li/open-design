@@ -90,7 +90,6 @@ describe('NewProjectPanel design system defaults', () => {
         designSystems={designSystems}
         defaultDesignSystemId="clay"
         templates={[]}
-        onDeleteTemplate={vi.fn()}
         promptTemplates={[]}
         onCreate={vi.fn()}
       />,
@@ -120,7 +119,6 @@ describe('NewProjectPanel design system defaults', () => {
         designSystems={designSystems}
         defaultDesignSystemId="clay"
         templates={[]}
-        onDeleteTemplate={vi.fn()}
         promptTemplates={[]}
         onCreate={onCreate}
       />,
@@ -158,7 +156,6 @@ describe('NewProjectPanel design system defaults', () => {
         designSystems={designSystems}
         defaultDesignSystemId="clay"
         templates={[]}
-        onDeleteTemplate={vi.fn()}
         promptTemplates={[]}
         onCreate={onCreate}
       />,
@@ -198,7 +195,6 @@ describe('NewProjectPanel design system defaults', () => {
         designSystems={designSystems}
         defaultDesignSystemId={null}
         templates={[]}
-        onDeleteTemplate={vi.fn()}
         promptTemplates={[]}
         onCreate={onCreate}
       />,
@@ -228,7 +224,6 @@ describe('NewProjectPanel design system defaults', () => {
         designSystems={designSystems}
         defaultDesignSystemId="clay"
         templates={[]}
-        onDeleteTemplate={vi.fn()}
         promptTemplates={[]}
         onCreate={onCreate}
         connectors={[]}
@@ -264,7 +259,6 @@ describe('NewProjectPanel design system defaults', () => {
         designSystems={designSystems}
         defaultDesignSystemId="clay"
         templates={[]}
-        onDeleteTemplate={vi.fn()}
         promptTemplates={[]}
         onCreate={onCreate}
       />,
@@ -299,7 +293,6 @@ describe('NewProjectPanel design system defaults', () => {
         designSystems={designSystems}
         defaultDesignSystemId="clay"
         templates={[]}
-        onDeleteTemplate={vi.fn()}
         promptTemplates={[]}
         onCreate={emptyOnCreate}
       />,
@@ -319,7 +312,6 @@ describe('NewProjectPanel design system defaults', () => {
         designSystems={designSystems}
         defaultDesignSystemId="clay"
         templates={templates}
-        onDeleteTemplate={vi.fn()}
         promptTemplates={[]}
         onCreate={templateOnCreate}
       />,
@@ -353,7 +345,6 @@ describe('NewProjectPanel design system defaults', () => {
         designSystems={designSystems}
         defaultDesignSystemId="clay"
         templates={[]}
-        onDeleteTemplate={vi.fn()}
         promptTemplates={[]}
         onCreate={onCreate}
       />,
@@ -388,7 +379,6 @@ describe('NewProjectPanel design system defaults', () => {
         designSystems={designSystems}
         defaultDesignSystemId="clay"
         templates={[]}
-        onDeleteTemplate={vi.fn()}
         promptTemplates={[]}
         onCreate={onCreate}
       />,
@@ -427,7 +417,6 @@ describe('NewProjectPanel design system defaults', () => {
         designSystems={designSystems}
         defaultDesignSystemId="clay"
         templates={[]}
-        onDeleteTemplate={vi.fn()}
         promptTemplates={[]}
         onCreate={onCreate}
       />,
@@ -509,7 +498,6 @@ describe('NewProjectPanel design system defaults', () => {
         designSystems={designSystems}
         defaultDesignSystemId="clay"
         templates={[]}
-        onDeleteTemplate={vi.fn()}
         promptTemplates={[]}
         onCreate={onCreate}
       />,
@@ -534,32 +522,5 @@ describe('NewProjectPanel design system defaults', () => {
         }),
       }),
     );
-  });
-});
-
-describe('NewProjectPanel template deletion', () => {
-  beforeEach(() => {
-    globalThis.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver;
-    Element.prototype.scrollIntoView = () => {};
-  });
-
-  it('calls onDeleteTemplate when user clicks delete button', async () => {
-    const onDelete = vi.fn().mockResolvedValue(true);
-    render(
-      <NewProjectPanel
-        skills={skills}
-        designSystems={designSystems}
-        defaultDesignSystemId="clay"
-        templates={templates}
-        onDeleteTemplate={onDelete}
-        promptTemplates={[]}
-        onCreate={vi.fn()}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('tab', { name: 'From template' }));
-    const deleteBtn = screen.getByLabelText(/delete template/i);
-    fireEvent.click(deleteBtn);
-    expect(onDelete).toHaveBeenCalledWith('tmpl-landing');
   });
 });

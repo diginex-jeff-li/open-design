@@ -39,7 +39,6 @@ import { PetRail } from './pet/PetRail';
 import { PromptTemplatePreviewModal } from './PromptTemplatePreviewModal';
 import { PromptTemplatesTab } from './PromptTemplatesTab';
 import { apiProtocolLabel } from '../utils/apiProtocol';
-import { AppChromeHeader, SettingsIconButton } from './AppChromeHeader';
 
 type TopTab = 'designs' | 'templates' | 'design-systems' | 'image-templates' | 'video-templates';
 
@@ -55,7 +54,6 @@ interface Props {
   designSystems: DesignSystemSummary[];
   projects: Project[];
   templates: ProjectTemplate[];
-  onDeleteTemplate: (id: string) => Promise<boolean>;
   promptTemplates: PromptTemplateSummary[];
   defaultDesignSystemId: string | null;
   config: AppConfig;
@@ -234,7 +232,6 @@ export function EntryView({
   designSystems,
   projects,
   templates,
-  onDeleteTemplate,
   promptTemplates,
   defaultDesignSystemId,
   config,
@@ -476,15 +473,6 @@ export function EntryView({
 
   return (
     <div className="entry-shell">
-      <AppChromeHeader
-        actions={(
-          <SettingsIconButton
-            onClick={() => onOpenSettings()}
-            title={t('entry.openSettingsTitle')}
-            ariaLabel={t('entry.openSettingsAria')}
-          />
-        )}
-      />
       <div
         className={`entry${petRailHidden ? '' : ' has-pet-rail'}`}
         style={{
@@ -494,12 +482,21 @@ export function EntryView({
         }}
       >
       <aside className="entry-side" style={{ width: sidebarWidth }}>
+        <div className="entry-brand">
+          <span className="entry-brand-mark" aria-hidden>
+            <img src="/app-icon.svg" alt="" className="brand-mark-img" draggable={false} />
+          </span>
+          <div className="entry-brand-text">
+            <div className="entry-brand-title-row">
+              <span className="entry-brand-title">{t('app.brand')}</span>
+            </div>
+          </div>
+        </div>
         <NewProjectPanel
           skills={skills}
           designSystems={designSystems}
           defaultDesignSystemId={defaultDesignSystemId}
           templates={templates}
-          onDeleteTemplate={onDeleteTemplate}
           promptTemplates={promptTemplates}
           onCreate={handleCreate}
           onImportClaudeDesign={onImportClaudeDesign}
@@ -516,9 +513,7 @@ export function EntryView({
             type="button"
             className="foot-pill foot-pill-env"
             onClick={() => onOpenSettings()}
-            aria-label={`${t('settings.envConfigure')}: ${
-              config.mode === 'daemon' ? t('settings.localCli') : apiProtocolLabel(config.apiProtocol)
-            } ${envMetaLine}`}
+            aria-label={t('settings.envConfigure')}
             title={t('settings.envConfigure')}
           >
             <Icon name="settings" size={12} />

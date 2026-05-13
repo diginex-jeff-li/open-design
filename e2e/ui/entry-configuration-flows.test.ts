@@ -196,9 +196,10 @@ test('connectors search supports empty results and keyboard-closeable details', 
 
   await page.goto('/');
   // Connector cards + search now live under Settings → Connectors. Open the
-  // settings dialog and switch to the Connectors section before exercising the
+  // settings dialog via the entry sidebar's "Configure execution mode" pill
+  // and switch to the Connectors section before exercising the
   // search/empty/details flow.
-  await page.getByRole('button', { name: 'Open settings' }).click();
+  await page.getByRole('button', { name: 'Configure execution mode' }).click();
   const settingsDialog = page.getByRole('dialog');
   await expect(settingsDialog).toBeVisible();
   await settingsDialog.getByRole('button', { name: /^Connectors\b/ }).click();
@@ -253,7 +254,7 @@ test('saving a Composio key from Settings unlocks the connectors gate immediatel
   });
 
   await gotoEntryHome(page);
-  await page.getByRole('button', { name: 'Open settings' }).click();
+  await page.getByRole('button', { name: 'Configure execution mode' }).click();
   const settingsDialog = page.getByRole('dialog');
   await expect(settingsDialog).toBeVisible();
   await settingsDialog.getByRole('button', { name: /^Connectors\b/ }).click();
@@ -315,7 +316,7 @@ test('typing a draft replacement Composio key does not trigger global autosave',
   });
 
   await gotoEntryHome(page);
-  await page.getByRole('button', { name: 'Open settings' }).click();
+  await page.getByRole('button', { name: 'Configure execution mode' }).click();
   const settingsDialog = page.getByRole('dialog');
   await expect(settingsDialog).toBeVisible();
   await settingsDialog.getByRole('button', { name: /^Connectors\b/ }).click();

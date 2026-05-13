@@ -51,7 +51,6 @@ import {
   importFolderProject,
   listProjects,
   listTemplates,
-  deleteTemplate,
   patchProject,
 } from './state/projects';
 import { useI18n } from './i18n';
@@ -509,12 +508,6 @@ export function App() {
     const list = await listTemplates();
     setTemplates(list);
   }, []);
-
-  const handleDeleteTemplate = useCallback(async (id: string) => {
-    const ok = await deleteTemplate(id);
-    if (ok) await refreshTemplates();
-    return ok;
-  }, [refreshTemplates]);
 
   const reloadMediaProvidersFromDaemon = useCallback(async () => {
     const result = await fetchMediaProvidersFromDaemon();
@@ -1011,7 +1004,6 @@ export function App() {
           designSystems={enabledDS}
           projects={projects}
           templates={templates}
-          onDeleteTemplate={handleDeleteTemplate}
           promptTemplates={promptTemplates}
           defaultDesignSystemId={config.designSystemId}
           config={config}
