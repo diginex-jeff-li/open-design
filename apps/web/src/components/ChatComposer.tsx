@@ -24,6 +24,7 @@ import { Icon } from "./Icon";
 import { PluginDetailsModal } from "./PluginDetailsModal";
 import { PluginsSection, type PluginsSectionHandle } from "./PluginsSection";
 import { BUILT_IN_PETS, CUSTOM_PET_ID, resolveActivePet } from "./pet/pets";
+import { ANNOTATION_EVENT, type AnnotationEventDetail } from "./PreviewDrawOverlay";
 
 type TranslateFn = (key: keyof Dict, vars?: Record<string, string | number>) => string;
 
@@ -61,6 +62,7 @@ interface Props {
   projectId: string | null;
   projectFiles: ProjectFile[];
   streaming: boolean;
+  sendDisabled?: boolean;
   initialDraft?: string;
   // Lazy ensure — the composer calls this before its first upload, so the
   // project folder exists on disk before files land in it. Returns the
@@ -68,7 +70,18 @@ interface Props {
   onEnsureProject: () => Promise<string | null>;
   commentAttachments?: ChatCommentAttachment[];
   onRemoveCommentAttachment?: (id: string) => void;
-  onSend: (prompt: string, attachments: ChatAttachment[], commentAttachments: ChatCommentAttachment[], meta?: ChatSendMeta) => void;
+  // Available skills the user can compose into a turn via @<skill>. The
+  // chat layer already filters out disabled skills before passing them in
+  // here, so the picker can render the list as-is. Keep this optional so
+  // the composer still works on surfaces that don't show a skills picker
+  // (e.g. tests, screenshot harnesses).
+  skills?: SkillSummary[];
+  onSend: (
+    prompt: string,
+    attachments: ChatAttachment[],
+    commentAttachments: ChatCommentAttachment[],
+    meta?: ChatSendMeta,
+  ) => void;
   onStop: () => void;
   // Opens the global settings dialog (CLI / model / agent picker). The
   // composer's leading gear icon routes here so users can switch models
@@ -110,6 +123,11 @@ export interface ChatComposerHandle {
 
 export interface ChatSendMeta {
   research?: ResearchOptions;
+  // Per-turn skill ids picked via the @-mention popover. The chat layer
+  // forwards these to the daemon's `skillIds` field so the system prompt
+  // for this run only is composed with the extra skill bodies, without
+  // touching the project's persistent `skillId`.
+  skillIds?: string[];
 }
 
 /**
@@ -127,10 +145,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       projectId,
       projectFiles,
       streaming,
+      sendDisabled = false,
       initialDraft,
       onEnsureProject,
       commentAttachments = [],
       onRemoveCommentAttachment,
+      skills = [],
       onSend,
       onStop,
       onOpenSettings,
@@ -151,6 +171,10 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     const t = useT();
     const [draft, setDraft] = useState(initialDraft ?? "");
     const [staged, setStaged] = useState<ChatAttachment[]>([]);
+    // Skills the user has @-mentioned for this turn. We dedupe on id and
+    // strip the chip when the user removes the corresponding `@<skill>`
+    // token from the draft, keeping draft and chips in sync.
+    const [stagedSkills, setStagedSkills] = useState<SkillSummary[]>([]);
     const [dragActive, setDragActive] = useState(false);
     const [mention, setMention] = useState<{
       q: string;
@@ -172,7 +196,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     // the prompt that nudges the model to use that server's tools.
     const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([]);
     const [mcpTemplates, setMcpTemplates] = useState<McpTemplate[]>([]);
-    const [skills, setSkills] = useState<SkillSummary[]>([]);
     // Installed plugins, fetched lazily for the tools-menu Plugins tab and
     // the @-mention picker. Both surfaces share the same list so applying
     // a plugin from either path lands on the same project context.
@@ -251,17 +274,9 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       };
     }, []);
 
-    useEffect(() => {
-      if (!projectId) return;
-      let cancelled = false;
-      void fetchSkills().then((rows) => {
-        if (cancelled) return;
-        setSkills(rows.filter((s) => !s.aggregatesExamples));
-      });
-      return () => {
-        cancelled = true;
-      };
-    }, [projectId]);
+    // Skills now come from the parent (App.tsx → ProjectView → ChatPane → ChatComposer)
+    // pre-filtered by enabled/disabled state. We no longer fetch a fresh list
+    // here to avoid showing skills the user has disabled via Settings.
 
     // Lazy-fetch installed plugins once on mount; the tools-menu Plugins
     // tab and the @-mention picker both consume this list.
@@ -554,9 +569,46 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     function reset() {
       setDraft("");
       setStaged([]);
+      setStagedSkills([]);
       setUploadError(null);
       setMention(null);
       setSlash(null);
+    }
+
+    function insertSkillMention(skill: SkillSummary) {
+      if (!mention) return;
+      const ta = textareaRef.current;
+      if (!ta) return;
+      const cursor = mention.cursor;
+      const before = draft.slice(0, cursor);
+      const after = draft.slice(cursor);
+      // Use the same `@<token>` prefix as file mentions so the visual
+      // grammar is consistent. The id is stable across renames; the
+      // displayed name is derived in render from stagedSkills.
+      const replaced = before.replace(/@([^\s@]*)$/, `@${skill.id} `);
+      const next = replaced + after;
+      setDraft(next);
+      setMention(null);
+      setStagedSkills((prev) =>
+        prev.some((s) => s.id === skill.id) ? prev : [...prev, skill],
+      );
+      requestAnimationFrame(() => {
+        ta.focus();
+        const pos = replaced.length;
+        ta.setSelectionRange(pos, pos);
+      });
+    }
+
+    function removeStagedSkill(id: string) {
+      setStagedSkills((prev) => prev.filter((s) => s.id !== id));
+      // Also strip the matching `@<id>` token from the draft so the chip
+      // and the textarea stay in sync. We allow trailing whitespace to be
+      // collapsed too.
+      setDraft((d) =>
+        d
+          .replace(new RegExp(`(^|\\s)@${escapeRegExp(id)}(\\s|$)`, 'g'), '$1$2')
+          .replace(/\s{2,}/g, ' '),
+      );
     }
 
     async function ensureProject(): Promise<string | null> {
@@ -590,6 +642,60 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
         setUploading(false);
       }
     }
+
+    useEffect(() => {
+      function onAnnotation(e: Event) {
+        const detail = (e as CustomEvent<AnnotationEventDetail>).detail;
+        if (!detail) return;
+        void (async () => {
+          let uploaded: ChatAttachment[] = [];
+          if (detail.file) {
+            const id = await ensureProject();
+            if (!id) return;
+            setUploading(true);
+            try {
+              const result = await uploadProjectFiles(id, [detail.file]);
+              if (result.uploaded.length > 0) {
+                uploaded = result.uploaded;
+                if (detail.action !== 'send') {
+                  setStaged((s) => [...s, ...uploaded]);
+                }
+              }
+              if (result.failed.length > 0) {
+                const detailText = result.error ? ` (${result.error})` : '';
+                setUploadError(`Attachment upload failed for ${result.failed.length} file(s)${detailText}.`);
+              }
+            } finally {
+              setUploading(false);
+            }
+          }
+
+          if (detail.action === 'send') {
+            if (streaming) {
+              if (uploaded.length > 0) setStaged((s) => [...s, ...uploaded]);
+              if (detail.note) setDraft((d) => (d ? `${d}\n${detail.note}` : detail.note));
+              textareaRef.current?.focus();
+              return;
+            }
+            const prompt = [draft.trim(), detail.note].filter(Boolean).join('\n');
+            const attachments = [...staged, ...uploaded];
+            if (!prompt && attachments.length === 0 && commentAttachments.length === 0) return;
+            const skillIds = stagedSkills.map((s) => s.id);
+            const skillMeta = skillIds.length > 0 ? { skillIds } : undefined;
+            onSend(prompt, attachments, commentAttachments, skillMeta);
+            reset();
+            return;
+          }
+
+          if (detail.note) {
+            setDraft((d) => (d ? `${d}\n${detail.note}` : detail.note));
+            textareaRef.current?.focus();
+          }
+        })();
+      }
+      window.addEventListener(ANNOTATION_EVENT, onAnnotation);
+      return () => window.removeEventListener(ANNOTATION_EVENT, onAnnotation);
+    }, [commentAttachments, draft, onSend, projectId, staged, stagedSkills, streaming]);
 
     function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
       const items = Array.from(e.clipboardData?.items ?? []);
@@ -638,6 +744,20 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       const value = e.target.value;
       const cursor = e.target.selectionStart;
       setDraft(value);
+      // Keep the staged-skill chips in sync with the draft. If the user
+      // hand-deletes an `@<id>` token from the textarea, the chip must
+      // disappear too — otherwise submit() would still forward that id in
+      // skillIds and the daemon would compose a skill the prompt no
+      // longer references. Mirror the removeStagedSkill() boundary
+      // (whitespace or string edge) so partial matches don't keep a chip
+      // alive accidentally. We do not run the same prune for `staged`
+      // file attachments because users frequently attach files via the
+      // upload button without leaving an `@<path>` token in the draft.
+      setStagedSkills((prev) =>
+        prev.filter((s) =>
+          new RegExp(`(^|\\s)@${escapeRegExp(s.id)}(\\s|$)`).test(value),
+        ),
+      );
       // Detect a fresh @ at start or after whitespace; capture the typed
       // query up to the cursor.
       const before = value.slice(0, cursor);
@@ -739,18 +859,13 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       return true;
     }
 
-    async function insertSkillMention(skill: SkillSummary) {
-      const applied = await applyProjectSkill(skill);
-      if (!applied) return;
-      replaceMentionWithText(`Use the @${skill.id} skill. `);
-    }
-
     function removeStaged(p: string) {
       setStaged((s) => s.filter((a) => a.path !== p));
     }
 
     async function submit() {
       const prompt = draft.trim();
+      if (sendDisabled) return;
       // Intercept `/pet …` and `/mcp` before sending so the slash command
       // never hits the agent — these are local UX hooks, not model prompts.
       if (tryHandlePetSlash()) return;
@@ -759,10 +874,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       // prompt and *is* sent to the agent — the agent runs the skill,
       // packages a Codex pet under `~/.codex/pets/`, and the user
       // adopts it from "Recently hatched" in pet settings afterwards.
+      const skillIds = stagedSkills.map((s) => s.id);
+      const skillMeta = skillIds.length > 0 ? { skillIds } : undefined;
       const hatched = expandHatchCommand(prompt);
       if (hatched) {
         if (streaming) return;
-        onSend(hatched, staged, commentAttachments);
+        onSend(hatched, staged, commentAttachments, skillMeta);
         reset();
         return;
       }
@@ -770,13 +887,14 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       if (search) {
         if (streaming) return;
         onSend(search.prompt, staged, commentAttachments, {
+          ...skillMeta,
           research: { enabled: true, query: search.query },
         });
         reset();
         return;
       }
       if ((!prompt && commentAttachments.length === 0) || streaming) return;
-      onSend(prompt, staged, commentAttachments);
+      onSend(prompt, staged, commentAttachments, skillMeta);
       reset();
     }
 
@@ -824,8 +942,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
           })
           .slice(0, 8)
       : [];
+    // Already-staged skills drop out of the suggestion list (carried over
+    // from main) so the @-popover keeps moving forward as the user picks.
+    const stagedSkillIds = new Set(stagedSkills.map((s) => s.id));
     const filteredSkills = mention
       ? skills
+          .filter((s) => !stagedSkillIds.has(s.id))
           .filter((s) => {
             if (!mentionQuery) return true;
             return [
@@ -855,6 +977,13 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
         onDrop={handleDrop}
       >
         <div className="composer-shell">
+          {stagedSkills.length > 0 ? (
+            <StagedSkills
+              skills={stagedSkills}
+              onRemove={removeStagedSkill}
+              t={t}
+            />
+          ) : null}
           {staged.length > 0 ? (
             <StagedAttachments
               attachments={staged}
@@ -1196,7 +1325,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
                 className="composer-send"
                 data-testid="chat-send"
                 onClick={() => void submit()}
-                disabled={!draft.trim() && commentAttachments.length === 0}
+                disabled={sendDisabled || (!draft.trim() && commentAttachments.length === 0)}
               >
                 <Icon name="send" size={13} />
                 <span>{t('chat.send')}</span>
@@ -1232,25 +1361,122 @@ function StagedAttachments({
   onRemove: (path: string) => void;
   t: TranslateFn;
 }) {
+  const [preview, setPreview] = useState<ChatAttachment | null>(null);
+  const previewUrl = preview && projectId ? projectRawUrl(projectId, preview.path) : null;
+
+  useEffect(() => {
+    if (!preview) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setPreview(null);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [preview]);
+
   return (
-    <div className="staged-row" data-testid="staged-attachments">
-      {attachments.map((a) => (
-        <div key={a.path} className={`staged-chip staged-${a.kind}`}>
-          {a.kind === "image" && projectId ? (
-            <img src={projectRawUrl(projectId, a.path)} alt={a.name} />
-          ) : (
-            <span className="staged-icon" aria-hidden>
-              <Icon name="file" size={13} />
-            </span>
-          )}
-          <span className="staged-name" title={a.path}>
-            {a.name}
+    <>
+      <div className="staged-row" data-testid="staged-attachments">
+        {attachments.map((a) => {
+          const canPreview = a.kind === "image" && Boolean(projectId);
+          const imageUrl = canPreview ? projectRawUrl(projectId!, a.path) : null;
+          return (
+            <div key={a.path} className={`staged-chip staged-${a.kind}`}>
+              {canPreview && imageUrl ? (
+                <button
+                  type="button"
+                  className="staged-preview-trigger"
+                  onClick={() => setPreview(a)}
+                  title={a.path}
+                  aria-label={`Preview ${a.name}`}
+                >
+                  <img src={imageUrl} alt="" aria-hidden />
+                  <span className="staged-name">
+                    {a.name}
+                  </span>
+                </button>
+              ) : (
+                <>
+                  <span className="staged-icon" aria-hidden>
+                    <Icon name="file" size={13} />
+                  </span>
+                  <span className="staged-name" title={a.path}>
+                    {a.name}
+                  </span>
+                </>
+              )}
+              <button
+                className="staged-remove"
+                onClick={() => onRemove(a.path)}
+                title={t('common.delete')}
+                aria-label={t('chat.removeAria', { name: a.name })}
+              >
+                <Icon name="close" size={11} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      {preview && previewUrl ? (
+        <div
+          className="staged-preview-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label={preview.name}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setPreview(null);
+          }}
+        >
+          <div className="staged-preview-card">
+            <div className="staged-preview-head">
+              <span title={preview.path}>{preview.name}</span>
+              <button
+                type="button"
+                className="icon-only"
+                onClick={() => setPreview(null)}
+                aria-label={t('common.close')}
+                title={t('common.close')}
+              >
+                <Icon name="close" size={14} />
+              </button>
+            </div>
+            <img src={previewUrl} alt={preview.name} />
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function StagedSkills({
+  skills,
+  onRemove,
+  t,
+}: {
+  skills: SkillSummary[];
+  onRemove: (id: string) => void;
+  t: TranslateFn;
+}) {
+  return (
+    <div
+      className="staged-row staged-skills-row"
+      data-testid="staged-skills"
+    >
+      {skills.map((s) => (
+        <div
+          key={s.id}
+          className={`staged-chip staged-skill staged-skill-${s.source ?? 'built-in'}`}
+        >
+          <span className="staged-icon" aria-hidden>
+            <Icon name="sparkles" size={12} />
+          </span>
+          <span className="staged-name" title={s.description || s.name}>
+            @{s.id}
           </span>
           <button
             className="staged-remove"
-            onClick={() => onRemove(a.path)}
+            onClick={() => onRemove(s.id)}
             title={t('common.delete')}
-            aria-label={t('chat.removeAria', { name: a.name })}
+            aria-label={`Remove skill ${s.id}`}
           >
             <Icon name="close" size={11} />
           </button>
@@ -2006,6 +2232,10 @@ function MentionPopover({
       </div>
     </div>
   );
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function looksLikeImage(name: string): boolean {

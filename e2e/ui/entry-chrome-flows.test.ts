@@ -41,9 +41,10 @@ test.beforeEach(async ({ page }) => {
 test('entry chrome settings menu opens with brand header and no pet rail', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('new-project-panel')).toBeVisible();
-  await expect(page.locator('.app-chrome-header')).toBeVisible();
-  await expect(page.locator('.app-chrome-brand[aria-label="Open Design"]')).toBeVisible();
-  await expect(page.locator('.entry-brand')).toHaveCount(0);
+  await expect(page.locator('.entry-brand')).toBeVisible();
+  await expect(page.locator('.entry-brand .entry-brand-title')).toHaveText('Open Design');
+  await expect(page.locator('.app-chrome-header')).toHaveCount(0);
+  await expect(page.locator('.pet-rail')).toBeVisible();
 
   // The pet picker rail was removed; pet adoption now lives in
   // Settings → Pet exclusively. Make sure no rail leaks back into the
@@ -58,19 +59,43 @@ test('entry chrome settings menu opens with brand header and no pet rail', async
   await expect(settingsMenu.getByRole('button', { name: /show pet picker/i })).toHaveCount(0);
 });
 
+test('entry top navigation matches the current home tab structure', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('new-project-panel')).toBeVisible();
+
+  const tabs = page.locator('.entry-tabs').getByRole('tab');
+  await expect(tabs).toHaveText([
+    'Designs',
+    'Templates',
+    'Design systems',
+    'Image templates',
+    'Video templates',
+  ]);
+  await expect(page.getByTestId('entry-tab-designs')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('entry-tab-templates')).toBeVisible();
+  await expect(page.getByTestId('entry-tab-design-systems')).toBeVisible();
+  await expect(page.getByTestId('entry-tab-image-templates')).toBeVisible();
+  await expect(page.getByTestId('entry-tab-video-templates')).toBeVisible();
+  await expect(page.locator('.entry-tabs').getByRole('tab', { name: 'Connectors' })).toHaveCount(0);
+  await expect(page.locator('.entry-tabs').getByRole('tab', { name: 'Designs' })).toHaveCount(1);
+});
+
 test('entry chrome avoids horizontal overflow on compact desktop width', async ({ page }) => {
   await page.setViewportSize({ width: 820, height: 900 });
   await page.goto('/');
   await expect(page.getByTestId('new-project-panel')).toBeVisible();
-  await expect(page.locator('.app-chrome-header')).toBeVisible();
+  await expect(page.locator('.entry-brand')).toBeVisible();
 
-  const overflow = await page.evaluate(() => {
-    const header = document.querySelector('.app-chrome-header');
-    if (!(header instanceof HTMLElement)) return null;
-    return Math.max(0, header.scrollWidth - header.clientWidth);
+  // The brand row replaced the old global chrome header; if it overflows
+  // horizontally on a compact desktop, the logo/title/settings cog will
+  // wrap or push the layout sideways. Keep it pinned to no-overflow.
+  const brandOverflow = await page.evaluate(() => {
+    const brand = document.querySelector('.entry-brand');
+    if (!(brand instanceof HTMLElement)) return null;
+    return Math.max(0, brand.scrollWidth - brand.clientWidth);
   });
-  expect(overflow).not.toBeNull();
-  expect(overflow!).toBeLessThanOrEqual(2);
+  expect(brandOverflow).not.toBeNull();
+  expect(brandOverflow!).toBeLessThanOrEqual(2);
 
   const pageOverflow = await page.evaluate(() =>
     Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth),
