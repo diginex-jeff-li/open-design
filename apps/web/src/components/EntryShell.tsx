@@ -334,7 +334,7 @@ export function EntryShell({
     };
     onCreateProject({
       name,
-      skillId: null,
+      skillId: payload.skillId ?? null,
       designSystemId: null,
       metadata,
       pendingPrompt: payload.prompt,
@@ -685,6 +685,8 @@ export function EntryShell({
                   setNewProjectOpen(true);
                 }}
                 promptHandoff={homePromptHandoff}
+                skills={skills}
+                skillsLoading={skillsLoading}
               />
             ) : null}
             {view === 'projects' ? (

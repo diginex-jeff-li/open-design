@@ -3,10 +3,11 @@
 // The Home input card sits naked above an unstructured prompt. New
 // users frequently type a request without knowing which scenario
 // plugin to apply, which lands them in the generic agent path and
-// stretches the convergence loop. This chip rail mirrors the
-// NewProjectModal taxonomy plus a small set of migration shortcuts
-// (Figma / folder / template), so the same Enter keystroke can hit a
-// scenario-bound run.
+// stretches the convergence loop. This chip rail exposes high-signal
+// NewProjectModal categories plus a small set of lower-row shortcuts
+// (plugin authoring / Figma / folder / template), so the same Enter
+// keystroke can hit a scenario-bound run. The generic "other" path stays
+// in the free-form prompt instead of becoming a redundant chip.
 //
 // The catalog stays a pure data table:
 //   - `id` — stable React key + test selector.
@@ -51,11 +52,11 @@ export type ChipAction =
   | { kind: 'import-folder' }
   | { kind: 'open-template-picker' };
 
-// Two intent groups: "create" = produce something new from scratch,
-// "migrate" = start from an existing source. The grouping is structural
-// only — HomeHero renders the two groups in separate flex containers so
-// they wrap onto separate rows on narrow viewports without horizontal
-// scrolling.
+// Two intent groups: "create" = produce a design artifact, "migrate" =
+// lower-row starter shortcuts such as plugin authoring, imports, and
+// templates. The grouping is structural only — HomeHero renders the two
+// groups in separate flex containers so they wrap onto separate rows on
+// narrow viewports without horizontal scrolling.
 export type ChipGroup = 'create' | 'migrate';
 
 export interface HomeHeroChip {
@@ -186,26 +187,10 @@ export const HOME_HERO_CHIPS: ReadonlyArray<HomeHeroChip> = [
     },
   },
   {
-    id: 'other',
-    label: 'Other',
-    icon: 'sparkles',
-    group: 'create',
-    action: {
-      kind: 'apply-scenario',
-      pluginId: 'od-new-generation',
-      projectKind: 'other',
-      inputs: {
-        artifactKind: 'design artifact',
-        audience: 'the target audience',
-        topic: 'the user request',
-      },
-    },
-  },
-  {
     id: 'create-plugin',
     label: 'Create plugin',
     icon: 'edit',
-    group: 'create',
+    group: 'migrate',
     hint: 'Author a reusable Open Design plugin and add it to My plugins.',
     action: { kind: 'create-plugin' },
   },

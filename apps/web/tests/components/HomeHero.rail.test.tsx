@@ -80,6 +80,26 @@ describe('HomeHero intent rail', () => {
     expect(screen.getByTestId('home-hero-rail-figma').className).toContain('is-pending');
   });
 
+  it('groups plugin authoring with the lower starter shortcuts', () => {
+    renderHero();
+    const createPluginGroup = screen
+      .getByTestId('home-hero-rail-create-plugin')
+      .closest('[data-rail-group]');
+
+    expect(createPluginGroup?.getAttribute('data-rail-group')).toBe('migrate');
+    for (const id of ['figma', 'folder', 'template']) {
+      expect(screen.getByTestId(`home-hero-rail-${id}`).closest('[data-rail-group]'))
+        .toBe(createPluginGroup);
+    }
+  });
+
+  it('keeps the generic fallback in the free-form prompt instead of an Other chip', () => {
+    renderHero();
+
+    expect(findChip('other')).toBeUndefined();
+    expect(screen.queryByTestId('home-hero-rail-other')).toBeNull();
+  });
+
   it('migration chips carry the right action discriminator', () => {
     expect(findChip('create-plugin')?.action).toMatchObject({ kind: 'create-plugin' });
     expect(findChip('figma')?.action).toMatchObject({ kind: 'apply-figma-migration' });
@@ -100,7 +120,6 @@ describe('HomeHero intent rail', () => {
   it('non-media scenario chips route to od-new-generation', () => {
     expect(findChip('prototype')?.action).toMatchObject({ pluginId: 'od-new-generation', projectKind: 'prototype' });
     expect(findChip('deck')?.action).toMatchObject({ pluginId: 'od-new-generation', projectKind: 'deck' });
-    expect(findChip('other')?.action).toMatchObject({ pluginId: 'od-new-generation', projectKind: 'other' });
   });
 
   it('specialised category chips route to their bundled scenario plugin', () => {

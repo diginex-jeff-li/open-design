@@ -17,6 +17,7 @@ import { authorInitials, derivePluginSourceLinks } from '../runtime/plugin-sourc
 export interface PluginLoopSubmit {
   prompt: string;
   pluginId: string | null;
+  skillId?: string | null;
   appliedPluginSnapshotId: string | null;
   pluginTitle: string | null;
   taskKind: string | null;

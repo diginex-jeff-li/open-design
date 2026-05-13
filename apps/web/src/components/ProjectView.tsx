@@ -2031,6 +2031,10 @@ export function ProjectView({
               onProjectMetadataChange={(metadata) => {
                 onProjectChange({ ...project, metadata });
               }}
+              currentSkillId={project.skillId}
+              onProjectSkillChange={(skillId) => {
+                onProjectChange({ ...project, skillId });
+              }}
               activePluginSnapshot={activePluginSnapshot}
             />
           ) : (

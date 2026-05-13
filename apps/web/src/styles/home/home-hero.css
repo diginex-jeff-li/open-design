@@ -286,11 +286,11 @@
 
 /* ------------------------------------------------------------
    Stage B of plugin-driven-flow-plan: Home intent rail.
-   Two flex sub-groups ("create" outputs vs. "migrate" sources)
+   Two flex sub-groups ("create" outputs vs. lower starter shortcuts)
    separated by a hairline divider. The whole rail wraps cleanly
    onto multiple rows on narrow viewports — no horizontal scroll.
    Visual language matches the active-plugin chip inside the
-   input card (pill, accent-tint when selected), and the migrate
+   input card (pill, accent-tint when selected), and the shortcut
    variant uses the page's --bg-subtle surface so secondary
    intents recede without losing affordance.
    ------------------------------------------------------------ */

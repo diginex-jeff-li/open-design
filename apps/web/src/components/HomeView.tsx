@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   ApplyResult,
+  McpServerConfig,
   InstalledPluginRecord,
   ProjectKind,
 } from '@open-design/contracts';
@@ -20,10 +21,11 @@ import {
   renderPluginBriefTemplate,
   resolvePluginQueryFallback,
 } from '../state/projects';
+import { fetchMcpServers } from '../state/mcp';
 import { useI18n } from '../i18n';
-import type { Project } from '../types';
+import type { Project, SkillSummary } from '../types';
 import { HomeHero } from './HomeHero';
-import type { HomeHeroChip } from './home-hero/chips';
+import { findChip, type HomeHeroChip } from './home-hero/chips';
 import {
   buildPluginAuthoringPrompt,
   PLUGIN_AUTHORING_PROMPT,
@@ -36,7 +38,12 @@ import { RecentProjectsStrip } from './RecentProjectsStrip';
 
 interface ActivePlugin {
   record: InstalledPluginRecord;
-  result: ApplyResult;
+  // `result` is `null` during the optimistic window — set on chip
+  // click before applyPlugin's roundtrip finishes — and is filled in
+  // once the daemon returns the snapshot + resolved context. submit()
+  // and contextItemCount both null-coalesce, so an in-flight active
+  // is safe to render without a result.
+  result: ApplyResult | null;
   inputs: Record<string, unknown>;
   // Stage B of plugin-driven-flow-plan: when the user applied this
   // plugin through the Home chip rail, the chip carries the project
@@ -65,6 +72,8 @@ interface Props {
   onImportFolder?: () => Promise<void> | void;
   onOpenNewProject?: (tab: 'template') => void;
   promptHandoff?: HomePromptHandoff | null;
+  skills?: SkillSummary[];
+  skillsLoading?: boolean;
 }
 
 export function HomeView({
@@ -76,6 +85,8 @@ export function HomeView({
   onImportFolder,
   onOpenNewProject,
   promptHandoff,
+  skills = [],
+  skillsLoading = false,
 }: Props) {
   const { locale } = useI18n();
   const [plugins, setPlugins] = useState<InstalledPluginRecord[]>([]);
@@ -86,6 +97,9 @@ export function HomeView({
   const [pendingAuthoringPrompt, setPendingAuthoringPrompt] = useState(PLUGIN_AUTHORING_PROMPT);
   const [fallbackProjectKind, setFallbackProjectKind] = useState<ProjectKind | null>(null);
   const [active, setActive] = useState<ActivePlugin | null>(null);
+  const [activeSkill, setActiveSkill] = useState<SkillSummary | null>(null);
+  const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([]);
+  const [mcpLoading, setMcpLoading] = useState(true);
   const [prompt, setPrompt] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [detailsRecord, setDetailsRecord] = useState<InstalledPluginRecord | null>(null);
@@ -110,9 +124,22 @@ export function HomeView({
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    void fetchMcpServers().then((result) => {
+      if (cancelled) return;
+      setMcpServers(result?.servers ?? []);
+      setMcpLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!promptHandoff || consumedHandoffIdRef.current === promptHandoff.id) return;
     consumedHandoffIdRef.current = promptHandoff.id;
     setActive(null);
+    setActiveSkill(null);
     setError(null);
     setFallbackProjectKind(promptHandoff.source === 'plugin-authoring' ? 'other' : null);
     setPrompt(promptHandoff.prompt);
@@ -125,8 +152,32 @@ export function HomeView({
   }, [promptHandoff]);
 
   const contextItemCount = useMemo(
-    () => active?.result.contextItems?.length ?? 0,
+    () => active?.result?.contextItems?.length ?? 0,
     [active],
+  );
+
+  // When the active plugin was bound through a chip, the badge shows
+  // the chip label (e.g. "Prototype") instead of the underlying plugin
+  // record title (e.g. "New generation (default scenario)"). Several
+  // chips share od-new-generation, so surfacing the raw plugin title
+  // would mislabel what the user actually picked.
+  const activeBadgeTitle = useMemo(() => {
+    if (!active) return null;
+    if (active.chipId) {
+      const chip = findChip(active.chipId);
+      if (chip) return chip.label;
+    }
+    return active.record.title;
+  }, [active]);
+
+  const selectableSkills = useMemo(
+    () => skills.filter((skill) => !skill.aggregatesExamples),
+    [skills],
+  );
+
+  const enabledMcpServers = useMemo(
+    () => mcpServers.filter((server) => server.enabled),
+    [mcpServers],
   );
 
   async function usePlugin(
@@ -137,44 +188,104 @@ export function HomeView({
     setPendingApplyId(record.id);
     if (options?.chipId) setPendingChipId(options.chipId);
     setError(null);
-    const result = await applyPlugin(record.id, { locale, inputs: options?.inputs });
-    setPendingApplyId(null);
-    setPendingChipId(null);
-    if (!result) {
-      setError(`Failed to apply ${record.title}. Make sure the daemon is reachable.`);
-      return;
-    }
-    const inputs: Record<string, unknown> = { ...(options?.inputs ?? {}) };
-    for (const field of result.inputs ?? []) {
-      if (field.default !== undefined && inputs[field.name] === undefined) inputs[field.name] = field.default;
-    }
+    // Optimistic update: the chip already carries the inputs and the
+    // plugin record's manifest already carries the query template, so
+    // we can render the brief locally without waiting for the apply
+    // roundtrip. The active badge + prompt appear on the same frame as
+    // the click; applyPlugin then resolves the snapshot id and context
+    // items in the background and we reconcile in place. Without this
+    // the user sees a ~100-500ms freeze before the input back-fills,
+    // which feels like the UI is jammed.
+    const optimisticInputs: Record<string, unknown> = { ...(options?.inputs ?? {}) };
+    const manifestQuery = resolvePluginQueryFallback(
+      record.manifest?.od?.useCase?.query,
+      locale,
+    );
+    const optimisticPrompt =
+      nextPrompt !== undefined && nextPrompt !== null
+        ? nextPrompt
+        : manifestQuery
+          ? renderPluginBriefTemplate(manifestQuery, optimisticInputs)
+          : null;
     setActive({
       record,
-      result,
-      inputs,
+      result: null,
+      inputs: optimisticInputs,
       projectKind: options?.projectKind ?? null,
       chipId: options?.chipId ?? null,
     });
     setFallbackProjectKind(null);
-    const query = result.query || resolvePluginQueryFallback(record.manifest?.od?.useCase?.query, locale);
-    if (nextPrompt !== undefined && nextPrompt !== null) {
-      setPrompt(nextPrompt);
-    } else if (query) {
-      setPrompt(renderPluginBriefTemplate(query, inputs));
-    }
     setDetailsRecord(null);
+    if (optimisticPrompt !== null) setPrompt(optimisticPrompt);
     requestAnimationFrame(() => inputRef.current?.focus());
+
+    const result = await applyPlugin(record.id, { locale, inputs: options?.inputs });
+    setPendingApplyId(null);
+    setPendingChipId(null);
+    if (!result) {
+      // Roll back the optimistic active so submit can't fire against a
+      // plugin that never bound. Only clear when the in-flight apply
+      // still matches the visible active state — concurrent clicks
+      // would otherwise stomp a successful later apply.
+      setActive((prev) => (prev?.record.id === record.id ? null : prev));
+      setError(`Failed to apply ${record.title}. Make sure the daemon is reachable.`);
+      return;
+    }
+    const reconciledInputs: Record<string, unknown> = { ...optimisticInputs };
+    for (const field of result.inputs ?? []) {
+      if (field.default !== undefined && reconciledInputs[field.name] === undefined) {
+        reconciledInputs[field.name] = field.default;
+      }
+    }
+    setActive((prev) =>
+      prev && prev.record.id === record.id
+        ? { ...prev, result, inputs: reconciledInputs }
+        : prev,
+    );
+    // The daemon may have filled in `topic`/`audience` defaults the
+    // optimistic render didn't know about (the manifest is inspected
+    // client-side but field.default lives on the apply result). Re-
+    // render the brief using the reconciled inputs, but only if the
+    // user hasn't edited the prompt in the meantime — if they have,
+    // current !== optimisticPrompt and the functional setter is a
+    // no-op so their edits survive.
+    if (nextPrompt === undefined || nextPrompt === null) {
+      const reconciledQuery =
+        result.query ||
+        resolvePluginQueryFallback(record.manifest?.od?.useCase?.query, locale);
+      if (reconciledQuery) {
+        const reconciledPrompt = renderPluginBriefTemplate(reconciledQuery, reconciledInputs);
+        if (reconciledPrompt !== optimisticPrompt) {
+          setPrompt((current) => (current === optimisticPrompt ? reconciledPrompt : current));
+        }
+      }
+    }
   }
 
-  function clearActive() {
+  function clearActivePlugin() {
     setActive(null);
     setFallbackProjectKind(null);
     setPrompt('');
   }
 
+  function useSkill(skill: SkillSummary, nextPrompt: string | null) {
+    setActiveSkill(skill);
+    setError(null);
+    const replacement = nextPrompt ?? skill.examplePrompt ?? '';
+    if (replacement.trim().length > 0) setPrompt(replacement);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function useMcpServer(_server: McpServerConfig, nextPrompt: string) {
+    setPrompt(nextPrompt);
+    setError(null);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
   function queuePluginAuthoring(chipId: string | null, goal?: string) {
     const nextPrompt = goal ? buildPluginAuthoringPrompt(goal) : PLUGIN_AUTHORING_PROMPT;
     setActive(null);
+    setActiveSkill(null);
     setFallbackProjectKind('other');
     setError(null);
     setPrompt(nextPrompt);
@@ -259,11 +370,12 @@ export function HomeView({
     onSubmit({
       prompt: trimmed,
       pluginId: active?.record.id ?? DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID,
-      appliedPluginSnapshotId: active?.result.appliedPlugin?.snapshotId ?? null,
+      skillId: activeSkill?.id ?? null,
+      appliedPluginSnapshotId: active?.result?.appliedPlugin?.snapshotId ?? null,
       pluginTitle: active?.record.title ?? null,
-      taskKind: active?.result.appliedPlugin?.taskKind ?? null,
+      taskKind: active?.result?.appliedPlugin?.taskKind ?? null,
       pluginInputs: active ? active.inputs : defaultInputs,
-      projectKind: active?.projectKind ?? fallbackProjectKind ?? 'other',
+      projectKind: active?.projectKind ?? fallbackProjectKind ?? projectKindForSkill(activeSkill) ?? 'other',
     });
   }
 
@@ -274,15 +386,24 @@ export function HomeView({
         prompt={prompt}
         onPromptChange={setPrompt}
         onSubmit={submit}
-        activePluginTitle={active?.record.title ?? null}
+        activePluginTitle={activeBadgeTitle}
+        activeSkillId={activeSkill?.id ?? null}
+        activeSkillTitle={activeSkill?.name ?? null}
         activeChipId={active?.chipId ?? null}
-        onClearActivePlugin={clearActive}
+        onClearActivePlugin={clearActivePlugin}
+        onClearActiveSkill={() => setActiveSkill(null)}
         pluginOptions={plugins}
         pluginsLoading={pluginsLoading}
+        skillOptions={selectableSkills}
+        skillsLoading={skillsLoading}
+        mcpOptions={enabledMcpServers}
+        mcpLoading={mcpLoading}
         pendingPluginId={pendingApplyId}
         pendingChipId={pendingChipId}
         submitDisabled={Boolean(pendingApplyId) || Boolean(pendingAuthoringChipId)}
         onPickPlugin={(record, nextPrompt) => void usePlugin(record, nextPrompt)}
+        onPickSkill={useSkill}
+        onPickMcp={useMcpServer}
         onPickChip={pickChip}
         contextItemCount={contextItemCount}
         error={error}
@@ -315,4 +436,15 @@ export function HomeView({
       ) : null}
     </div>
   );
+}
+
+function projectKindForSkill(skill: SkillSummary | null): ProjectKind | null {
+  if (!skill) return null;
+  if (skill.mode === 'deck') return 'deck';
+  if (skill.mode === 'prototype') return 'prototype';
+  if (skill.mode === 'template') return 'template';
+  if (skill.mode === 'image' || skill.surface === 'image') return 'image';
+  if (skill.mode === 'video' || skill.surface === 'video') return 'video';
+  if (skill.mode === 'audio' || skill.surface === 'audio') return 'audio';
+  return 'other';
 }

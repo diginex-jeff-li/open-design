@@ -7,9 +7,10 @@
 // composed with the recent-projects strip and plugins section
 // without owning their data lifecycles.
 
-import { forwardRef, useMemo, useRef, useState } from 'react';
+import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { InstalledPluginRecord } from '@open-design/contracts';
+import type { InstalledPluginRecord, McpServerConfig } from '@open-design/contracts';
+import type { SkillSummary } from '../types';
 import { Icon } from './Icon';
 import {
   chipsForGroup,
@@ -28,12 +29,21 @@ interface Props {
   activePluginTitle: string | null;
   activeChipId: string | null;
   onClearActivePlugin: () => void;
+  activeSkillId?: string | null;
+  activeSkillTitle?: string | null;
+  onClearActiveSkill?: () => void;
   pluginOptions: InstalledPluginRecord[];
   pluginsLoading: boolean;
+  skillOptions?: SkillSummary[];
+  skillsLoading?: boolean;
+  mcpOptions?: McpServerConfig[];
+  mcpLoading?: boolean;
   pendingPluginId: string | null;
   pendingChipId: string | null;
   submitDisabled?: boolean;
   onPickPlugin: (record: InstalledPluginRecord, nextPrompt: string | null) => void;
+  onPickSkill?: (skill: SkillSummary, nextPrompt: string | null) => void;
+  onPickMcp?: (server: McpServerConfig, nextPrompt: string) => void;
   onPickChip: (chip: HomeHeroChip) => void;
   contextItemCount: number;
   error: string | null;
@@ -45,14 +55,23 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
     onPromptChange,
     onSubmit,
     activePluginTitle,
+    activeSkillId = null,
+    activeSkillTitle = null,
     activeChipId,
     onClearActivePlugin,
+    onClearActiveSkill = () => undefined,
     pluginOptions,
     pluginsLoading,
+    skillOptions = [],
+    skillsLoading = false,
+    mcpOptions = [],
+    mcpLoading = false,
     pendingPluginId,
     pendingChipId,
     submitDisabled = false,
     onPickPlugin,
+    onPickSkill = () => undefined,
+    onPickMcp = () => undefined,
     onPickChip,
     contextItemCount,
     error,
@@ -60,36 +79,124 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
   ref,
 ) {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [mentionTab, setMentionTab] = useState<HomeMentionTab>('all');
   const composingRef = useRef(false);
   const canSubmit = prompt.trim().length > 0 && !submitDisabled;
-  const placeholder = activePluginTitle
+  const placeholder = activePluginTitle || activeSkillTitle
     ? 'Edit the example query or write your own…'
-    : 'What do you want to design? Type a prompt, @search a plugin, or pick one below…';
-  const mention = getPluginMention(prompt);
-  const pickerOptions = useMemo(() => {
-    if (!mention) return [];
-    const q = mention.query.toLowerCase();
-    return pluginOptions
-      .filter((plugin) => {
-        if (!q) return true;
-        return [
-          plugin.title,
-          plugin.id,
-          plugin.manifest?.description ?? '',
-          ...(plugin.manifest?.tags ?? []),
-        ]
-          .join(' ')
-          .toLowerCase()
-          .includes(q);
-      })
-      .slice(0, 6);
-  }, [mention, pluginOptions]);
-  const pickerOpen = Boolean(mention) && (pluginsLoading || pickerOptions.length > 0);
+    : 'What do you want to design? Type a prompt, @search plugins, skills, or MCP…';
+  const mention = getContextMention(prompt);
+  const mentionActive = Boolean(mention);
+  const mentionQuery = mention?.query ?? '';
+  const pluginMatches = useMemo(
+    () =>
+      mentionActive
+        ? pluginOptions.filter((plugin) => pluginMatchesQuery(plugin, mentionQuery)).slice(0, 6)
+        : [],
+    [mentionActive, mentionQuery, pluginOptions],
+  );
+  const skillMatches = useMemo(
+    () =>
+      mentionActive
+        ? skillOptions.filter((skill) => skillMatchesQuery(skill, mentionQuery)).slice(0, 6)
+        : [],
+    [mentionActive, mentionQuery, skillOptions],
+  );
+  const mcpMatches = useMemo(
+    () =>
+      mentionActive
+        ? mcpOptions.filter((server) => mcpServerMatchesQuery(server, mentionQuery)).slice(0, 6)
+        : [],
+    [mcpOptions, mentionActive, mentionQuery],
+  );
+  const pickerOpen = mentionActive;
+  const tabs: Array<{ id: HomeMentionTab; label: string; count: number }> = [
+    { id: 'all', label: 'All', count: pluginMatches.length + skillMatches.length + mcpMatches.length },
+    { id: 'plugins', label: 'Plugins', count: pluginMatches.length },
+    { id: 'skills', label: 'Skills', count: skillMatches.length },
+    { id: 'mcp', label: 'MCP', count: mcpMatches.length },
+  ];
+  const showPlugins = mentionTab === 'all' || mentionTab === 'plugins';
+  const showSkills = mentionTab === 'all' || mentionTab === 'skills';
+  const showMcp = mentionTab === 'all' || mentionTab === 'mcp';
+  const visibleSections: HomeMentionSection[] = [
+    showPlugins
+      ? {
+          id: 'plugins',
+          label: 'Plugins',
+          options: pluginMatches.map((plugin) => ({
+            id: `plugin-${plugin.id}`,
+            icon: 'sparkles',
+            title: plugin.title,
+            description: plugin.manifest?.description ?? plugin.id,
+            meta: pendingPluginId === plugin.id ? 'Applying…' : getPluginSourceLabel(plugin),
+            disabled: pendingPluginId !== null,
+            onPick: () => pickPlugin(plugin),
+          })),
+        }
+      : null,
+    showSkills
+      ? {
+          id: 'skills',
+          label: 'Skills',
+          options: skillMatches.map((skill) => ({
+            id: `skill-${skill.id}`,
+            icon: skill.id === activeSkillId ? 'check' : 'file',
+            title: skill.name,
+            description: skill.description || skill.id,
+            meta: skill.id === activeSkillId ? 'Active' : skill.mode,
+            onPick: () => pickSkill(skill),
+          })),
+        }
+      : null,
+    showMcp
+      ? {
+          id: 'mcp',
+          label: 'MCP',
+          options: mcpMatches.map((server) => ({
+            id: `mcp-${server.id}`,
+            icon: 'link',
+            title: server.label || server.id,
+            description: server.url || server.command || server.id,
+            meta: server.transport,
+            onPick: () => pickMcp(server),
+          })),
+        }
+      : null,
+  ].filter((section): section is HomeMentionSection => Boolean(section?.options.length));
+  const visiblePickerOptions = visibleSections.flatMap((section) => section.options);
+  const visibleLoading =
+    (mentionTab === 'all' && (pluginsLoading || skillsLoading || mcpLoading)) ||
+    (mentionTab === 'plugins' && pluginsLoading) ||
+    (mentionTab === 'skills' && skillsLoading) ||
+    (mentionTab === 'mcp' && mcpLoading);
+
+  useEffect(() => {
+    if (selectedIndex >= visiblePickerOptions.length) setSelectedIndex(0);
+  }, [selectedIndex, visiblePickerOptions.length]);
 
   function pickPlugin(record: InstalledPluginRecord) {
     const nextPrompt = mention ? replaceMentionToken(prompt, mention) : null;
     onPickPlugin(record, nextPrompt);
   }
+
+  function pickSkill(skill: SkillSummary) {
+    const nextPrompt = mention ? replaceMentionToken(prompt, mention) : null;
+    onPickSkill(skill, nextPrompt);
+  }
+
+  function pickMcp(server: McpServerConfig) {
+    const nextPrompt = mention
+      ? replaceMentionTokenWithText(
+          prompt,
+          mention,
+          `Use the \`${server.id}\` MCP server tools.`,
+        )
+      : prompt;
+    onPickMcp(server, nextPrompt);
+  }
+
+  let optionRenderIndex = 0;
 
   return (
     <section className="home-hero" data-testid="home-hero">
@@ -106,21 +213,41 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
       </p>
 
       <div className="home-hero__input-card">
-        {activePluginTitle ? (
-          <div className="home-hero__active" data-testid="home-hero-active-plugin">
-            <span className="home-hero__active-chip">
-              <span className="home-hero__active-dot" aria-hidden />
-              <span>Plugin: {activePluginTitle}</span>
-              <button
-                type="button"
-                className="home-hero__active-clear"
-                onClick={onClearActivePlugin}
-                aria-label="Clear active plugin"
-                title="Clear active plugin"
+        {activePluginTitle || activeSkillTitle ? (
+          <div className="home-hero__active">
+            {activePluginTitle ? (
+              <span className="home-hero__active-chip" data-testid="home-hero-active-plugin">
+                <span className="home-hero__active-dot" aria-hidden />
+                <span>Plugin: {activePluginTitle}</span>
+                <button
+                  type="button"
+                  className="home-hero__active-clear"
+                  onClick={onClearActivePlugin}
+                  aria-label="Clear active plugin"
+                  title="Clear active plugin"
+                >
+                  ×
+                </button>
+              </span>
+            ) : null}
+            {activeSkillTitle ? (
+              <span
+                className="home-hero__active-chip home-hero__active-chip--skill"
+                data-testid="home-hero-active-skill"
               >
-                ×
-              </button>
-            </span>
+                <span className="home-hero__active-dot" aria-hidden />
+                <span>Skill: {activeSkillTitle}</span>
+                <button
+                  type="button"
+                  className="home-hero__active-clear"
+                  onClick={onClearActiveSkill}
+                  aria-label="Clear active skill"
+                  title="Clear active skill"
+                >
+                  ×
+                </button>
+              </span>
+            ) : null}
             {contextItemCount > 0 ? (
               <span className="home-hero__context-summary">
                 {contextItemCount} context items resolved
@@ -145,21 +272,23 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
           }}
           onKeyDown={(e) => {
             if (isImeComposing(e, composingRef.current)) return;
-            if (pickerOpen && pickerOptions.length > 0) {
+            if (pickerOpen && visiblePickerOptions.length > 0) {
               if (e.key === 'ArrowDown') {
                 e.preventDefault();
-                setSelectedIndex((idx) => (idx + 1) % pickerOptions.length);
+                setSelectedIndex((idx) => (idx + 1) % visiblePickerOptions.length);
                 return;
               }
               if (e.key === 'ArrowUp') {
                 e.preventDefault();
-                setSelectedIndex((idx) => (idx - 1 + pickerOptions.length) % pickerOptions.length);
+                setSelectedIndex(
+                  (idx) => (idx - 1 + visiblePickerOptions.length) % visiblePickerOptions.length,
+                );
                 return;
               }
               if (e.key === 'Tab') {
                 e.preventDefault();
-                const selected = pickerOptions[selectedIndex] ?? pickerOptions[0];
-                if (selected) pickPlugin(selected);
+                const selected = visiblePickerOptions[selectedIndex] ?? visiblePickerOptions[0];
+                if (selected && !selected.disabled) selected.onPick();
                 return;
               }
             }
@@ -171,9 +300,9 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
               !e.altKey
             ) {
               e.preventDefault();
-              if (pickerOpen && pickerOptions.length > 0) {
-                const selected = pickerOptions[selectedIndex] ?? pickerOptions[0];
-                if (selected) pickPlugin(selected);
+              if (pickerOpen && visiblePickerOptions.length > 0) {
+                const selected = visiblePickerOptions[selectedIndex] ?? visiblePickerOptions[0];
+                if (selected && !selected.disabled) selected.onPick();
                 return;
               }
               if (canSubmit) onSubmit();
@@ -181,44 +310,86 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
           }}
           placeholder={placeholder}
           rows={3}
-          aria-controls={pickerOpen ? 'home-hero-plugin-picker' : undefined}
+          aria-controls={pickerOpen ? 'home-hero-context-picker' : undefined}
           aria-expanded={pickerOpen}
         />
         {pickerOpen ? (
           <div
-            id="home-hero-plugin-picker"
+            id="home-hero-context-picker"
             className="home-hero__plugin-picker"
             role="listbox"
-            aria-label="Plugin search results"
+            aria-label="Context search results"
+            data-testid="home-hero-context-picker"
             data-testid="home-hero-plugin-picker"
           >
-            {pluginsLoading ? (
-              <div className="home-hero__plugin-picker-empty">Loading plugins…</div>
-            ) : (
-              pickerOptions.map((plugin, idx) => (
+            <div className="home-hero__mention-tabs" role="tablist" aria-label="Context surfaces">
+              {tabs.map((item) => (
                 <button
-                  key={plugin.id}
+                  key={item.id}
                   type="button"
-                  role="option"
-                  aria-selected={idx === selectedIndex}
-                  className={`home-hero__plugin-option${idx === selectedIndex ? ' is-active' : ''}`}
-                  onMouseEnter={() => setSelectedIndex(idx)}
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    pickPlugin(plugin);
+                  role="tab"
+                  aria-selected={mentionTab === item.id}
+                  className={`home-hero__mention-tab${mentionTab === item.id ? ' is-active' : ''}`}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    setMentionTab(item.id);
+                    setSelectedIndex(0);
                   }}
-                  disabled={pendingPluginId !== null}
                 >
-                  <span className="home-hero__plugin-option-main">
-                    <span>{plugin.title}</span>
-                    <span>{plugin.manifest?.description ?? plugin.id}</span>
-                  </span>
-                  <span className="home-hero__plugin-option-meta">
-                    {pendingPluginId === plugin.id ? 'Applying…' : getPluginSourceLabel(plugin)}
-                  </span>
+                  <span>{item.label}</span>
+                  {item.count > 0 ? <span>{item.count}</span> : null}
                 </button>
-              ))
-            )}
+              ))}
+            </div>
+            {visibleLoading && visiblePickerOptions.length === 0 ? (
+              <div className="home-hero__plugin-picker-empty">Loading context…</div>
+            ) : null}
+            {!visibleLoading && visiblePickerOptions.length === 0 ? (
+              <div className="home-hero__plugin-picker-empty">
+                {mentionQuery ? (
+                  <>No results for “{mentionQuery}”.</>
+                ) : (
+                  <>Search plugins, skills, and MCP servers.</>
+                )}
+              </div>
+            ) : null}
+            {visibleSections.map((section) => (
+              <div key={section.id} className="home-hero__mention-section">
+                <div className="home-hero__mention-section-label">{section.label}</div>
+                {section.options.map((item) => {
+                  const optionIndex = optionRenderIndex;
+                  optionRenderIndex += 1;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="option"
+                      aria-selected={optionIndex === selectedIndex}
+                      className={`home-hero__plugin-option${
+                        optionIndex === selectedIndex ? ' is-active' : ''
+                      }`}
+                      onMouseEnter={() => setSelectedIndex(optionIndex)}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        if (!item.disabled) item.onPick();
+                      }}
+                      disabled={item.disabled}
+                    >
+                      <span className="home-hero__plugin-option-icon" aria-hidden>
+                        <Icon name={item.icon} size={13} />
+                      </span>
+                      <span className="home-hero__plugin-option-main">
+                        <span>{item.title}</span>
+                        <span>{item.description}</span>
+                      </span>
+                      <span className="home-hero__plugin-option-meta">
+                        {item.meta}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </div>
         ) : null}
         <div className="home-hero__input-foot">
@@ -242,7 +413,7 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
       <div
         className="home-hero__rail"
         role="toolbar"
-        aria-label="Pick a project category or migration shortcut"
+        aria-label="Pick a project category or starter shortcut"
         data-testid="home-hero-rail"
       >
         <RailGroup

@@ -98,6 +98,8 @@ interface Props {
   onOpenPetSettings?: () => void;
   projectMetadata?: ProjectMetadata;
   onProjectMetadataChange?: (metadata: ProjectMetadata) => void;
+  currentSkillId?: string | null;
+  onProjectSkillChange?: (skillId: string | null) => void;
   researchAvailable?: boolean;
   // Immutable snapshot of the plugin pinned to this project. When set
   // we suppress the in-composer plugin rail (the user already picked a
@@ -142,6 +144,8 @@ export function ChatPane({
   onOpenPetSettings,
   projectMetadata,
   onProjectMetadataChange,
+  currentSkillId = null,
+  onProjectSkillChange,
   researchAvailable,
   activePluginSnapshot,
 }: Props) {
@@ -552,6 +556,8 @@ export function ChatPane({
             researchAvailable={researchAvailable}
             projectMetadata={projectMetadata}
             onProjectMetadataChange={onProjectMetadataChange}
+            currentSkillId={currentSkillId}
+            onProjectSkillChange={onProjectSkillChange}
             pinnedPluginId={activePluginSnapshot?.pluginId ?? null}
           />
         </>

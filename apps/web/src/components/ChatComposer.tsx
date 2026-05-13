@@ -8,15 +8,16 @@ import {
 } from "react";
 import { useT } from '../i18n';
 import type { Dict } from '../i18n/types';
-import { projectRawUrl, uploadProjectFiles, openFolderDialog } from "../providers/registry";
+import { projectRawUrl, uploadProjectFiles, openFolderDialog, fetchSkills } from "../providers/registry";
 import { patchProject } from "../state/projects";
 import { fetchMcpServers } from "../state/mcp";
-import type { McpServerConfig } from "../state/mcp";
+import type { McpServerConfig, McpTemplate } from "../state/mcp";
 import { listPlugins } from "../state/projects";
-import type { AppConfig, ChatAttachment, ChatCommentAttachment, ProjectFile, ProjectMetadata } from "../types";
+import type { AppConfig, ChatAttachment, ChatCommentAttachment, ProjectFile, ProjectMetadata, SkillSummary } from "../types";
 import type {
   ContextItem,
   InstalledPluginRecord,
+  PluginSourceKind,
   ResearchOptions,
 } from '@open-design/contracts';
 import { Icon } from "./Icon";
@@ -25,6 +26,19 @@ import { PluginsSection, type PluginsSectionHandle } from "./PluginsSection";
 import { BUILT_IN_PETS, CUSTOM_PET_ID, resolveActivePet } from "./pet/pets";
 
 type TranslateFn = (key: keyof Dict, vars?: Record<string, string | number>) => string;
+
+type ToolsTab = 'plugins' | 'skills' | 'mcp' | 'import' | 'pet';
+
+type MentionTab = 'all' | 'plugins' | 'skills' | 'mcp' | 'files';
+
+const USER_PLUGIN_SOURCE_KINDS = new Set<PluginSourceKind>([
+  'user',
+  'project',
+  'marketplace',
+  'github',
+  'url',
+  'local',
+]);
 
 interface SlashCommand {
   id: string;
@@ -74,6 +88,8 @@ interface Props {
   researchAvailable?: boolean;
   projectMetadata?: ProjectMetadata;
   onProjectMetadataChange?: (metadata: ProjectMetadata) => void;
+  currentSkillId?: string | null;
+  onProjectSkillChange?: (skillId: string | null) => void;
   // Set when the project was created with a plugin already pinned
   // (PluginLoopHome on Home). When provided, the in-composer plugin
   // rail collapses to the single pinned plugin so the user can see
@@ -126,6 +142,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       researchAvailable = false,
       projectMetadata,
       onProjectMetadataChange,
+      currentSkillId = null,
+      onProjectSkillChange,
       pinnedPluginId = null,
     },
     ref
@@ -153,6 +171,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     // shown in the slash-command palette so `/mcp <id>` inserts a hint into
     // the prompt that nudges the model to use that server's tools.
     const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([]);
+    const [mcpTemplates, setMcpTemplates] = useState<McpTemplate[]>([]);
+    const [skills, setSkills] = useState<SkillSummary[]>([]);
     // Installed plugins, fetched lazily for the tools-menu Plugins tab and
     // the @-mention picker. Both surfaces share the same list so the
     // count badge on the trigger stays consistent.
@@ -166,7 +186,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     // a shortcut to open the full Settings dialog. Replaces the previous
     // row of three standalone buttons (which overflowed in narrow chats).
     const [toolsOpen, setToolsOpen] = useState(false);
-    type ToolsTab = 'plugins' | 'mcp' | 'import' | 'pet';
     const [toolsTab, setToolsTab] = useState<ToolsTab>('plugins');
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -224,12 +243,25 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       void (async () => {
         const data = await fetchMcpServers();
         if (cancelled || !data) return;
-        setMcpServers(data.servers.filter((s) => s.enabled));
+        setMcpServers(data.servers);
+        setMcpTemplates(data.templates);
       })();
       return () => {
         cancelled = true;
       };
     }, []);
+
+    useEffect(() => {
+      if (!projectId) return;
+      let cancelled = false;
+      void fetchSkills().then((rows) => {
+        if (cancelled) return;
+        setSkills(rows.filter((s) => !s.aggregatesExamples));
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [projectId]);
 
     // Lazy-fetch installed plugins once on mount; the tools-menu Plugins
     // tab and the @-mention picker both consume this list.
@@ -260,6 +292,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       return rows;
     }, [installedPlugins, pinnedPluginId]);
 
+    const enabledMcpServers = useMemo(
+      () => mcpServers.filter((s) => s.enabled),
+      [mcpServers],
+    );
+
     // Resolve which tabs to surface in the consolidated tools popover.
     // Plugins is always visible while a project is active so users can
     // apply context without leaving the composer. MCP and Pet tabs only
@@ -267,7 +304,10 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     // Import is always available (folder linking is unconditional).
     const availableTabs = useMemo<ToolsTab[]>(() => {
       const tabs: ToolsTab[] = [];
-      if (projectId) tabs.push('plugins');
+      if (projectId) {
+        tabs.push('plugins');
+        tabs.push('skills');
+      }
       if (onOpenMcpSettings) tabs.push('mcp');
       tabs.push('import');
       if (petEnabled) tabs.push('pet');
@@ -306,7 +346,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
           argHint: 'open settings · <server-id> to insert hint',
         });
       }
-      for (const s of mcpServers) {
+      for (const s of enabledMcpServers) {
         list.push({
           id: `mcp-${s.id}`,
           label: `/mcp ${s.id}`,
@@ -361,7 +401,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
         );
       }
       return list;
-    }, [petEnabled, researchAvailable, t, mcpServers, onOpenMcpSettings]);
+    }, [petEnabled, researchAvailable, t, enabledMcpServers, onOpenMcpSettings]);
 
     const filteredSlash = useMemo(() => {
       if (!slash) return [] as SlashCommand[];
@@ -672,6 +712,42 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       });
     }
 
+    function replaceMentionWithText(text: string) {
+      if (!mention) return;
+      const ta = textareaRef.current;
+      const cursor = mention.cursor;
+      const before = draft.slice(0, cursor);
+      const after = draft.slice(cursor);
+      const replaced = before.replace(/(^|\s)@([^\s@]*)$/, `$1${text}`);
+      const next = replaced + after;
+      setDraft(next);
+      setMention(null);
+      requestAnimationFrame(() => {
+        if (!ta) return;
+        ta.focus();
+        const pos = replaced.length;
+        ta.setSelectionRange(pos, pos);
+      });
+    }
+
+    function insertMcpMention(server: McpServerConfig) {
+      replaceMentionWithText(`Use the \`${server.id}\` MCP server tools. `);
+    }
+
+    async function applyProjectSkill(skill: SkillSummary): Promise<boolean> {
+      if (!projectId) return false;
+      const result = await patchProject(projectId, { skillId: skill.id });
+      if (!result) return false;
+      onProjectSkillChange?.(result.skillId ?? skill.id);
+      return true;
+    }
+
+    async function insertSkillMention(skill: SkillSummary) {
+      const applied = await applyProjectSkill(skill);
+      if (!applied) return;
+      replaceMentionWithText(`Use the @${skill.id} skill. `);
+    }
+
     function removeStaged(p: string) {
       setStaged((s) => s.filter((a) => a.path !== p));
     }
@@ -707,33 +783,67 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       reset();
     }
 
-    // The @-picker offers a unified search across two surfaces: project
-    // files (a path attachment is added + the @path token is inserted)
-    // and installed plugins (the plugin is applied via PluginsSection's
-    // imperative handle, the same path the tools-menu uses). The popover
-    // groups them so users can discover both kinds without leaving the
-    // textarea.
+    // The @-picker offers a unified search across context surfaces:
+    // project files, plugins, active MCP servers, and skills. Plugins and
+    // skills are applied as project context; files keep the inline @path
+    // token because agents already understand file references there.
+    const mentionQuery = mention ? mention.q.toLowerCase() : '';
     const filteredFiles = mention
       ? projectFiles
           .filter((f) => f.type === undefined || f.type === "file")
           .filter((f) => {
             const key = f.path ?? f.name;
-            return key.toLowerCase().includes(mention.q.toLowerCase());
+            return key.toLowerCase().includes(mentionQuery);
           })
           .slice(0, 12)
       : [];
     const filteredPlugins = mention
       ? pluginsForComposer
           .filter((p) => {
-            if (!mention.q) return true;
-            const q = mention.q.toLowerCase();
+            if (!mentionQuery) return true;
             return (
-              p.title.toLowerCase().includes(q) ||
-              p.id.toLowerCase().includes(q) ||
-              (p.manifest?.description ?? '').toLowerCase().includes(q)
+              p.title.toLowerCase().includes(mentionQuery) ||
+              p.id.toLowerCase().includes(mentionQuery) ||
+              (p.manifest?.description ?? '').toLowerCase().includes(mentionQuery) ||
+              (p.manifest?.tags ?? []).join(' ').toLowerCase().includes(mentionQuery)
             );
           })
-          .slice(0, 6)
+          .slice(0, 8)
+      : [];
+    const filteredMcpServers = mention
+      ? enabledMcpServers
+          .filter((s) => {
+            if (!mentionQuery) return true;
+            return [
+              s.id,
+              s.label ?? '',
+              s.transport,
+              s.url ?? '',
+              s.command ?? '',
+            ]
+              .join(' ')
+              .toLowerCase()
+              .includes(mentionQuery);
+          })
+          .slice(0, 8)
+      : [];
+    const filteredSkills = mention
+      ? skills
+          .filter((s) => {
+            if (!mentionQuery) return true;
+            return [
+              s.id,
+              s.name,
+              s.description,
+              s.mode,
+              s.surface ?? '',
+              ...s.triggers,
+            ]
+              .join(' ')
+              .toLowerCase()
+              .includes(mentionQuery);
+          })
+          .slice(0, 8)
       : [];
 
     return (
@@ -856,12 +966,18 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
                 }
               }}
             />
-            {mention && (filteredFiles.length > 0 || filteredPlugins.length > 0) ? (
+            {mention ? (
               <MentionPopover
                 files={filteredFiles}
                 plugins={filteredPlugins}
+                skills={filteredSkills}
+                mcpServers={filteredMcpServers}
+                query={mention.q}
+                currentSkillId={currentSkillId}
                 onPickFile={insertMention}
                 onPickPlugin={(record) => void insertPluginMention(record)}
+                onPickSkill={(skill) => void insertSkillMention(skill)}
+                onPickMcp={insertMcpMention}
               />
             ) : null}
             {slash && filteredSlash.length > 0 ? (
@@ -899,8 +1015,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
                 aria-label={t('chat.cliSettingsAria')}
               >
                 <Icon name="sliders" size={15} />
-                {mcpServers.length > 0 ? (
-                  <span className="composer-tools-badge">{mcpServers.length}</span>
+                {enabledMcpServers.length > 0 ? (
+                  <span className="composer-tools-badge">{enabledMcpServers.length}</span>
                 ) : null}
               </button>
               {toolsOpen ? (
@@ -930,13 +1046,24 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
                             ) : null}
                           </>
                         ) : null}
+                        {tab === 'skills' ? (
+                          <>
+                            <Icon name="file" size={12} />
+                            <span>Skills</span>
+                            {skills.length > 0 ? (
+                              <span className="composer-tools-tab-count">
+                                {skills.length}
+                              </span>
+                            ) : null}
+                          </>
+                        ) : null}
                         {tab === 'mcp' ? (
                           <>
                             <Icon name="link" size={12} />
                             <span>MCP</span>
-                            {mcpServers.length > 0 ? (
+                            {enabledMcpServers.length > 0 ? (
                               <span className="composer-tools-tab-count">
-                                {mcpServers.length}
+                                {enabledMcpServers.length}
                               </span>
                             ) : null}
                           </>
@@ -976,9 +1103,20 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
                         }}
                       />
                     ) : null}
+                    {toolsTab === 'skills' ? (
+                      <ToolsSkillsPanel
+                        skills={skills}
+                        currentSkillId={currentSkillId}
+                        onPick={async (skill) => {
+                          const applied = await applyProjectSkill(skill);
+                          if (applied) setToolsOpen(false);
+                        }}
+                      />
+                    ) : null}
                     {toolsTab === 'mcp' && onOpenMcpSettings ? (
                       <ToolsMcpPanel
-                        servers={mcpServers}
+                        servers={enabledMcpServers}
+                        templates={mcpTemplates}
                         onInsert={(serverId) => {
                           const ta = textareaRef.current;
                           const insert = `Use the \`${serverId}\` MCP server tools. `;
@@ -1183,80 +1321,157 @@ function ToolsPluginsPanel({
   onShowDetails: (record: InstalledPluginRecord) => void;
 }) {
   const [pendingId, setPendingId] = useState<string | null>(null);
-  if (plugins.length === 0) {
-    return (
-      <div className="composer-tools-empty">
-        No plugins installed yet. Install one with{' '}
-        <code>od plugin install &lt;source&gt;</code>.
-      </div>
-    );
-  }
+  const [source, setSource] = useState<'community' | 'mine'>('community');
+  const [query, setQuery] = useState('');
+  const communityPlugins = useMemo(
+    () => plugins.filter((p) => p.sourceKind === 'bundled'),
+    [plugins],
+  );
+  const userPlugins = useMemo(
+    () => plugins.filter((p) => USER_PLUGIN_SOURCE_KINDS.has(p.sourceKind)),
+    [plugins],
+  );
+  const scopedPlugins = source === 'community' ? communityPlugins : userPlugins;
+  const visiblePlugins = useMemo(
+    () => scopedPlugins.filter((p) => pluginMatchesQuery(p, query)),
+    [scopedPlugins, query],
+  );
+
   return (
-    <div className="composer-tools-list">
-      {plugins.map((p) => (
-        <div key={p.id} className="composer-tools-row composer-tools-row--plugin">
+    <>
+      <div className="composer-tools-filter">
+        <div className="composer-tools-segments" role="tablist" aria-label="Plugin source">
           <button
             type="button"
-            className="composer-tools-row-main"
-            onClick={async () => {
-              setPendingId(p.id);
-              try {
-                await onApply(p);
-              } finally {
-                setPendingId(null);
-              }
-            }}
-            disabled={pendingId !== null}
-            aria-busy={pendingId === p.id ? 'true' : undefined}
-            title={p.manifest?.description ?? p.title}
+            className={`composer-tools-segment${source === 'community' ? ' active' : ''}`}
+            onClick={() => setSource('community')}
           >
-            <Icon name="sparkles" size={12} />
-            <span className="composer-tools-row-body">
-              <strong>{p.title}</strong>
-              {p.manifest?.description ? (
-                <span className="composer-tools-row-meta">
-                  {p.manifest.description}
-                </span>
-              ) : null}
-            </span>
-            {pendingId === p.id ? (
-              <span className="composer-tools-row-pending">Applying…</span>
-            ) : null}
+            <span>Community</span>
+            <span>{communityPlugins.length}</span>
           </button>
           <button
             type="button"
-            className="composer-tools-row-side"
-            onClick={() => onShowDetails(p)}
-            title={`View details for ${p.title}`}
-            aria-label={`View details for ${p.title}`}
+            className={`composer-tools-segment${source === 'mine' ? ' active' : ''}`}
+            onClick={() => setSource('mine')}
           >
-            <Icon name="eye" size={12} />
+            <span>My plugins</span>
+            <span>{userPlugins.length}</span>
           </button>
         </div>
-      ))}
-    </div>
+        <input
+          className="composer-tools-search"
+          value={query}
+          onChange={(e) => setQuery(e.currentTarget.value)}
+          placeholder="Search plugins…"
+          aria-label="Search plugins"
+        />
+      </div>
+      {visiblePlugins.length === 0 ? (
+        <div className="composer-tools-empty">
+          {plugins.length === 0 ? (
+            <>
+              No plugins installed yet. Browse Community or add your own with{' '}
+              <code>od plugin install &lt;source&gt;</code>.
+            </>
+          ) : query ? (
+            <>No {source === 'community' ? 'Community' : 'My plugins'} results for “{query}”.</>
+          ) : (
+            <>No {source === 'community' ? 'Community' : 'My plugins'} plugins available.</>
+          )}
+        </div>
+      ) : (
+        <div className="composer-tools-list">
+          {visiblePlugins.map((p) => (
+            <div key={p.id} className="composer-tools-row composer-tools-row--plugin">
+              <button
+                type="button"
+                className="composer-tools-row-main"
+                onClick={async () => {
+                  setPendingId(p.id);
+                  try {
+                    await onApply(p);
+                  } finally {
+                    setPendingId(null);
+                  }
+                }}
+                disabled={pendingId !== null}
+                aria-busy={pendingId === p.id ? 'true' : undefined}
+                title={p.manifest?.description ?? p.title}
+              >
+                <Icon name="sparkles" size={12} />
+                <span className="composer-tools-row-body">
+                  <strong>{p.title}</strong>
+                  {p.manifest?.description ? (
+                    <span className="composer-tools-row-meta">
+                      {p.manifest.description}
+                    </span>
+                  ) : (
+                    <span className="composer-tools-row-meta">{p.id}</span>
+                  )}
+                </span>
+                {pendingId === p.id ? (
+                  <span className="composer-tools-row-pending">Applying…</span>
+                ) : null}
+              </button>
+              <button
+                type="button"
+                className="composer-tools-row-side"
+                onClick={() => onShowDetails(p)}
+                title={`View details for ${p.title}`}
+                aria-label={`View details for ${p.title}`}
+              >
+                <Icon name="eye" size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
 function ToolsMcpPanel({
   servers,
+  templates,
   onInsert,
   onManage,
 }: {
   servers: McpServerConfig[];
+  templates: McpTemplate[];
   onInsert: (serverId: string) => void;
   onManage: () => void;
 }) {
+  const [query, setQuery] = useState('');
+  const visibleServers = useMemo(
+    () => servers.filter((s) => mcpServerMatchesQuery(s, query)),
+    [servers, query],
+  );
+  const visibleTemplates = useMemo(
+    () => templates.filter((tpl) => mcpTemplateMatchesQuery(tpl, query)).slice(0, 8),
+    [templates, query],
+  );
+
   return (
     <>
-      {servers.length === 0 ? (
+      <div className="composer-tools-filter">
+        <input
+          className="composer-tools-search"
+          value={query}
+          onChange={(e) => setQuery(e.currentTarget.value)}
+          placeholder="Search MCP…"
+          aria-label="Search MCP servers and templates"
+        />
+      </div>
+      {visibleServers.length === 0 ? (
         <div className="composer-tools-empty">
-          No MCP servers configured yet. Open Settings to add Higgsfield,
-          GitHub, Filesystem, or a custom server.
+          {servers.length === 0
+            ? 'No enabled MCP servers configured yet.'
+            : `No configured MCP results for “${query}”.`}
         </div>
       ) : (
         <div className="composer-tools-list">
-          {servers.map((s) => (
+          <div className="composer-tools-section-label">Configured</div>
+          {visibleServers.map((s) => (
             <button
               key={s.id}
               type="button"
@@ -1274,6 +1489,30 @@ function ToolsMcpPanel({
           ))}
         </div>
       )}
+      {visibleTemplates.length > 0 ? (
+        <div className="composer-tools-list">
+          <div className="composer-tools-section-label">Templates</div>
+          {visibleTemplates.map((tpl) => (
+            <button
+              key={tpl.id}
+              type="button"
+              role="menuitem"
+              className="composer-tools-row"
+              onClick={onManage}
+              title={`Add ${tpl.label} from Settings`}
+            >
+              <Icon name="plus" size={12} />
+              <span className="composer-tools-row-body">
+                <strong>{tpl.label}</strong>
+                <span className="composer-tools-row-meta">
+                  {tpl.transport}
+                  {tpl.category ? ` · ${tpl.category}` : ''}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
       <button
         type="button"
         role="menuitem"
@@ -1285,6 +1524,145 @@ function ToolsMcpPanel({
       </button>
     </>
   );
+}
+
+function ToolsSkillsPanel({
+  skills,
+  currentSkillId,
+  onPick,
+}: {
+  skills: SkillSummary[];
+  currentSkillId: string | null;
+  onPick: (skill: SkillSummary) => void | Promise<void>;
+}) {
+  const [query, setQuery] = useState('');
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const visibleSkills = useMemo(
+    () => skills.filter((s) => skillMatchesQuery(s, query)).slice(0, 24),
+    [skills, query],
+  );
+  return (
+    <>
+      <div className="composer-tools-filter">
+        <input
+          className="composer-tools-search"
+          value={query}
+          onChange={(e) => setQuery(e.currentTarget.value)}
+          placeholder="Search skills…"
+          aria-label="Search skills"
+        />
+      </div>
+      {visibleSkills.length === 0 ? (
+        <div className="composer-tools-empty">
+          {skills.length === 0 ? 'No skills available yet.' : `No skills found for “${query}”.`}
+        </div>
+      ) : (
+        <div className="composer-tools-list">
+          {visibleSkills.map((skill) => {
+            const active = skill.id === currentSkillId;
+            return (
+              <button
+                key={skill.id}
+                type="button"
+                role="menuitem"
+                className={`composer-tools-row${active ? ' active' : ''}`}
+                onClick={async () => {
+                  setPendingId(skill.id);
+                  try {
+                    await onPick(skill);
+                  } finally {
+                    setPendingId(null);
+                  }
+                }}
+                disabled={pendingId !== null}
+                title={skill.description}
+              >
+                <Icon name={active ? 'check' : 'file'} size={12} />
+                <span className="composer-tools-row-body">
+                  <strong>{skill.name}</strong>
+                  <span className="composer-tools-row-meta">
+                    {skill.mode}
+                    {skill.surface ? ` · ${skill.surface}` : ''}
+                  </span>
+                </span>
+                {pendingId === skill.id ? (
+                  <span className="composer-tools-row-pending">Applying…</span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+function pluginMatchesQuery(plugin: InstalledPluginRecord, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return [
+    plugin.title,
+    plugin.id,
+    plugin.sourceKind,
+    plugin.source,
+    plugin.manifest?.description ?? '',
+    ...(plugin.manifest?.tags ?? []),
+  ]
+    .join(' ')
+    .toLowerCase()
+    .includes(q);
+}
+
+function skillMatchesQuery(skill: SkillSummary, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return [
+    skill.id,
+    skill.name,
+    skill.description,
+    skill.mode,
+    skill.surface ?? '',
+    ...skill.triggers,
+  ]
+    .join(' ')
+    .toLowerCase()
+    .includes(q);
+}
+
+function mcpServerMatchesQuery(server: McpServerConfig, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return [
+    server.id,
+    server.label ?? '',
+    server.transport,
+    server.url ?? '',
+    server.command ?? '',
+  ]
+    .join(' ')
+    .toLowerCase()
+    .includes(q);
+}
+
+function mcpTemplateMatchesQuery(tpl: McpTemplate, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return [
+    tpl.id,
+    tpl.label,
+    tpl.description,
+    tpl.transport,
+    tpl.category,
+    tpl.homepage ?? '',
+    tpl.example ?? '',
+  ]
+    .join(' ')
+    .toLowerCase()
+    .includes(q);
+}
+
+function pluginSourceLabel(plugin: InstalledPluginRecord): string {
+  return plugin.sourceKind === 'bundled' ? 'Community' : 'My plugin';
 }
 
 function ToolsImportPanel({
@@ -1468,55 +1846,161 @@ function SlashPopover({
 function MentionPopover({
   files,
   plugins,
+  skills,
+  mcpServers,
+  query,
+  currentSkillId,
   onPickFile,
   onPickPlugin,
+  onPickSkill,
+  onPickMcp,
 }: {
   files: ProjectFile[];
   plugins: InstalledPluginRecord[];
+  skills: SkillSummary[];
+  mcpServers: McpServerConfig[];
+  query: string;
+  currentSkillId: string | null;
   onPickFile: (path: string) => void;
   onPickPlugin: (record: InstalledPluginRecord) => void;
+  onPickSkill: (skill: SkillSummary) => void;
+  onPickMcp: (server: McpServerConfig) => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
+  const [tab, setTab] = useState<MentionTab>('all');
+  const tabs: Array<{ id: MentionTab; label: string; count: number }> = [
+    { id: 'all', label: 'All', count: plugins.length + skills.length + mcpServers.length + files.length },
+    { id: 'plugins', label: 'Plugins', count: plugins.length },
+    { id: 'skills', label: 'Skills', count: skills.length },
+    { id: 'mcp', label: 'MCP', count: mcpServers.length },
+    { id: 'files', label: 'Design files', count: files.length },
+  ];
+  const showPlugins = tab === 'all' || tab === 'plugins';
+  const showSkills = tab === 'all' || tab === 'skills';
+  const showMcp = tab === 'all' || tab === 'mcp';
+  const showFiles = tab === 'all' || tab === 'files';
+  const hasVisibleResults =
+    (showPlugins && plugins.length > 0) ||
+    (showSkills && skills.length > 0) ||
+    (showMcp && mcpServers.length > 0) ||
+    (showFiles && files.length > 0);
   useEffect(() => {
     if (ref.current) ref.current.scrollTop = 0;
-  }, [files, plugins]);
-  if (files.length === 0 && plugins.length === 0) return null;
+  }, [files, plugins, skills, mcpServers, tab]);
   return (
-    <div className="mention-popover" data-testid="mention-popover" ref={ref}>
-      {plugins.length > 0 ? (
+    <div className="mention-popover" data-testid="mention-popover">
+      <div className="mention-tabs" role="tablist" aria-label="Mention surfaces">
+        {tabs.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === item.id}
+            className={`mention-tab${tab === item.id ? ' active' : ''}`}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setTab(item.id)}
+          >
+            <span>{item.label}</span>
+            {item.count > 0 ? <span>{item.count}</span> : null}
+          </button>
+        ))}
+      </div>
+      <div className="mention-results" ref={ref}>
+        {!hasVisibleResults ? (
+          <div className="mention-empty">
+            {query ? (
+              <>No results for “{query}”.</>
+            ) : (
+              <>Search plugins, skills, MCP servers, and Design Files.</>
+            )}
+          </div>
+        ) : null}
+        {showPlugins && plugins.length > 0 ? (
         <>
           <div className="mention-section-label">Plugins</div>
           {plugins.map((p) => (
             <button
               key={`plugin-${p.id}`}
               className="mention-item mention-item--plugin"
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => onPickPlugin(p)}
               title={p.manifest?.description ?? p.title}
             >
               <Icon name="sparkles" size={12} />
               <span className="mention-item-body">
                 <strong>{p.title}</strong>
-                {p.manifest?.description ? (
-                  <span className="mention-meta mention-meta--desc">
-                    {p.manifest.description}
-                  </span>
-                ) : null}
+                <span className="mention-meta mention-meta--desc">
+                  {p.manifest?.description ?? p.id}
+                </span>
               </span>
+              <span className="mention-meta">{pluginSourceLabel(p)}</span>
             </button>
           ))}
         </>
       ) : null}
-      {files.length > 0 ? (
+        {showSkills && skills.length > 0 ? (
+          <>
+            <div className="mention-section-label">Skills</div>
+            {skills.map((skill) => {
+              const active = skill.id === currentSkillId;
+              return (
+                <button
+                  key={`skill-${skill.id}`}
+                  className="mention-item"
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => onPickSkill(skill)}
+                  title={skill.description}
+                >
+                  <Icon name={active ? 'check' : 'file'} size={12} />
+                  <span className="mention-item-body">
+                    <strong>{skill.name}</strong>
+                    <span className="mention-meta mention-meta--desc">
+                      {skill.description || skill.id}
+                    </span>
+                  </span>
+                  <span className="mention-meta">{active ? 'Active' : skill.mode}</span>
+                </button>
+              );
+            })}
+          </>
+        ) : null}
+        {showMcp && mcpServers.length > 0 ? (
+          <>
+            <div className="mention-section-label">MCP</div>
+            {mcpServers.map((server) => (
+              <button
+                key={`mcp-${server.id}`}
+                className="mention-item"
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => onPickMcp(server)}
+                title={`Use ${server.label || server.id}`}
+              >
+                <Icon name="link" size={12} />
+                <span className="mention-item-body">
+                  <strong>{server.label || server.id}</strong>
+                  <span className="mention-meta mention-meta--desc">
+                    {server.url || server.command || server.id}
+                  </span>
+                </span>
+                <span className="mention-meta">{server.transport}</span>
+              </button>
+            ))}
+          </>
+        ) : null}
+        {showFiles && files.length > 0 ? (
         <>
-          {plugins.length > 0 ? (
-            <div className="mention-section-label">Files</div>
-          ) : null}
+          <div className="mention-section-label">Design files</div>
           {files.map((f) => {
             const key = f.path ?? f.name;
             return (
               <button
                 key={`file-${key}`}
                 className="mention-item"
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => onPickFile(key)}
               >
                 <Icon name="file" size={12} />
@@ -1529,6 +2013,7 @@ function MentionPopover({
           })}
         </>
       ) : null}
+      </div>
     </div>
   );
 }
