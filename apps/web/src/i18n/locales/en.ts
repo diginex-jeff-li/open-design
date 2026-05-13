@@ -1206,7 +1206,7 @@ export const en: Dict = {
   'sketch.textPrompt': 'Text:',
   'sketch.textModalTitle': 'Add text',
 
-  'critiqueTheater.title': 'Design Jury',
+  'critiqueTheater.userFacingName': 'Design Jury',
   'critiqueTheater.roleDesigner': 'Designer',
   'critiqueTheater.roleCritic': 'Critic',
   'critiqueTheater.roleBrand': 'Brand',
