@@ -8,24 +8,28 @@ export interface HomePromptHandoff {
 export const PLUGIN_AUTHORING_PROMPT = [
   'Create an Open Design plugin for: <describe the workflow you want to package>.',
   '',
-  'Follow docs/plugins-spec.md and produce a folder named generated-plugin with:',
+  'Run the agent-assisted plugin authoring flow end to end. Follow docs/plugins-spec.md and produce a folder named generated-plugin with:',
   '- SKILL.md describing the agent behavior and workflow',
-  '- open-design.json with valid metadata, mode, task kind, inputs, and any pipeline/context references',
+  '- open-design.json with valid metadata, vendor/plugin-name naming when publishing, plugin.repo, mode, task kind, inputs, and any pipeline/context references',
   '- optional examples/ and assets/ when useful',
   '',
-  'When finished, summarize the files created and whether the folder is ready to add to My plugins.',
+  'Then run or prepare the CLI path: od plugin validate, od plugin pack, local install/run validation, od plugin whoami/login through gh, and od plugin publish when the user is ready to open a registry PR.',
+  '',
+  'When finished, summarize files created, validation status, local install/run status, pack output, and the exact publish command or PR next step.',
 ].join('\n');
 
 export function buildPluginAuthoringPrompt(goal: string): string {
   return [
     `Create an Open Design plugin for: ${goal}`,
     '',
-    'Follow docs/plugins-spec.md and produce a folder named generated-plugin with:',
+    'Run the agent-assisted plugin authoring flow end to end. Follow docs/plugins-spec.md and produce a folder named generated-plugin with:',
     '- SKILL.md describing the agent behavior and workflow',
-    '- open-design.json with valid metadata, mode, task kind, inputs, and any pipeline/context references',
+    '- open-design.json with valid metadata, vendor/plugin-name naming when publishing, plugin.repo, mode, task kind, inputs, and any pipeline/context references',
     '- optional examples/ and assets/ when useful',
     '',
-    'When finished, summarize the files created and whether the folder is ready to add to My plugins.',
+    'Then run or prepare the CLI path: od plugin validate, od plugin pack, local install/run validation, od plugin whoami/login through gh, and od plugin publish when the user is ready to open a registry PR.',
+    '',
+    'When finished, summarize files created, validation status, local install/run status, pack output, and the exact publish command or PR next step.',
   ].join('\n');
 }
 

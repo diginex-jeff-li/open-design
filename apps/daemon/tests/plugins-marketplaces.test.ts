@@ -13,6 +13,7 @@ import Database from 'better-sqlite3';
 import { migratePlugins } from '../src/plugins/persistence.js';
 import {
   addMarketplace,
+  ensureMarketplaceManifest,
   getMarketplace,
   listMarketplaces,
   refreshMarketplace,
@@ -131,6 +132,38 @@ describe('marketplaces', () => {
     expect(trusted?.trust).toBe('trusted');
     expect(removeMarketplace(db, added.row.id)).toBe(true);
     expect(getMarketplace(db, added.row.id)).toBeNull();
+  });
+
+  it('upserts a fixed built-in marketplace manifest', () => {
+    const result = ensureMarketplaceManifest(db, {
+      id: 'official',
+      url: 'https://open-design.ai/marketplace/open-design-marketplace.json',
+      trust: 'official',
+      manifestText: VALID_MANIFEST,
+      now: 123,
+    });
+    if (!result.ok) throw new Error('seed failed');
+    expect(result.row.id).toBe('official');
+    expect(result.row.trust).toBe('official');
+
+    const updatedManifest = JSON.stringify({
+      specVersion: '1.0.0',
+      name: 'test-marketplace',
+      version: '1.0.1',
+      plugins: [],
+    });
+    const updated = ensureMarketplaceManifest(db, {
+      id: 'official',
+      url: 'https://open-design.ai/marketplace/open-design-marketplace.json',
+      trust: 'official',
+      manifestText: updatedManifest,
+      now: 456,
+    });
+    if (!updated.ok) throw new Error('update failed');
+    expect(listMarketplaces(db)).toHaveLength(1);
+    expect(updated.row.addedAt).toBe(123);
+    expect(updated.row.refreshedAt).toBe(456);
+    expect(updated.row.version).toBe('1.0.1');
   });
 });
 

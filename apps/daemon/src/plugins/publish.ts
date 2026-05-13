@@ -11,6 +11,7 @@
 //   - awesome-agent-skills   → VoltAgent/awesome-agent-skills
 //   - clawhub                → openclaw/clawhub
 //   - skills-sh              → skills.sh discovery hint
+//   - open-design            → open-design/plugin-registry
 //
 // The function is pure: it accepts the plugin's metadata and returns
 // the catalog target description. The CLI is the side-effect-bearing
@@ -20,7 +21,8 @@ export type PublishCatalog =
   | 'anthropics-skills'
   | 'awesome-agent-skills'
   | 'clawhub'
-  | 'skills-sh';
+  | 'skills-sh'
+  | 'open-design';
 
 export interface PublishMetadata {
   // Plugin name + version come from the manifest. The repo URL is the
@@ -57,6 +59,7 @@ const KNOWN_TARGETS = new Set<PublishCatalog>([
   'awesome-agent-skills',
   'clawhub',
   'skills-sh',
+  'open-design',
 ]);
 
 export function buildPublishLink(args: {
@@ -101,6 +104,24 @@ export function buildPublishLink(args: {
           `2. Run \`npx skills add ${repo}\` once locally to seed the catalog index.`,
           '3. Verify the entry appears at https://skills.sh/ within ~24 hours.',
         ].join('\n'),
+      };
+    }
+    case 'open-design': {
+      const bodyWithRegistry = [
+        body,
+        '',
+        '## Open Design registry entry',
+        '',
+        '- Target path: `community/<vendor>/<plugin-name>/open-design.json`',
+        '- Generated index: `open-design-marketplace.json`',
+        '- Required checks: `od plugin validate`, `od plugin pack`, integrity digest, preview smoke.',
+      ].join('\n');
+      const url = newIssueUrl('open-design/plugin-registry', title, bodyWithRegistry);
+      return {
+        catalog: args.catalog,
+        catalogLabel: 'open-design/plugin-registry',
+        url,
+        prBody: bodyWithRegistry,
       };
     }
   }

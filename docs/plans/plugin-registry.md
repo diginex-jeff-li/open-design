@@ -34,10 +34,11 @@ References (shape, not API):
   registry must still install cleanly as a plain agent skill in Claude
   Code / Cursor / Codex / Gemini CLI / OpenClaw / Hermes. `open-design.json`
   remains an additive sidecar (per spec §1).
-- [ ] **R4. Trust vocabulary is one set, everywhere.** Contracts, daemon, CLI,
+- [x] **R4. Trust vocabulary is one set, everywhere.** Contracts, daemon, CLI,
   UI, and website all use **`official` / `trusted` / `restricted`**. (Today
   `marketplace.ts` ships `official|trusted|untrusted` and the runtime ships
-  `bundled|trusted|restricted` — these get unified in P0.)
+  `bundled|trusted|restricted` — P0 unifies these and normalizes legacy
+  `untrusted` rows to `restricted`.)
 - [ ] **R5. Federation is the default, not the exception.** OD's own registry
   is one source among many. Adding a third-party registry URL is symmetric
   to adding ours; no special-casing in code paths.
@@ -96,7 +97,8 @@ Product surface semantics:
 
 - **Home / Official starters** is not a separate registry. It is a curated
   shortcut shelf for already-installed bundled/official workflows so users can
-  immediately click `Use`.
+  immediately click `Use`. Bundled official plugins are the preinstalled cache
+  of the `official` registry source, not a separate distribution model.
 - **Plugins / Installed** is the full local runnable inventory: bundled
   official plugins, user-created plugins, direct GitHub/URL/local installs, and
   marketplace-installed plugins.
@@ -117,7 +119,12 @@ User-added registry
   Sources -> Available -> Install -> Installed -> agent context/runtime
 
 Packaged official plugins
-  bundled with OD -> Installed/bundled -> Home Official starters -> agent
+  official registry -> bundled preinstall cache -> Installed/bundled
+  -> Home Official starters -> agent
+
+Default community registry
+  community source -> Available by default -> user installs intentionally
+  -> ~/.open-design/plugins/<plugin-id> -> Installed -> agent
 ```
 
 `Available` is not directly consumable by the agent. It is a supply pool. The
@@ -125,6 +132,13 @@ agent consumes the installed set: bundled official plugins, user-created
 plugins, direct GitHub/URL/local installs, and marketplace-installed plugins. A
 future "Use from Available" convenience action may auto-install first, but it
 must still create an installed record before execution.
+
+User-created and user-installed plugins are persisted under the user plugin
+root (`~/.open-design/plugins/<plugin-id>` by default). Daemon startup reloads
+installed records from SQLite and resolves those user-state plugin folders; a
+packaged runtime upgrade should not overwrite them. Bundled official plugins
+stay inside the runtime image and are re-registered on boot as official-source
+preinstalls.
 
 Authoring and publishing mirror the consumption loop:
 
@@ -337,6 +351,36 @@ marketplace manifests and existing `/api/marketplaces` endpoints. Follow-up
 work should move large-catalog browsing to typed paginated APIs and add
 provenance-aware `--from <marketplace-id>` install semantics.
 
+### 1.8 Current implementation slice (2026-05-13 / 2026-05-14)
+
+This repo now has the first registry closure in place:
+
+- Contracts and JSON schema use `official / trusted / restricted` marketplace
+  trust, and marketplace entries can carry `versions`, `dist`, `distTags`,
+  `integrity`, `manifestDigest`, `publisher`, `homepage`, `license`,
+  `capabilitiesSummary`, `deprecated`, and yanking metadata while staying
+  passthrough-friendly.
+- Daemon install and upgrade flows preserve marketplace provenance:
+  `sourceMarketplaceId`, entry name/version, marketplace trust, resolved
+  source/ref, manifest digest, and archive integrity. Snapshot records carry
+  the same audit trail for agent/runtime replay.
+- The packaged daemon seeds built-in `official` and `community` registry
+  sources from `community/*/open-design-marketplace.json`. `official` is
+  verified and can also hydrate bundled preinstalls; `community` is restricted
+  by default and feeds Available entries for user-initiated installs.
+- Bundled official plugins now carry `sourceMarketplaceId=official` and
+  `sourceMarketplaceEntryName=open-design/<plugin-id>`, so they are modeled as
+  preinstalled official registry entries while keeping offline first-run bytes
+  in the runtime image.
+- `od plugin login` and `od plugin whoami` now delegate to `gh`, and
+  `od plugin publish --to open-design` produces the Open Design registry
+  submission target/link. The full fork/branch/PR mutation backend is still P1.
+- Home now presents official plugins as `Official starters` with a
+  `Browse registry` path into `/plugins`; `/plugins` remains the registry
+  console (`Installed / Available / Sources / Team`).
+- The `Create plugin` product prompt is agent-assisted and explicitly drives
+  scaffold/validate/local install/pack/login/whoami/publish expectations.
+
 ---
 
 ## 2. Phased plan
@@ -346,19 +390,19 @@ provenance-aware `--from <marketplace-id>` install semantics.
 Goal: every later phase can assume one trust vocabulary, full provenance,
 and a versioned marketplace entry.
 
-- [ ] **P0.1 Unify trust tier vocabulary.** In `packages/contracts/src/plugins/marketplace.ts`,
+- [x] **P0.1 Unify trust tier vocabulary.** In `packages/contracts/src/plugins/marketplace.ts`,
   rename `MarketplaceTrust` from `official|trusted|untrusted` →
   `official|trusted|restricted`. Migrate daemon, CLI, UI, fixtures.
-- [ ] **P0.2 Marketplace entry v1.1 fields.** Extend `MarketplacePluginEntrySchema`
+- [x] **P0.2 Marketplace entry v1.1 fields.** Extend `MarketplacePluginEntrySchema`
   with optional `versions[]`, `integrity` (sha256), `publisher`, `homepage`,
   `license`, `capabilitiesSummary`, `yanked`. Stay `.passthrough()` for
   community extensions (clawhub tags etc.).
-- [ ] **P0.3 Install provenance.** Plumb `sourceMarketplaceId`,
+- [x] **P0.3 Install provenance.** Plumb `sourceMarketplaceId`,
   `marketplaceTrust`, `marketplacePluginName`, and the resolved transport
   source through `apps/daemon/src/server.ts` install path (currently around
   line 3880). The `InstalledPluginRecord` already has these fields — make
   sure they actually get populated when install comes via marketplace.
-- [ ] **P0.4 Default trust inheritance.** Installs from `official`/`trusted`
+- [x] **P0.4 Default trust inheritance.** Installs from `official`/`trusted`
   catalogs default to `trusted`; installs from `restricted` catalogs stay
   `restricted`. Document in spec §6 patch.
 - [ ] **P0.5 Registry protocol package.** New
@@ -380,6 +424,8 @@ first, headless, JSON-emitting.
   - `od plugin info <name> [--version <v>] [--json]`
   - `od plugin login` -> wraps `gh auth login` with OD-specific host/scope guidance.
   - `od plugin whoami` -> wraps `gh auth status` plus `gh api user`.
+  Current slice landed `od plugin login` / `od plugin whoami`; marketplace
+  login, doctor, versioned install, lock, and yank remain follow-up work.
 - [ ] **P1.2 GitHub backend module.** `apps/daemon/src/registry/github-backend.ts`
   implements `RegistryBackend` against `open-design/plugin-registry`. Uses
   `gh` CLI for auth-required ops (fork, PR), raw HTTPS for reads, on-disk
@@ -410,17 +456,18 @@ first, headless, JSON-emitting.
   change trust tier through existing `/api/marketplaces` endpoints.
 - [x] **P2.2 Available tab entry slice.** Available cards are built from
   configured marketplace manifests and show Install / Use / Upgrade states.
-  Current install still uses the existing bare-name resolver; typed source
-  selection and provenance-aware `--from <marketplace-id>` remain backend work.
-- [ ] **P2.3 Home official shelf semantics.** Rename the Home page `Official`
+  The bare-name install path now persists marketplace provenance; explicit
+  `--from <marketplace-id>` remains follow-up work.
+- [x] **P2.3 Home official shelf semantics.** Rename the Home page `Official`
   plugin shelf copy to `Official starters` or `Official installed`, and add a
   lightweight `Browse registry` path into `/plugins`. Home remains fast-use;
   `/plugins` remains registry discovery/management.
-- [ ] **P2.4 Agent-assisted Create plugin flow.** The `Create plugin` action
+- [x] **P2.4 Agent-assisted Create plugin flow.** The `Create plugin` action
   should start an agent workflow that gathers intent, scaffolds the plugin,
   writes `SKILL.md`/`open-design.json`, validates, installs a local test copy,
   packs, checks `gh` login/whoami, and publishes by opening a GitHub registry
-  PR through `od plugin publish`.
+  PR through `od plugin publish`. Current slice upgrades the product prompt and
+  CLI wrapper; full PR mutation remains owned by P1.3.
 - [ ] **P2.5 Plugin detail drawer.** Provenance line, permissions, capability
   summary, version dropdown, install command (copy-to-clipboard, matches
   `od plugin install <name>@<version>`).

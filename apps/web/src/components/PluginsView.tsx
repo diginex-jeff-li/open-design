@@ -1155,6 +1155,9 @@ function pluginLookupKeys(plugin: InstalledPluginRecord): string[] {
   const keys = new Set<string>();
   keys.add(normalizePluginName(plugin.id));
   if (plugin.manifest?.name) keys.add(normalizePluginName(plugin.manifest.name));
+  if (plugin.sourceMarketplaceEntryName) {
+    keys.add(normalizePluginName(plugin.sourceMarketplaceEntryName));
+  }
   return Array.from(keys);
 }
 

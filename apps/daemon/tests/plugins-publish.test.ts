@@ -26,6 +26,7 @@ describe('buildPublishLink', () => {
       'anthropics-skills',
       'awesome-agent-skills',
       'clawhub',
+      'open-design',
       'skills-sh',
     ].sort());
   });
@@ -55,6 +56,13 @@ describe('buildPublishLink', () => {
     const link = buildPublishLink({ catalog: 'skills-sh', meta: META });
     expect(link.url).toBe('https://skills.sh/');
     expect(link.prBody).toContain('npx skills add open-design/sample-plugin');
+  });
+
+  it('builds an Open Design registry submission URL', () => {
+    const link = buildPublishLink({ catalog: 'open-design', meta: META });
+    expect(link.catalogLabel).toBe('open-design/plugin-registry');
+    expect(link.url).toMatch(/^https:\/\/github\.com\/open-design\/plugin-registry\/issues\/new\?/);
+    expect(link.prBody).toContain('open-design-marketplace.json');
   });
 
   it('falls back to owner/repo placeholder when repoUrl is missing for skills-sh', () => {

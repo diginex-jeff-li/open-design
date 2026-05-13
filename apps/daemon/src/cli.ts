@@ -889,6 +889,8 @@ async function runPlugin(args) {
     case 'scaffold': return runPluginScaffold(rest);
     case 'validate': return runPluginValidate(rest);
     case 'pack':     return runPluginPack(rest);
+    case 'login':    return runPluginLogin(rest);
+    case 'whoami':   return runPluginWhoami(rest);
     case 'export':   return runPluginExport(rest);
     case 'publish':  return runPluginPublish(rest);
     default:
@@ -1123,6 +1125,108 @@ Exit codes:
     console.error(`[pack] failed: ${err?.message ?? err}`);
     process.exit(2);
   }
+}
+
+async function runPluginLogin(rest) {
+  const flags = parseFlags(rest, {
+    string: new Set(['host']),
+    boolean: new Set(['help', 'h']),
+  });
+  if (flags.help || flags.h) {
+    console.log(`Usage:
+  od plugin login [--host github.com]
+
+Wraps GitHub CLI auth for Open Design registry publishing. The token stays in gh.`);
+    return;
+  }
+  const host = typeof flags.host === 'string' ? flags.host : 'github.com';
+  const version = await execFileBuffered('gh', ['--version'], { timeout: 10_000 });
+  if (!version.ok) {
+    console.error('[plugin login] GitHub CLI is required. Install gh from https://cli.github.com/ and retry.');
+    process.exit(1);
+  }
+  const result = await spawnPassthrough('gh', ['auth', 'login', '--hostname', host, '--web']);
+  process.exit(result.code ?? 0);
+}
+
+async function runPluginWhoami(rest) {
+  const flags = parseFlags(rest, {
+    string: new Set(['host']),
+    boolean: new Set(['help', 'h', 'json']),
+  });
+  if (flags.help || flags.h) {
+    console.log(`Usage:
+  od plugin whoami [--host github.com] [--json]
+
+Shows the GitHub account gh will use for Open Design registry publishing.`);
+    return;
+  }
+  const host = typeof flags.host === 'string' ? flags.host : 'github.com';
+  const auth = await execFileBuffered('gh', ['auth', 'status', '--hostname', host], { timeout: 10_000 });
+  if (!auth.ok) {
+    if (flags.json) {
+      process.stdout.write(JSON.stringify({
+        ok: false,
+        host,
+        message: 'GitHub CLI is not authenticated for this host.',
+        log: auth.stderr || auth.stdout,
+      }, null, 2) + '\n');
+      return;
+    }
+    console.error(`[plugin whoami] gh is not authenticated for ${host}. Run: od plugin login --host ${host}`);
+    if (auth.stderr || auth.stdout) console.error(auth.stderr || auth.stdout);
+    process.exit(1);
+  }
+  const user = await execFileBuffered('gh', ['api', 'user', '--hostname', host], { timeout: 10_000 });
+  let login = '';
+  let name = '';
+  try {
+    const parsed = JSON.parse(user.stdout || '{}');
+    login = typeof parsed.login === 'string' ? parsed.login : '';
+    name = typeof parsed.name === 'string' ? parsed.name : '';
+  } catch {
+    // Keep the auth status useful even if gh api output is unavailable.
+  }
+  const payload = {
+    ok: true,
+    host,
+    login,
+    name,
+    auth: auth.stderr || auth.stdout,
+  };
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
+  } else {
+    console.log(`[plugin whoami] ${login || 'authenticated'}${name ? ` (${name})` : ''} @ ${host}`);
+  }
+}
+
+async function execFileBuffered(command, args, opts = {}) {
+  const { execFile } = await import('node:child_process');
+  return new Promise((resolve) => {
+    execFile(command, args, {
+      timeout: 30_000,
+      maxBuffer: 1024 * 1024,
+      ...opts,
+    }, (error, stdout, stderr) => {
+      resolve({
+        ok: !error,
+        code: error?.code,
+        stdout: String(stdout ?? '').trim(),
+        stderr: String(stderr ?? '').trim(),
+        error,
+      });
+    });
+  });
+}
+
+async function spawnPassthrough(command, args) {
+  const { spawn } = await import('node:child_process');
+  return await new Promise((resolve) => {
+    const child = spawn(command, args, { stdio: 'inherit' });
+    child.on('error', (error) => resolve({ code: 1, error }));
+    child.on('close', (code) => resolve({ code }));
+  });
 }
 
 // Phase 4 / spec §14 — `od plugin export <projectId> --as <target>`.
@@ -2665,7 +2769,7 @@ async function runPluginPublish(rest) {
   });
   if (rest.length === 0 || flags.help || flags.h) {
     console.log(`Usage:
-  od plugin publish <pluginId> --to anthropics-skills|awesome-agent-skills|clawhub|skills-sh
+  od plugin publish <pluginId> --to open-design|anthropics-skills|awesome-agent-skills|clawhub|skills-sh
                     [--repo <github-url>] [--snapshot-id <id>] [--open] [--json]
 
 The CLI prints the catalog's submission URL + a pre-filled PR body.
@@ -2683,7 +2787,7 @@ publish from a frozen run snapshot rather than the live installed copy.`);
     process.exit(2);
   }
   if (!target) {
-    console.error('--to <catalog> is required (one of: anthropics-skills, awesome-agent-skills, clawhub, skills-sh)');
+    console.error('--to <catalog> is required (one of: open-design, anthropics-skills, awesome-agent-skills, clawhub, skills-sh)');
     process.exit(2);
   }
   const base = pluginDaemonUrl(flags).replace(/\/$/, '');
@@ -3158,13 +3262,17 @@ function printPluginHelp() {
                                           (manifest parse + atom + ref checks).
   od plugin pack <folder> [--out <path>]  Build a .tgz archive of a plugin
                                           folder for distribution.
+  od plugin publish <folder> --to open-design|anthropics-skills|awesome-agent-skills|clawhub|skills-sh
+                                          Prepare a registry submission link.
+  od plugin login [--host github.com]      Authenticate registry publishing via gh.
+  od plugin whoami [--host github.com]     Show the gh account used for publishing.
 
 Common options:
   --daemon-url <url>   Open Design daemon HTTP base (default OD_DAEMON_URL or http://127.0.0.1:7456).
   --json               Emit raw JSON (suitable for scripts) instead of human-readable output.
 
-Phase 1 only supports local-folder installs. The github / https tarball
-sources arrive in Phase 2A. The marketplace surface comes in Phase 4.`);
+Installs support local folders, github:owner/repo refs, HTTPS .tgz archives,
+and bare marketplace names resolved through configured registry sources.`);
 }
 
 // ---------------------------------------------------------------------------

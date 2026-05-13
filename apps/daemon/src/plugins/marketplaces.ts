@@ -60,7 +60,19 @@ export interface AddMarketplaceFailure {
   errors?: string[];
 }
 
+export interface EnsureMarketplaceManifestInput {
+  id: string;
+  url: string;
+  trust: MarketplaceTrustTier;
+  manifestText: string;
+  now?: number;
+}
+
 const HTTPS_RE = /^https:\/\//i;
+
+function normalizeMarketplaceTrust(value: unknown): MarketplaceTrustTier {
+  return value === 'official' || value === 'trusted' ? value : 'restricted';
+}
 
 export async function addMarketplace(
   db: SqliteDb,
@@ -103,7 +115,7 @@ export async function addMarketplace(
   }
   const id = randomUUID();
   const now = Date.now();
-  const trust = input.trust ?? 'restricted';
+  const trust = normalizeMarketplaceTrust(input.trust);
   db.prepare(
     `INSERT INTO plugin_marketplaces (id, url, spec_version, version, trust, manifest_json, added_at, refreshed_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -118,6 +130,58 @@ export async function addMarketplace(
       trust,
       manifest: parsed.manifest,
       addedAt: now,
+      refreshedAt: now,
+    },
+    warnings: [],
+  };
+}
+
+export function ensureMarketplaceManifest(
+  db: SqliteDb,
+  input: EnsureMarketplaceManifestInput,
+): AddMarketplaceResult | AddMarketplaceFailure {
+  const parsed = parseMarketplace(input.manifestText);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      status: 422,
+      message: 'marketplace manifest failed validation',
+      errors: parsed.errors,
+    };
+  }
+  const now = input.now ?? Date.now();
+  const trust = normalizeMarketplaceTrust(input.trust);
+  const existing = getMarketplace(db, input.id);
+  db.prepare(`
+    INSERT INTO plugin_marketplaces (id, url, spec_version, version, trust, manifest_json, added_at, refreshed_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      url = excluded.url,
+      spec_version = excluded.spec_version,
+      version = excluded.version,
+      trust = excluded.trust,
+      manifest_json = excluded.manifest_json,
+      refreshed_at = excluded.refreshed_at
+  `).run(
+    input.id,
+    input.url,
+    parsed.manifest.specVersion,
+    parsed.manifest.version,
+    trust,
+    input.manifestText,
+    existing?.addedAt ?? now,
+    now,
+  );
+  return {
+    ok: true,
+    row: {
+      id: input.id,
+      url: input.url,
+      specVersion: parsed.manifest.specVersion,
+      version: parsed.manifest.version,
+      trust,
+      manifest: parsed.manifest,
+      addedAt: existing?.addedAt ?? now,
       refreshedAt: now,
     },
     warnings: [],
@@ -144,7 +208,7 @@ export function listMarketplaces(db: SqliteDb): MarketplaceRow[] {
       url: r.url,
       specVersion: r.spec_version || manifest.specVersion,
       version: r.version === '0.0.0' ? manifest.version : r.version,
-      trust: r.trust,
+      trust: normalizeMarketplaceTrust(r.trust),
       manifest,
       addedAt: r.added_at,
       refreshedAt: r.refreshed_at,
@@ -174,7 +238,7 @@ export function getMarketplace(db: SqliteDb, id: string): MarketplaceRow | null 
     url: row.url,
     specVersion: row.spec_version || manifest.specVersion,
     version: row.version === '0.0.0' ? manifest.version : row.version,
-    trust: row.trust,
+    trust: normalizeMarketplaceTrust(row.trust),
     manifest,
     addedAt: row.added_at,
     refreshedAt: row.refreshed_at,
@@ -326,6 +390,9 @@ export interface ResolvedPluginEntry {
   pluginName: string;
   pluginVersion: string;
   source: string;
+  ref?: string;
+  manifestDigest?: string;
+  archiveIntegrity?: string;
   description?: string;
 }
 
@@ -350,6 +417,21 @@ export function resolvePluginInMarketplaces(
           pluginVersion:    entry.version,
           source:           entry.source,
         };
+        if (entry.ref) result.ref = entry.ref;
+        const manifestDigest =
+          typeof entry.manifestDigest === 'string'
+            ? entry.manifestDigest
+            : typeof entry.dist?.manifestDigest === 'string'
+              ? entry.dist.manifestDigest
+              : undefined;
+        const archiveIntegrity =
+          typeof entry.integrity === 'string'
+            ? entry.integrity
+            : typeof entry.dist?.integrity === 'string'
+              ? entry.dist.integrity
+              : undefined;
+        if (manifestDigest) result.manifestDigest = manifestDigest;
+        if (archiveIntegrity) result.archiveIntegrity = archiveIntegrity;
         if (entry.description) result.description = entry.description;
         return result;
       }

@@ -66,6 +66,7 @@ interface Props {
   onSubmit: (payload: PluginLoopSubmit) => void;
   onOpenProject: (id: string) => void;
   onViewAllProjects: () => void;
+  onBrowseRegistry?: () => void;
   // Stage B: optional callbacks the rail's migration chips need.
   // HomeView itself never imports them; EntryShell threads them
   // through so the dispatcher can stay declarative.
@@ -82,6 +83,7 @@ export function HomeView({
   onSubmit,
   onOpenProject,
   onViewAllProjects,
+  onBrowseRegistry,
   onImportFolder,
   onOpenNewProject,
   promptHandoff,
@@ -424,6 +426,7 @@ export function HomeView({
         onUse={(record) => void usePlugin(record)}
         onOpenDetails={setDetailsRecord}
         onCreatePlugin={(goal) => queuePluginAuthoring(null, goal)}
+        onBrowseRegistry={onBrowseRegistry}
       />
 
       {detailsRecord ? (

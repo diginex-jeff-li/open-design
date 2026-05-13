@@ -25,9 +25,15 @@ import {
   deleteInstalledPlugin,
   resolvePluginFolder,
   upsertInstalledPlugin,
+  type ResolveOptions,
   type RegistryRoots,
 } from './registry.js';
-import type { InstalledPluginRecord, PluginSourceKind } from '@open-design/contracts';
+import type {
+  InstalledPluginRecord,
+  MarketplaceTrust,
+  PluginSourceKind,
+  TrustTier,
+} from '@open-design/contracts';
 import type Database from 'better-sqlite3';
 import { recordPluginEvent } from './events.js';
 
@@ -71,6 +77,14 @@ export interface InstallOptions {
   // sets this to 'upgraded' so consumers can distinguish the two
   // operations in the live event stream.
   eventKind?: 'installed' | 'upgraded';
+  sourceMarketplaceId?: string;
+  sourceMarketplaceEntryName?: string;
+  sourceMarketplaceEntryVersion?: string;
+  marketplaceTrust?: MarketplaceTrust;
+  resolvedSource?: string;
+  resolvedRef?: string;
+  manifestDigest?: string;
+  archiveIntegrity?: string;
 }
 
 export type ArchiveFetcher = (url: string) => Promise<{
@@ -327,12 +341,13 @@ export async function* installFromLocalFolder(
   // installs.
   yield { kind: 'progress', phase: 'parsing', message: 'Parsing manifest' };
   const tentativeId = path.basename(sourceFolder).toLowerCase();
-  const probe = await resolvePluginFolder({
+  const probeOptions = buildResolveOptions({
     folder: sourceFolder,
     folderId: SAFE_BASENAME.test(tentativeId) ? tentativeId : 'plugin',
     sourceKind: recordedSourceKind,
     source: recordedSource,
-  });
+  }, opts);
+  const probe = await resolvePluginFolder(probeOptions);
   if (!probe.ok) {
     yield { kind: 'error', message: probe.errors.join('; '), warnings: probe.warnings };
     return;
@@ -366,12 +381,13 @@ export async function* installFromLocalFolder(
   }
 
   yield { kind: 'progress', phase: 'parsing', message: 'Re-parsing destination' };
-  const parsed = await resolvePluginFolder({
+  const parsedOptions = buildResolveOptions({
     folder: destFolder,
     folderId: pluginId,
     sourceKind: recordedSourceKind,
     source: recordedSource,
-  });
+  }, opts);
+  const parsed = await resolvePluginFolder(parsedOptions);
   if (!parsed.ok) {
     await fsp.rm(destFolder, { recursive: true, force: true }).catch(() => undefined);
     yield { kind: 'error', message: parsed.errors.join('; '), warnings: [...warnings, ...parsed.warnings] };
@@ -394,6 +410,10 @@ export async function* installFromLocalFolder(
       version:    parsed.record.version,
       sourceKind: parsed.record.sourceKind,
       source:     parsed.record.source,
+      sourceMarketplaceId: parsed.record.sourceMarketplaceId,
+      sourceMarketplaceEntryName: parsed.record.sourceMarketplaceEntryName,
+      sourceMarketplaceEntryVersion: parsed.record.sourceMarketplaceEntryVersion,
+      marketplaceTrust: parsed.record.marketplaceTrust,
       trust:      parsed.record.trust,
       warnings:   warnings.length,
     },
@@ -479,6 +499,29 @@ function isSafeBasename(name: string): boolean {
   if (name === '.' || name === '..') return false;
   if (name.includes('/') || name.includes('\\') || name.includes('\0')) return false;
   return true;
+}
+
+function buildResolveOptions(
+  base: Pick<ResolveOptions, 'folder' | 'folderId' | 'sourceKind' | 'source'>,
+  opts: InstallOptions,
+): ResolveOptions {
+  const resolveOptions: ResolveOptions = { ...base };
+  if (opts.sourceMarketplaceId) resolveOptions.sourceMarketplaceId = opts.sourceMarketplaceId;
+  if (opts.sourceMarketplaceEntryName) resolveOptions.sourceMarketplaceEntryName = opts.sourceMarketplaceEntryName;
+  if (opts.sourceMarketplaceEntryVersion) resolveOptions.sourceMarketplaceEntryVersion = opts.sourceMarketplaceEntryVersion;
+  if (opts.marketplaceTrust) {
+    resolveOptions.marketplaceTrust = opts.marketplaceTrust;
+    resolveOptions.trust = installedTrustFromMarketplace(opts.marketplaceTrust);
+  }
+  if (opts.resolvedSource) resolveOptions.resolvedSource = opts.resolvedSource;
+  if (opts.resolvedRef) resolveOptions.resolvedRef = opts.resolvedRef;
+  if (opts.manifestDigest) resolveOptions.manifestDigest = opts.manifestDigest;
+  if (opts.archiveIntegrity) resolveOptions.archiveIntegrity = opts.archiveIntegrity;
+  return resolveOptions;
+}
+
+function installedTrustFromMarketplace(trust: MarketplaceTrust): TrustTier {
+  return trust === 'restricted' ? 'restricted' : 'trusted';
 }
 
 export type { PluginSourceKind };

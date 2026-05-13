@@ -674,6 +674,7 @@ export function EntryShell({
                 onSubmit={handlePluginLoopSubmit}
                 onOpenProject={onOpenProject}
                 onViewAllProjects={() => changeView('projects')}
+                onBrowseRegistry={() => changeView('plugins')}
                 onImportFolder={handleChipFolderImport}
                 onOpenNewProject={(tab) => {
                   // Stage B of plugin-driven-flow-plan: the rail's
