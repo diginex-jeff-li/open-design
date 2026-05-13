@@ -140,17 +140,26 @@ export function pluginVisualScore(record: InstalledPluginRecord): number {
   return score;
 }
 
-// Stable sort: visual score descending, then title ascending so tiles
-// at the same score band still order deterministically.
+// Stable sort: curated featured rank first, then visual score descending,
+// then title ascending so tiles at the same score band still order
+// deterministically.
 export function sortByVisualAppeal<T extends InstalledPluginRecord>(
   records: readonly T[],
 ): T[] {
   const annotated = records.map((r, idx) => ({
     record: r,
+    rank: featuredRank(r),
     score: pluginVisualScore(r),
     idx,
   }));
   annotated.sort((a, b) => {
+    const aFeatured = a.rank !== null;
+    const bFeatured = b.rank !== null;
+    if (aFeatured || bFeatured) {
+      if (aFeatured && !bFeatured) return -1;
+      if (!aFeatured && bFeatured) return 1;
+      if (a.rank !== b.rank) return (a.rank ?? 0) - (b.rank ?? 0);
+    }
     if (b.score !== a.score) return b.score - a.score;
     const aTitle = a.record.title || a.record.id;
     const bTitle = b.record.title || b.record.id;

@@ -122,6 +122,32 @@ describe('sortByVisualAppeal', () => {
     expect(sorted[sorted.length - 1]).toBe('plain');
   });
 
+  it('keeps numeric featured rank ahead of media bonuses', () => {
+    const records = [
+      fixture({
+        id: 'hyperframes',
+        od: {
+          surface: 'video',
+          mode: 'video',
+          preview: { type: 'video', video: 'r.mp4', poster: 'r.png' },
+          featured: 0.13,
+        },
+      }),
+      fixture({
+        id: 'guizang',
+        od: {
+          mode: 'deck',
+          preview: { type: 'html', entry: './index.html' },
+          featured: 0.01,
+        },
+      }),
+      fixture({ id: 'huashu', od: { mode: 'prototype', featured: 0.03 } }),
+      fixture({ id: 'kami', od: { mode: 'deck', featured: 0.06 } }),
+    ];
+    const sorted = sortByVisualAppeal(records).map((r) => r.id);
+    expect(sorted).toEqual(['guizang', 'huashu', 'kami', 'hyperframes']);
+  });
+
   it('keeps the original list reference unchanged (returns a new array)', () => {
     const records = [
       fixture({ id: 'a' }),
