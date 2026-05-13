@@ -220,6 +220,7 @@ export function projectSplitClassName(workspaceFocused: boolean): string {
 
 function projectEventToAgentEvent(evt: ProjectEvent): LiveArtifactEventItem['event'] | null {
   if (evt.type === 'file-changed') return null;
+  if (evt.type === 'conversation-created') return null;
   if (evt.type === 'live_artifact') {
     return {
       kind: 'live_artifact',
@@ -418,6 +419,24 @@ export function ProjectView({
   // correctly gate new-conversation creation even during async loads.
   const messagesConversationIdRef = useRef<string | null>(null);
   const creatingConversationRef = useRef(false);
+  // Live mirror of the currently-viewed project id. Used to bail out of
+  // the conversation-created async refresh (#1361) if the user switches
+  // projects while the refetch is in flight — the existing project-load
+  // effects use the same kind of cancellation guard.
+  const projectIdRef = useRef(project.id);
+  useEffect(() => {
+    projectIdRef.current = project.id;
+  }, [project.id]);
+  // Monotonic token bumped on every `conversation-created` refresh dispatch.
+  // Two rapid events (e.g. concurrent routine runs against the same reused
+  // project, #1502) can start overlapping `listConversations` calls; if the
+  // later request resolves first with N+1 conversations and the earlier
+  // request resolves afterwards with only N, an unconditional
+  // `setConversations(list)` would drop the newest conversation. Each
+  // dispatch captures the token at start; only the dispatch whose token
+  // still equals `conversationsRefreshTokenRef.current` at await-return is
+  // allowed to apply its result.
+  const conversationsRefreshTokenRef = useRef(0);
   const [creatingConversation, setCreatingConversation] = useState(false);
   const currentConversationHasActiveRun = useMemo(
     () => messages.some((m) => m.role === 'assistant' && isActiveRunStatus(m.runStatus)),
@@ -750,6 +769,43 @@ export function ProjectView({
       setDesignMdRefreshKey((n) => n + 1);
       return;
     }
+    if (evt.type === 'conversation-created') {
+      // A new conversation was inserted into this project by a path the
+      // open project view can't observe through its own state (currently:
+      // Routines "Run now" in reuse-an-existing-project mode, #1361).
+      // Refetch the conversation list so the new entry becomes visible
+      // without requiring the user to leave and re-enter the project.
+      // Deliberately do NOT change the active conversation here — the
+      // user keeps their current context. Auto-switch is a separate UX
+      // decision tracked in #1361.
+      if (evt.projectId !== project.id) return;
+      const capturedProjectId = project.id;
+      const myToken = ++conversationsRefreshTokenRef.current;
+      void (async () => {
+        try {
+          const list = await listConversations(capturedProjectId);
+          // Bail if the user switched projects while this request was in
+          // flight (#1361 review, Codex P1). The captured project id is the
+          // one we asked the daemon about; the live ref is the one the
+          // user is looking at right now. If they don't match, applying
+          // the list would overwrite the new project's sidebar with
+          // stale data from the old one.
+          if (projectIdRef.current !== capturedProjectId) return;
+          // Bail if a newer conversation-created event already dispatched
+          // its own refresh after us (#1361 review, lefarcen P2). With two
+          // rapid events the later request may resolve first; if this
+          // earlier request resolves afterwards it would drop the newer
+          // conversation. Only the latest dispatch is allowed to apply.
+          if (conversationsRefreshTokenRef.current !== myToken) return;
+          setConversations(list);
+        } catch {
+          // Defensive: refresh failed (network blip, daemon gone). The
+          // next project mount or another conversation-created event
+          // will retry; no need to surface an error here.
+        }
+      })();
+      return;
+    }
     const agentEvent = projectEventToAgentEvent(evt);
     if (!agentEvent) return;
     setLiveArtifactEvents((prev) => appendLiveArtifactEventItem(prev, agentEvent));
@@ -758,7 +814,7 @@ export function ProjectView({
     // Live artifact events come from chat-turn-emitted artifacts; they
     // also imply the conversation transcript changed.
     setDesignMdRefreshKey((n) => n + 1);
-  }, [onProjectsRefresh, refreshLiveArtifacts]);
+  }, [onProjectsRefresh, refreshLiveArtifacts, project.id]);
   useProjectFileEvents(project.id, daemonLive, handleProjectEvent);
 
   // When the URL points at a specific file, fire an open request so the
