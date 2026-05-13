@@ -4550,6 +4550,30 @@ export async function startServer({
 
   });
 
+  // SPA fallback: serve index.html for client-side routes (e.g., /projects/:id)
+  // that don't correspond to static files or API endpoints.
+  // express.static above only serves exact file matches; this catch-all
+  // ensures deep links work by returning the SPA shell so the client-side
+  // Next.js router can take over.
+  if (fs.existsSync(STATIC_DIR)) {
+    app.get('*', (req, res, next) => {
+      // Don't interfere with API/artifact/frame routes (already served above)
+      if (
+        req.path.startsWith('/api/') ||
+        req.path.startsWith('/artifacts/') ||
+        req.path.startsWith('/frames/')
+      ) {
+        return next();
+      }
+      const indexPath = path.join(STATIC_DIR, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        next();
+      }
+    });
+  }
+
   // Wait for `listen` to bind so callers always see the resolved URL —
   // critical when port=0 (ephemeral port) and when the embedding sidecar
   // needs to advertise the port to a parent process before any request
