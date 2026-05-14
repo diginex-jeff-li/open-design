@@ -32,6 +32,10 @@ export function PluginInputsForm(props: Props) {
   );
   const [values, setValues] = useState<Record<string, unknown>>(props.values ?? {});
 
+  useEffect(() => {
+    setValues(props.values ?? {});
+  }, [props.values]);
+
   // Hydrate defaults the first time we see a new field set.
   useEffect(() => {
     if (fields.length === 0) return;

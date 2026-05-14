@@ -54,6 +54,11 @@ const DEFAULT_PLUGIN = {
     name: 'od-new-generation',
     title: 'New generation',
     description: 'Create new design artifacts',
+    od: {
+      kind: 'scenario',
+      taskKind: 'new-generation',
+      useCase: { query: 'Create a plugin.' },
+    },
   },
 };
 
@@ -90,7 +95,56 @@ const WEB_PROTOTYPE_PLUGIN = {
     name: 'example-web-prototype',
     title: 'Web Prototype',
     description: 'General-purpose desktop web prototype.',
+    od: {
+      kind: 'scenario',
+      taskKind: 'new-generation',
+      useCase: {
+        query: 'Build a {{fidelity}} {{artifactKind}} for {{audience}} using {{designSystem}} from {{template}}.',
+      },
+      inputs: [
+        {
+          name: 'artifactKind',
+          type: 'string',
+          required: true,
+          default: 'web prototype',
+          label: 'Artifact kind',
+        },
+        {
+          name: 'fidelity',
+          type: 'select',
+          required: true,
+          options: ['wireframe', 'high-fidelity'],
+          default: 'high-fidelity',
+          label: 'Fidelity',
+        },
+        {
+          name: 'audience',
+          type: 'string',
+          required: true,
+          default: 'product evaluators',
+          label: 'Audience',
+        },
+        {
+          name: 'designSystem',
+          type: 'string',
+          default: 'the active project design system',
+          label: 'Design system',
+        },
+        {
+          name: 'template',
+          type: 'string',
+          default: 'the bundled web prototype seed',
+          label: 'Template',
+        },
+      ],
+    },
   },
+};
+
+const AUTHORING_DEFAULT_SCENARIO_INPUTS = {
+  artifactKind: 'Open Design plugin',
+  audience: 'Open Design plugin authors',
+  topic: 'packaging a reusable workflow as an Open Design plugin',
 };
 
 const AUTHORING_APPLY_RESULT = {
@@ -124,10 +178,30 @@ const AUTHORING_APPLY_RESULT = {
 
 const DEFAULT_APPLY_RESULT = {
   ...AUTHORING_APPLY_RESULT,
+  inputs: [],
   appliedPlugin: {
     ...AUTHORING_APPLY_RESULT.appliedPlugin,
     snapshotId: 'snap-default',
     pluginId: 'od-new-generation',
+    inputs: AUTHORING_DEFAULT_SCENARIO_INPUTS,
+  },
+};
+
+const WEB_PROTOTYPE_APPLY_RESULT = {
+  ...AUTHORING_APPLY_RESULT,
+  query: WEB_PROTOTYPE_PLUGIN.manifest.od.useCase.query,
+  inputs: WEB_PROTOTYPE_PLUGIN.manifest.od.inputs,
+  appliedPlugin: {
+    ...AUTHORING_APPLY_RESULT.appliedPlugin,
+    snapshotId: 'snap-web-prototype',
+    pluginId: 'example-web-prototype',
+    inputs: {
+      artifactKind: 'web prototype',
+      fidelity: 'high-fidelity',
+      audience: 'product evaluators',
+      designSystem: 'the active project design system',
+      template: 'the bundled web prototype seed',
+    },
   },
 };
 
@@ -220,7 +294,7 @@ describe('HomeView prompt handoff', () => {
         });
       }
       if (typeof url === 'string' && url.includes('/apply')) {
-        return new Response(JSON.stringify(DEFAULT_APPLY_RESULT), {
+        return new Response(JSON.stringify(WEB_PROTOTYPE_APPLY_RESULT), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -248,7 +322,9 @@ describe('HomeView prompt handoff', () => {
       expect.anything(),
     ));
     expect((await screen.findByTestId('home-hero-input') as HTMLTextAreaElement).value)
-      .toBe('Create a plugin.');
+      .toBe(
+        'Build a high-fidelity web prototype for product evaluators using the active project design system from the bundled web prototype seed.',
+      );
   });
 
   it('routes free-form submits through the hidden default plugin without applying a visible chip', async () => {
@@ -364,7 +440,7 @@ describe('HomeView prompt handoff', () => {
         });
       }
       if (typeof url === 'string' && url.includes('/apply')) {
-        return new Response(JSON.stringify(DEFAULT_APPLY_RESULT), {
+        return new Response(JSON.stringify(WEB_PROTOTYPE_APPLY_RESULT), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -392,16 +468,23 @@ describe('HomeView prompt handoff', () => {
       '/api/plugins/example-web-prototype/apply',
       expect.anything(),
     ));
-    // web-prototype's manifest has no `inputs` field, so the chip
-    // doesn't carry artifactKind/audience/topic anymore. The apply
-    // body's `inputs` map should be empty (chip passes no inputs and
-    // the plugin defines none).
     const applyCall = fetchMock.mock.calls.find(([url]) => (
       typeof url === 'string' && url.includes('/api/plugins/example-web-prototype/apply')
     ));
     expect(JSON.parse(String((applyCall?.[1] as RequestInit).body))).toMatchObject({
-      inputs: {},
+      inputs: {
+        artifactKind: 'web prototype',
+        fidelity: 'high-fidelity',
+        audience: 'product evaluators',
+        designSystem: 'the active project design system',
+        template: 'the bundled web prototype seed',
+      },
     });
+    expect(screen.getByTestId('home-hero-prompt-slot-fidelity')).toBeTruthy();
+    expect(screen.getByTestId('home-hero-prompt-slot-artifactKind')).toBeTruthy();
+    expect(screen.getByTestId('home-hero-prompt-slot-designSystem')).toBeTruthy();
+    expect(screen.getByTestId('home-hero-prompt-slot-template')).toBeTruthy();
+    expect(screen.queryByTestId('plugin-inputs-form')).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -606,13 +689,27 @@ describe('HomeView prompt handoff', () => {
     await waitFor(() => {
       expect(input.value).toContain('turn support transcripts into triaged GitHub issues');
     });
+
+    const rewrittenGoal = 'catalog internal research notes into a reusable knowledge workflow';
+    fireEvent.change(input, {
+      target: {
+        value: input.value.replace(
+          'turn support transcripts into triaged GitHub issues',
+          rewrittenGoal,
+        ),
+      },
+    });
+    await waitFor(() => {
+      expect((screen.getByLabelText(/plugin goal/i) as HTMLInputElement).value)
+        .toBe(rewrittenGoal);
+    });
     fireEvent.click(screen.getByTestId('home-hero-submit'));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-      prompt: expect.stringContaining('turn support transcripts into triaged GitHub issues'),
+      prompt: expect.stringContaining(rewrittenGoal),
       pluginId: 'od-plugin-authoring',
       pluginInputs: {
-        pluginGoal: 'turn support transcripts into triaged GitHub issues',
+        pluginGoal: rewrittenGoal,
       },
     })));
   });

@@ -203,6 +203,29 @@ describe('PluginsView', () => {
     expect(screen.getByText('Example Catalog')).toBeTruthy();
   });
 
+  it('shows all installed plugins by default on the Plugins page', async () => {
+    const createPlugin = makePlugin('create-plugin', 'github', 'restricted', 'Create Plugin');
+    const importPlugin = makePlugin('import-plugin', 'github', 'restricted', 'Import Plugin');
+    importPlugin.manifest.od = {
+      kind: 'scenario',
+      mode: 'scenario',
+      taskKind: 'figma-migration',
+    };
+    mockedListPlugins.mockResolvedValue([createPlugin, importPlugin]);
+    mockedListMarketplaces.mockResolvedValue([]);
+
+    render(<PluginsView />);
+
+    const list = await screen.findByRole('list');
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map((item) => item.getAttribute('data-plugin-id'))
+        .sort(),
+    ).toEqual(['create-plugin', 'import-plugin']);
+    expect(screen.getByText('2 of 2')).toBeTruthy();
+  });
+
   it('hands installed plugin Use actions to the host shell', async () => {
     const onUsePlugin = vi.fn();
     render(<PluginsView onUsePlugin={onUsePlugin} />);
@@ -249,9 +272,10 @@ describe('PluginsView', () => {
       expect(mockedInstallPluginSource).toHaveBeenCalledWith('remote-plugin'),
     );
     expect(await screen.findByText('Installed New Plugin.')).toBeTruthy();
+    expect(screen.getByTestId('plugins-tab-installed').getAttribute('aria-selected')).toBe('true');
   });
 
-  it('treats bundled official registry entries as installed and ready to use', async () => {
+  it('marks bundled official registry entries as already installed in Available', async () => {
     const official = makePlugin('official-plugin', 'bundled', 'bundled', 'Official Plugin');
     official.sourceMarketplaceId = 'official';
     official.sourceMarketplaceEntryName = 'open-design/official-plugin';
@@ -285,12 +309,11 @@ describe('PluginsView', () => {
     expect(card).not.toBeNull();
     expect(within(card!).getByText('Open Design Official')).toBeTruthy();
     expect(within(card!).queryByRole('button', { name: 'Install' })).toBeNull();
-
-    fireEvent.click(within(card!).getByRole('button', { name: 'Use' }));
-
-    await waitFor(() =>
-      expect(mockedApplyPlugin).toHaveBeenCalledWith('official-plugin', { locale: 'en' }),
-    );
+    expect(within(card!).queryByRole('button', { name: 'Use' })).toBeNull();
+    expect(
+      within(card!).getByRole('button', { name: 'Installed' }).hasAttribute('disabled'),
+    ).toBe(true);
+    expect(mockedApplyPlugin).not.toHaveBeenCalled();
   });
 
   it('manages registry sources from the Sources tab', async () => {

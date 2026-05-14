@@ -103,8 +103,39 @@ describe('HomeHero plugin picker', () => {
 
     expect(onPickPlugin).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'sample-user-plugin' }),
-      'Make',
+      'Make @Sample User Plugin',
     );
+  });
+
+  it('renders selected @ plugins inside the prompt and opens their details', () => {
+    const onOpenPluginDetails = vi.fn();
+    const sample = makePlugin('sample-plugin', 'Sample Plugin');
+    const helper = makePlugin('helper-plugin', 'Helper Plugin');
+
+    render(
+      <HomeHero
+        prompt="Use @Sample Plugin with @Helper Plugin"
+        onPromptChange={() => undefined}
+        onSubmit={() => undefined}
+        activePluginTitle={null}
+        activeChipId={null}
+        onClearActivePlugin={() => undefined}
+        selectedPluginContexts={[sample, helper]}
+        onOpenPluginDetails={onOpenPluginDetails}
+        pluginOptions={[]}
+        pluginsLoading={false}
+        pendingPluginId={null}
+        pendingChipId={null}
+        onPickPlugin={() => undefined}
+        onPickChip={() => undefined}
+        contextItemCount={2}
+        error={null}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('home-hero-prompt-plugin-sample-plugin'));
+    expect(onOpenPluginDetails).toHaveBeenCalledWith(sample);
+    expect(screen.getByTestId('home-hero-prompt-plugin-helper-plugin')).toBeTruthy();
   });
 
   it('opens the context picker for a bare @ token even before results arrive', () => {
@@ -299,10 +330,11 @@ describe('HomeHero plugin picker', () => {
       />,
     );
 
-    const slot = screen.getByTestId('home-hero-prompt-slot-source');
-    expect(slot.textContent).toBe('marketplace');
+    const slot = screen.getByTestId('home-hero-prompt-slot-source') as HTMLSelectElement;
+    expect(slot.value).toBe('marketplace');
     expect(slot.getAttribute('data-filled')).toBe('true');
     expect(screen.getByDisplayValue('marketplace')).toBeTruthy();
+    expect(screen.queryByTestId('plugin-inputs-form')).toBeNull();
 
     rerender(
       <HomeHero
@@ -327,5 +359,33 @@ describe('HomeHero plugin picker', () => {
     );
 
     expect(screen.queryByTestId('home-hero-prompt-slot-source')).toBeNull();
+  });
+
+  it('opens active plugin details from the active plugin chip', () => {
+    const onOpenPluginDetails = vi.fn();
+    const active = makePlugin('prototype-plugin', 'Prototype Plugin');
+    render(
+      <HomeHero
+        prompt="Build a prototype"
+        onPromptChange={() => undefined}
+        onSubmit={() => undefined}
+        activePluginTitle="Prototype"
+        activePluginRecord={active}
+        activeChipId="prototype"
+        onClearActivePlugin={() => undefined}
+        onOpenPluginDetails={onOpenPluginDetails}
+        pluginOptions={[]}
+        pluginsLoading={false}
+        pendingPluginId={null}
+        pendingChipId={null}
+        onPickPlugin={() => undefined}
+        onPickChip={() => undefined}
+        contextItemCount={0}
+        error={null}
+      />,
+    );
+
+    fireEvent.click(screen.getByTitle('Plugin: Prototype Plugin'));
+    expect(onOpenPluginDetails).toHaveBeenCalledWith(active);
   });
 });

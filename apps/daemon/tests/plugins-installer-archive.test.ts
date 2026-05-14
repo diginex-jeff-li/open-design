@@ -16,7 +16,7 @@ import path from 'node:path';
 import url from 'node:url';
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
-import { mkdtemp, rm, writeFile, mkdir, symlink, readdir } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, mkdir, symlink, readdir, readFile } from 'node:fs/promises';
 import Database from 'better-sqlite3';
 import { c as tarCreate } from 'tar';
 import { migratePlugins } from '../src/plugins/persistence.js';
@@ -73,6 +73,15 @@ function makeFetcher(buf: Buffer): ArchiveFetcher {
   });
 }
 
+function makeResponse(body: Buffer | string, status = 200, statusText = 'OK'): Awaited<ReturnType<ArchiveFetcher>> {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    statusText,
+    body: Readable.from([Buffer.isBuffer(body) ? body : Buffer.from(body)]),
+  };
+}
+
 beforeEach(async () => {
   tmpRoot = await mkdtemp(path.join(os.tmpdir(), 'od-installer-archive-'));
   pluginsRoot = path.join(tmpRoot, 'plugins');
@@ -117,14 +126,28 @@ describe('archive installer', () => {
   });
 
   it('extracts a github source with a ref and plugin subpath', async () => {
-    const tarball = await buildFixtureTarball({
-      rootPrefix: 'open-design-garnet-hemisphere',
-      pluginSubpath: path.join('plugins', 'community', 'registry-starter'),
-    });
-    let urlSeen = '';
+    const fixtureSrc = path.join(__dirname, 'fixtures', 'plugin-fixtures', 'sample-plugin');
+    const fixtureFiles = await readdir(fixtureSrc);
+    const urlsSeen: string[] = [];
+    const apiUrl =
+      'https://api.github.com/repos/nexu-io/open-design/contents/plugins/community/registry-starter?ref=garnet-hemisphere';
+    const downloadBase = 'https://raw.example.test/plugins/community/registry-starter';
+    const entries = fixtureFiles.map((name) => ({
+      type: 'file',
+      name,
+      path: `plugins/community/registry-starter/${name}`,
+      download_url: `${downloadBase}/${name}`,
+    }));
+    const fileBodies = new Map<string, Buffer>();
+    for (const name of fixtureFiles) {
+      fileBodies.set(`${downloadBase}/${name}`, await readFile(path.join(fixtureSrc, name)));
+    }
     const fetcher: ArchiveFetcher = async (u) => {
-      urlSeen = u;
-      return makeFetcher(tarball)('');
+      urlsSeen.push(u);
+      if (u === apiUrl) return makeResponse(JSON.stringify(entries));
+      const body = fileBodies.get(u);
+      if (body) return makeResponse(body);
+      return makeResponse('not found', 404, 'Not Found');
     };
     let success = false;
     let error: string | undefined;
@@ -140,7 +163,8 @@ describe('archive installer', () => {
     if (!success) {
       throw new Error(`install failed: ${error}`);
     }
-    expect(urlSeen).toBe('https://codeload.github.com/nexu-io/open-design/tar.gz/garnet-hemisphere');
+    expect(urlsSeen).toContain(apiUrl);
+    expect(urlsSeen).not.toContain('https://codeload.github.com/nexu-io/open-design/tar.gz/garnet-hemisphere');
     const row = db.prepare(`SELECT source_kind, source FROM installed_plugins WHERE id = 'sample-plugin'`).get();
     expect(row).toEqual({ source_kind: 'github', source });
   });
