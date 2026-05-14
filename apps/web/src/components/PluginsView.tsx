@@ -845,7 +845,7 @@ function SourcesPanel({
   );
 }
 
-type ImportKind = 'github' | 'zip' | 'folder' | 'template';
+type ImportKind = 'github' | 'zip' | 'folder';
 
 function PluginImportModal({
   onClose,
@@ -897,7 +897,7 @@ function PluginImportModal({
         <header className="plugins-import-modal__head">
           <div>
             <p className="plugins-view__kicker">User plugins</p>
-            <h2 id="plugins-import-title">Create or import a plugin</h2>
+            <h2 id="plugins-import-title">Import a plugin</h2>
           </div>
           <button
             type="button"
@@ -930,13 +930,6 @@ function PluginImportModal({
             title="Upload folder"
             body="Upload a plugin directory."
             onClick={() => setKind('folder')}
-          />
-          <ImportChoice
-            active={kind === 'template'}
-            icon="edit"
-            title="Create from template"
-            body="Coming soon."
-            onClick={() => setKind('template')}
           />
         </nav>
 
@@ -998,21 +991,6 @@ function PluginImportModal({
             />
           ) : null}
 
-          {kind === 'template' ? (
-            <section className="plugins-import-modal__coming">
-              <span className="plugins-view__future-icon" aria-hidden>
-                <Icon name="edit" size={18} />
-              </span>
-              <div>
-                <p className="plugins-view__kicker">Coming soon</p>
-                <h3>Create from template</h3>
-                <p>
-                  Template authoring will scaffold manifest metadata, examples,
-                  preview assets, and starter instructions in a future pass.
-                </p>
-              </div>
-            </section>
-          ) : null}
         </div>
 
         <footer className="plugins-import-modal__foot">
@@ -1041,7 +1019,7 @@ function ImportChoice({
   onClick,
 }: {
   active: boolean;
-  icon: 'github' | 'upload' | 'folder' | 'edit';
+  icon: 'github' | 'upload' | 'folder';
   title: string;
   body: string;
   onClick: () => void;

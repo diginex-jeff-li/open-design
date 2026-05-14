@@ -39,7 +39,6 @@ import { GithubStarBadge } from './GithubStarBadge';
 import { formatStars, GITHUB_REPO_URL, useGithubStars } from './useGithubStars';
 import { HomeView } from './HomeView';
 import {
-  buildPluginAuthoringPrompt,
   createPluginAuthoringHandoff,
   createPluginUseHandoff,
   type HomePromptHandoff,
@@ -273,10 +272,7 @@ export function EntryShell({
 
   function startPluginAuthoring(goal?: string) {
     setHomePromptHandoff(
-      createPluginAuthoringHandoff(
-        Date.now(),
-        goal ? buildPluginAuthoringPrompt(goal) : undefined,
-      ),
+      createPluginAuthoringHandoff(Date.now(), goal),
     );
     changeView('home');
   }

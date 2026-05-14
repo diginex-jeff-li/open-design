@@ -183,7 +183,7 @@ describe('PluginsView', () => {
     fireEvent.click(await screen.findByTestId('plugins-create-button'));
 
     expect(onCreatePlugin).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('dialog', { name: 'Create or import a plugin' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Import a plugin' })).toBeNull();
   });
 
   it('shows installed plugins and available registry entries', async () => {
@@ -221,7 +221,8 @@ describe('PluginsView', () => {
 
     expect(screen.queryByTestId('plugins-tab-import')).toBeNull();
     fireEvent.click(await screen.findByTestId('plugins-import-button'));
-    expect(screen.getByRole('dialog', { name: 'Create or import a plugin' })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Import a plugin' })).toBeTruthy();
+    expect(screen.queryByText('Create from template')).toBeNull();
     const source = 'github:nexu-io/open-design@garnet-hemisphere/plugins/community/registry-starter';
     fireEvent.change(screen.getByLabelText('GitHub, archive, or marketplace source'), {
       target: { value: source },

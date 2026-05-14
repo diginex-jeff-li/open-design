@@ -28,8 +28,10 @@ import type { Project, SkillSummary } from '../types';
 import { HomeHero } from './HomeHero';
 import { findChip, type HomeHeroChip } from './home-hero/chips';
 import {
-  buildPluginAuthoringPrompt,
+  buildPluginAuthoringInputs,
+  buildPluginAuthoringPromptForInputs,
   PLUGIN_AUTHORING_PROMPT,
+  PLUGIN_AUTHORING_PROMPT_TEMPLATE,
   type HomePromptHandoff,
 } from './home-hero/plugin-authoring';
 import { PluginDetailsModal } from './PluginDetailsModal';
@@ -116,6 +118,9 @@ export function HomeView({
   const [pendingChipId, setPendingChipId] = useState<string | null>(null);
   const [pendingAuthoringChipId, setPendingAuthoringChipId] = useState<string | null>(null);
   const [pendingAuthoringPrompt, setPendingAuthoringPrompt] = useState(PLUGIN_AUTHORING_PROMPT);
+  const [pendingAuthoringInputs, setPendingAuthoringInputs] = useState<Record<string, unknown>>(
+    () => buildPluginAuthoringInputs(undefined),
+  );
   const [pendingPluginUseHandoff, setPendingPluginUseHandoff] =
     useState<PendingPluginUseHandoff | null>(null);
   const [fallbackProjectKind, setFallbackProjectKind] = useState<ProjectKind | null>(null);
@@ -180,6 +185,8 @@ export function HomeView({
     setSelectedPluginContexts([]);
     setFallbackProjectKind('other');
     setPrompt(promptHandoff.prompt);
+    setPendingAuthoringPrompt(promptHandoff.prompt);
+    setPendingAuthoringInputs(promptHandoff.inputs);
     if (promptHandoff.focus) {
       requestAnimationFrame(() => inputRef.current?.focus());
     }
@@ -218,13 +225,20 @@ export function HomeView({
   async function usePlugin(
     record: InstalledPluginRecord,
     nextPrompt?: string | null,
-    options?: { projectKind?: ProjectKind; chipId?: string; inputs?: Record<string, unknown> },
+    options?: {
+      projectKind?: ProjectKind;
+      chipId?: string;
+      inputs?: Record<string, unknown>;
+      queryTemplate?: string | null;
+    },
   ) {
     const inputFields = record.manifest?.od?.inputs ?? [];
     const optimisticInputs = hydratePluginInputs(inputFields, options?.inputs);
     const inputsValid = pluginInputsAreValid(inputFields, optimisticInputs);
     const queryTemplate =
-      nextPrompt !== undefined && nextPrompt !== null
+      options?.queryTemplate !== undefined
+        ? options.queryTemplate
+        : nextPrompt !== undefined && nextPrompt !== null
         ? null
         : resolvePluginQueryFallback(record.manifest?.od?.useCase?.query, locale) || null;
     const optimisticPrompt =
@@ -330,7 +344,12 @@ export function HomeView({
   function requestUsePlugin(
     record: InstalledPluginRecord,
     nextPrompt?: string | null,
-    options?: { projectKind?: ProjectKind; chipId?: string; inputs?: Record<string, unknown> },
+    options?: {
+      projectKind?: ProjectKind;
+      chipId?: string;
+      inputs?: Record<string, unknown>;
+      queryTemplate?: string | null;
+    },
   ) {
     const replacement = previewPluginReplacement(record, nextPrompt, options?.inputs);
     runWithReplacementConfirmation(record.title, replacement, () => {
@@ -399,6 +418,30 @@ export function HomeView({
     setSelectedPluginContexts((prev) => prev.filter((item) => item.record.id !== pluginId));
   }
 
+  function handlePromptChange(nextPrompt: string) {
+    setPrompt(nextPrompt);
+    if (!active?.queryTemplate) return;
+    const extracted = extractPluginInputsFromPrompt(
+      active.queryTemplate,
+      nextPrompt,
+      active.inputFields,
+    );
+    if (!extracted) return;
+    const nextInputs = { ...active.inputs, ...extracted };
+    const inputsValid = pluginInputsAreValid(active.inputFields, nextInputs);
+    const inputsChanged = !inputsEqual(active.inputs, nextInputs);
+    setActive({
+      ...active,
+      inputs: nextInputs,
+      inputsValid,
+      result:
+        inputsChanged && !inputsEqual(active.result?.appliedPlugin?.inputs, nextInputs)
+          ? null
+          : active.result,
+      lastRenderedPrompt: nextPrompt,
+    });
+  }
+
   function updateActiveInputs(next: Record<string, unknown>) {
     if (!active) return;
     const inputsValid = pluginInputsAreValid(active.inputFields, next);
@@ -443,7 +486,8 @@ export function HomeView({
   }
 
   function queuePluginAuthoring(chipId: string | null, goal?: string) {
-    const nextPrompt = goal ? buildPluginAuthoringPrompt(goal) : PLUGIN_AUTHORING_PROMPT;
+    const nextInputs = buildPluginAuthoringInputs(goal);
+    const nextPrompt = buildPluginAuthoringPromptForInputs(nextInputs);
     runWithReplacementConfirmation('Plugin authoring', nextPrompt, () => {
       setActive(null);
       setActiveSkill(null);
@@ -451,6 +495,7 @@ export function HomeView({
       setError(null);
       setPrompt(nextPrompt);
       setPendingAuthoringPrompt(nextPrompt);
+      setPendingAuthoringInputs(nextInputs);
       setPendingAuthoringChipId(chipId ?? 'create-plugin');
       requestAnimationFrame(() => inputRef.current?.focus());
     });
@@ -472,10 +517,11 @@ export function HomeView({
     void usePlugin(record, pendingAuthoringPrompt, {
       projectKind: 'other',
       chipId: pendingAuthoringChipId,
-      ...(authoringRecord ? {} : { inputs: AUTHORING_DEFAULT_SCENARIO_INPUTS }),
+      inputs: authoringRecord ? pendingAuthoringInputs : AUTHORING_DEFAULT_SCENARIO_INPUTS,
+      ...(authoringRecord ? { queryTemplate: PLUGIN_AUTHORING_PROMPT_TEMPLATE } : {}),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingAuthoringChipId, pendingAuthoringPrompt, pluginsLoading, plugins]);
+  }, [pendingAuthoringChipId, pendingAuthoringPrompt, pendingAuthoringInputs, pluginsLoading, plugins]);
 
   // Stage B of plugin-driven-flow-plan: the chip rail dispatcher.
   // Pure UI-state mapping — the heavy lifting (apply / import) is
@@ -568,7 +614,7 @@ export function HomeView({
       <HomeHero
         ref={inputRef}
         prompt={prompt}
-        onPromptChange={setPrompt}
+        onPromptChange={handlePromptChange}
         onSubmit={submit}
         activePluginTitle={activeBadgeTitle}
         activeSkillId={activeSkill?.id ?? null}
@@ -705,6 +751,65 @@ function pluginInputsAreValid(
     const value = values[field.name];
     return value !== undefined && value !== null && value !== '';
   });
+}
+
+const TEMPLATE_INPUT_PATTERN = /\{\{\s*([a-zA-Z_][\w-]*)\s*\}\}/g;
+
+function extractPluginInputsFromPrompt(
+  template: string,
+  prompt: string,
+  fields: InputFieldSpec[],
+): Record<string, unknown> | null {
+  TEMPLATE_INPUT_PATTERN.lastIndex = 0;
+  const fieldByName = new Map(fields.map((field) => [field.name, field]));
+  const keys: string[] = [];
+  let pattern = '^';
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = TEMPLATE_INPUT_PATTERN.exec(template)) !== null) {
+    const placeholder = match[0];
+    const key = match[1];
+    if (!key) continue;
+    pattern += escapeRegExp(template.slice(lastIndex, match.index));
+    pattern += '([\\s\\S]*?)';
+    keys.push(key);
+    lastIndex = match.index + placeholder.length;
+  }
+  if (keys.length === 0) return null;
+  pattern += escapeRegExp(template.slice(lastIndex));
+  const renderedMatch = new RegExp(pattern + '$').exec(prompt);
+  if (!renderedMatch) return null;
+  const next: Record<string, unknown> = {};
+  keys.forEach((key, index) => {
+    const field = fieldByName.get(key);
+    if (!field) return;
+    const raw = renderedMatch[index + 1] ?? '';
+    next[key] = coercePromptInputValue(raw, field);
+  });
+  return next;
+}
+
+function coercePromptInputValue(raw: string, field: InputFieldSpec): unknown {
+  const rawType = (field as { type?: unknown }).type;
+  const type = typeof rawType === 'string' ? rawType : 'string';
+  const trimmed = raw.trim();
+  if (type === 'number') {
+    if (trimmed.length === 0) return undefined;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : raw;
+  }
+  if (type === 'boolean') {
+    if (trimmed.toLowerCase() === 'true') return true;
+    if (trimmed.toLowerCase() === 'false') return false;
+  }
+  if (type === 'select' && Array.isArray(field.options) && field.options.includes(trimmed)) {
+    return trimmed;
+  }
+  return raw;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function inputsEqual(

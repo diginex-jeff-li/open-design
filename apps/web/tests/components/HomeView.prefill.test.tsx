@@ -6,6 +6,7 @@ import { HomeView } from '../../src/components/HomeView';
 import {
   createPluginAuthoringHandoff,
   createPluginUseHandoff,
+  PLUGIN_AUTHORING_DEFAULT_GOAL,
   PLUGIN_AUTHORING_PROMPT,
 } from '../../src/components/home-hero/plugin-authoring';
 
@@ -28,7 +29,16 @@ const AUTHORING_PLUGIN = {
     od: {
       kind: 'scenario',
       taskKind: 'new-generation',
-      useCase: { query: 'Create a plugin.' },
+      useCase: { query: 'Create an Open Design plugin for {{pluginGoal}}.' },
+      inputs: [
+        {
+          name: 'pluginGoal',
+          type: 'string',
+          required: false,
+          default: PLUGIN_AUTHORING_DEFAULT_GOAL,
+          label: 'Plugin goal',
+        },
+      ],
     },
   },
 };
@@ -86,7 +96,7 @@ const WEB_PROTOTYPE_PLUGIN = {
 const AUTHORING_APPLY_RESULT = {
   query: 'Create a plugin.',
   contextItems: [],
-  inputs: [],
+  inputs: AUTHORING_PLUGIN.manifest.od.inputs,
   assets: [],
   mcpServers: [],
   trust: 'trusted',
@@ -97,7 +107,7 @@ const AUTHORING_APPLY_RESULT = {
     pluginId: 'od-plugin-authoring',
     pluginVersion: '0.1.0',
     manifestSourceDigest: 'a'.repeat(64),
-    inputs: {},
+    inputs: { pluginGoal: PLUGIN_AUTHORING_DEFAULT_GOAL },
     resolvedContext: { items: [] },
     capabilitiesGranted: ['prompt:inject'],
     capabilitiesRequired: ['prompt:inject'],
@@ -544,9 +554,67 @@ describe('HomeView prompt handoff', () => {
       prompt: PLUGIN_AUTHORING_PROMPT,
       pluginId: 'od-plugin-authoring',
       appliedPluginSnapshotId: 'snap-authoring',
-      pluginInputs: {},
+      pluginInputs: { pluginGoal: PLUGIN_AUTHORING_DEFAULT_GOAL },
       projectKind: 'other',
     }));
+  });
+
+  it('keeps the authoring goal input linked to the prompt and submit payload', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (url) => {
+      if (typeof url === 'string' && url === '/api/plugins') {
+        return new Response(JSON.stringify({ plugins: [AUTHORING_PLUGIN] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (typeof url === 'string' && url.includes('/apply')) {
+        return new Response(JSON.stringify(AUTHORING_APPLY_RESULT), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+    const onSubmit = vi.fn();
+
+    render(
+      <HomeView
+        projects={[]}
+        onSubmit={onSubmit}
+        onOpenProject={() => undefined}
+        onViewAllProjects={() => undefined}
+      />,
+    );
+
+    fireEvent.click(await screen.findByTestId('home-hero-rail-create-plugin'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      '/api/plugins/od-plugin-authoring/apply',
+      expect.anything(),
+    ));
+
+    const input = screen.getByTestId('home-hero-input') as HTMLTextAreaElement;
+    const goalInput = await screen.findByLabelText(/plugin goal/i);
+    fireEvent.change(goalInput, {
+      target: { value: 'turn support transcripts into triaged GitHub issues' },
+    });
+
+    await waitFor(() => {
+      expect(input.value).toContain('turn support transcripts into triaged GitHub issues');
+    });
+    fireEvent.click(screen.getByTestId('home-hero-submit'));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: expect.stringContaining('turn support transcripts into triaged GitHub issues'),
+      pluginId: 'od-plugin-authoring',
+      pluginInputs: {
+        pluginGoal: 'turn support transcripts into triaged GitHub issues',
+      },
+    })));
   });
 
   it('does not submit the create-plugin prompt before the authoring scenario is applied', async () => {
