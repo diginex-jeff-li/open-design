@@ -9,6 +9,7 @@ const REPO = 'https://github.com/nexu-io/open-design';
 const REPO_RELEASES = `${REPO}/releases`;
 const REPO_SKILLS = `${REPO}/tree/main/skills`;
 const REPO_DESIGN_SYSTEMS = `${REPO}/tree/main/design-systems`;
+const PLUGINS_PAGE = '/plugins/';
 
 const ext = {
   target: '_blank',
@@ -19,7 +20,7 @@ export function Header() {
   return (
     <header className='nav' data-od-id='nav' data-nav-headroom>
       <div className='container nav-inner'>
-        <a href='#top' className='brand'>
+        <a href='/' className='brand'>
           <span className='brand-mark'>Ø</span>
           <span>Open Design</span>
           <span className='brand-meta'>
@@ -28,6 +29,11 @@ export function Header() {
         </a>
         <nav>
           <ul className='nav-links'>
+            <li>
+              <a href={PLUGINS_PAGE}>
+                Plugins<span className='num'>Registry</span>
+              </a>
+            </li>
             <li>
               <a href={REPO_SKILLS} {...ext}>
                 Skills<span className='num'>31</span>
@@ -39,17 +45,17 @@ export function Header() {
               </a>
             </li>
             <li>
-              <a href='#agents'>
+              <a href='/#agents'>
                 Agents<span className='num'>12</span>
               </a>
             </li>
             <li>
-              <a href='#labs'>
+              <a href='/#labs'>
                 Labs<span className='num'>05</span>
               </a>
             </li>
             <li>
-              <a href='#contact'>Contact</a>
+              <a href='/#contact'>Contact</a>
             </li>
           </ul>
         </nav>

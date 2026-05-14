@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import url from 'node:url';
+import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { mkdtemp, rm, writeFile, mkdir, symlink, readdir } from 'node:fs/promises';
 import Database from 'better-sqlite3';
@@ -122,11 +123,33 @@ describe('archive installer', () => {
       if (ev.kind === 'success') success = true;
     }
     expect(success).toBe(true);
-    const row = db.prepare(`SELECT source_kind, source FROM installed_plugins WHERE id = 'sample-plugin'`).get();
+    const row = db.prepare(`SELECT source_kind, source, archive_integrity FROM installed_plugins WHERE id = 'sample-plugin'`).get() as {
+      source_kind: string;
+      source: string;
+      archive_integrity: string;
+    };
     expect(row).toEqual({
       source_kind: 'url',
       source: 'https://example.com/sample-plugin-1.0.0.tgz',
+      archive_integrity: `sha256:${createHash('sha256').update(tarball).digest('hex')}`,
     });
+  });
+
+  it('rejects archive downloads when marketplace integrity does not match', async () => {
+    const tarball = await buildFixtureTarball({ rootPrefix: 'sample-plugin-1.0.0' });
+    let success = false;
+    let error: string | undefined;
+    for await (const ev of installPlugin(db, {
+      source: 'https://example.com/sample-plugin-1.0.0.tgz',
+      roots: { userPluginsRoot: pluginsRoot },
+      fetcher: makeFetcher(tarball),
+      archiveIntegrity: 'sha256:deadbeef',
+    })) {
+      if (ev.kind === 'success') success = true;
+      if (ev.kind === 'error') error = ev.message;
+    }
+    expect(success).toBe(false);
+    expect(error).toMatch(/integrity mismatch/);
   });
 
   it('rejects archives that exceed the size cap', async () => {

@@ -208,14 +208,15 @@ describe('PluginsView', () => {
     expect(screen.queryByTestId('plugins-tab-import')).toBeNull();
     fireEvent.click(await screen.findByTestId('plugins-import-button'));
     expect(screen.getByRole('dialog', { name: 'Create or import a plugin' })).toBeTruthy();
+    const source = 'github:nexu-io/open-design@garnet-hemisphere/plugins/community/registry-starter';
     fireEvent.change(screen.getByLabelText('GitHub, archive, or marketplace source'), {
-      target: { value: 'github:owner/repo/plugins/my-plugin' },
+      target: { value: source },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Import' }));
 
     await waitFor(() =>
       expect(mockedInstallPluginSource).toHaveBeenCalledWith(
-        'github:owner/repo/plugins/my-plugin',
+        source,
       ),
     );
     expect(await screen.findByText('Installed New Plugin.')).toBeTruthy();
@@ -235,18 +236,62 @@ describe('PluginsView', () => {
     expect(await screen.findByText('Installed New Plugin.')).toBeTruthy();
   });
 
+  it('treats bundled official registry entries as installed and ready to use', async () => {
+    const official = makePlugin('official-plugin', 'bundled', 'bundled', 'Official Plugin');
+    official.sourceMarketplaceId = 'official';
+    official.sourceMarketplaceEntryName = 'open-design/official-plugin';
+    official.sourceMarketplaceEntryVersion = '1.0.0';
+    official.marketplaceTrust = 'official';
+    mockedListPlugins.mockResolvedValue([official]);
+    mockedListMarketplaces.mockResolvedValue([
+      {
+        id: 'official',
+        url: 'https://open-design.ai/marketplace/open-design-marketplace.json',
+        trust: 'official',
+        manifest: {
+          name: 'Open Design Official',
+          version: '0.1.0',
+          plugins: [{
+            name: 'open-design/official-plugin',
+            title: 'Official Plugin',
+            source: 'github:nexu-io/open-design@main/plugins/_official/scenarios/official-plugin',
+            version: '1.0.0',
+            description: 'Bundled official starter.',
+            tags: ['official'],
+          }],
+        },
+      },
+    ]);
+
+    render(<PluginsView />);
+
+    fireEvent.click(await screen.findByTestId('plugins-tab-available'));
+    const card = (await screen.findByText('Official Plugin')).closest('article');
+    expect(card).not.toBeNull();
+    expect(within(card!).getByText('Open Design Official')).toBeTruthy();
+    expect(within(card!).queryByRole('button', { name: 'Install' })).toBeNull();
+
+    fireEvent.click(within(card!).getByRole('button', { name: 'Use' }));
+
+    await waitFor(() =>
+      expect(mockedApplyPlugin).toHaveBeenCalledWith('official-plugin', { locale: 'en' }),
+    );
+  });
+
   it('manages registry sources from the Sources tab', async () => {
     render(<PluginsView />);
 
+    const sourceUrl =
+      'https://raw.githubusercontent.com/nexu-io/open-design/garnet-hemisphere/plugins/registry/community/open-design-marketplace.json';
     fireEvent.click(await screen.findByTestId('plugins-tab-sources'));
     fireEvent.change(screen.getByLabelText('Source URL'), {
-      target: { value: 'https://example.com/next.json' },
+      target: { value: sourceUrl },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
 
     await waitFor(() =>
       expect(mockedAddMarketplace).toHaveBeenCalledWith({
-        url: 'https://example.com/next.json',
+        url: sourceUrl,
         trust: 'restricted',
       }),
     );

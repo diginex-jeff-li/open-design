@@ -4,7 +4,7 @@
 // arrival lands in Phase 2A.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import Database from 'better-sqlite3';
@@ -71,6 +71,8 @@ describe('installFromLocalFolder', () => {
     const list = listInstalledPlugins(db);
     expect(list).toHaveLength(1);
     expect(list[0]?.id).toBe('sample-plugin');
+    expect(list[0]?.sourceKind).toBe('local');
+    expect(list[0]?.trust).toBe('restricted');
     expect(list[0]?.fsPath).toBe(path.join(pluginsRoot, 'sample-plugin'));
   });
 
@@ -105,6 +107,7 @@ describe('installFromLocalFolder', () => {
   });
 
   it('persists marketplace provenance and inherited trust for resolved installs', async () => {
+    const lockfilePath = path.join(tmpRoot, '.od', 'od-plugin-lock.json');
     const manifest = JSON.stringify({
       specVersion: '1.0.0',
       name: 'fixture-registry',
@@ -147,6 +150,7 @@ describe('installFromLocalFolder', () => {
       resolvedRef: resolved!.ref!,
       manifestDigest: resolved!.manifestDigest!,
       archiveIntegrity: resolved!.archiveIntegrity!,
+      lockfilePath,
     })) {
       if (ev.kind === 'success') installedRecord = ev.plugin;
       if (ev.kind === 'error') throw new Error(ev.message);
@@ -168,6 +172,16 @@ describe('installFromLocalFolder', () => {
     expect(row?.sourceMarketplaceId).toBe(added.row.id);
     expect(row?.marketplaceTrust).toBe('official');
     expect(row?.trust).toBe('trusted');
+    const lockfile = JSON.parse(await readFile(lockfilePath, 'utf8'));
+    expect(lockfile.plugins['vendor/sample-plugin']).toMatchObject({
+      name: 'vendor/sample-plugin',
+      version: '1.0.0',
+      sourceMarketplaceId: added.row.id,
+      sourceMarketplaceEntryName: 'vendor/sample-plugin',
+      resolvedRef: 'abc123',
+      manifestDigest: 'sha256-manifest',
+      archiveIntegrity: 'sha512-fixture',
+    });
   });
 
   it('keeps restricted marketplace installs restricted', async () => {

@@ -16,8 +16,9 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
+import { createHash } from 'node:crypto';
 import { promises as fsp } from 'node:fs';
-import { Readable } from 'node:stream';
+import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { x as tarExtract } from 'tar';
 import {
@@ -36,6 +37,7 @@ import type {
 } from '@open-design/contracts';
 import type Database from 'better-sqlite3';
 import { recordPluginEvent } from './events.js';
+import { upsertPluginLockfileEntry } from './lockfile.js';
 
 type SqliteDb = Database.Database;
 
@@ -85,6 +87,9 @@ export interface InstallOptions {
   resolvedRef?: string;
   manifestDigest?: string;
   archiveIntegrity?: string;
+  // Optional runtime-data lockfile path. Daemon routes pass
+  // `<OD_DATA_DIR>/od-plugin-lock.json`; tests can point at temp dirs.
+  lockfilePath?: string;
 }
 
 export type ArchiveFetcher = (url: string) => Promise<{
@@ -181,6 +186,26 @@ async function* installFromArchiveUrl(
       };
       return;
     }
+    const archivePath = path.join(tmpRoot, 'archive.tgz');
+    let computedIntegrity: string;
+    try {
+      computedIntegrity = await writeArchiveAndDigest(resp.body, archivePath, maxBytes);
+    } catch (err) {
+      yield {
+        kind: 'error',
+        message: `Archive download failed: ${(err as Error).message}`,
+        warnings: [],
+      };
+      return;
+    }
+    if (opts.archiveIntegrity && !integrityMatches(opts.archiveIntegrity, computedIntegrity)) {
+      yield {
+        kind: 'error',
+        message: `Archive integrity mismatch: expected ${opts.archiveIntegrity}, got ${computedIntegrity}`,
+        warnings: [],
+      };
+      return;
+    }
     yield { kind: 'progress', phase: 'copying', message: 'Extracting archive' };
     let symlinkSeen = false;
     let traversalSeen = false;
@@ -192,7 +217,7 @@ async function* installFromArchiveUrl(
       // any path-traversal segment; we then surface those as a clean
       // install error instead of silently skipping unsafe entries.
       await pipeline(
-        resp.body as NodeJS.ReadableStream,
+        fs.createReadStream(archivePath),
         tarExtract({
           cwd: tmpRoot,
           strip: 1,
@@ -261,6 +286,7 @@ async function* installFromArchiveUrl(
     // provenance accurately.
     yield* installFromLocalFolder(db, {
       ...opts,
+      archiveIntegrity: opts.archiveIntegrity ?? computedIntegrity,
       source: opts.source,
       // Drive the local backend through the staged folder; the
       // override on `_stagedFolder` is internal and lets us re-use the
@@ -281,6 +307,40 @@ async function defaultFetcher(url: string): ReturnType<ArchiveFetcher> {
     statusText: response.statusText,
     body: response.body ? Readable.fromWeb(response.body as never) : null,
   };
+}
+
+async function writeArchiveAndDigest(
+  body: Readable,
+  archivePath: string,
+  maxBytes: number,
+): Promise<string> {
+  const hash = createHash('sha256');
+  let bytes = 0;
+  const digestStream = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      bytes += chunk.length;
+      if (bytes > maxBytes) {
+        callback(new Error(`Downloaded archive exceeds ${maxBytes} bytes`));
+        return;
+      }
+      hash.update(chunk);
+      callback(null, chunk);
+    },
+  });
+  await pipeline(body as NodeJS.ReadableStream, digestStream, fs.createWriteStream(archivePath));
+  return `sha256:${hash.digest('hex')}`;
+}
+
+function integrityMatches(expected: string, computed: string): boolean {
+  const normalizedExpected = expected.trim();
+  const normalizedComputed = computed.trim();
+  if (normalizedExpected === normalizedComputed) return true;
+  if (normalizedExpected.startsWith('sha256-')) {
+    const hex = normalizedComputed.replace(/^sha256:/, '');
+    const base64 = Buffer.from(hex, 'hex').toString('base64');
+    return normalizedExpected === `sha256-${base64}`;
+  }
+  return false;
 }
 
 async function measureTreeSize(root: string): Promise<number> {
@@ -397,6 +457,9 @@ export async function* installFromLocalFolder(
 
   yield { kind: 'progress', phase: 'persisting', message: 'Writing installed_plugins row' };
   upsertInstalledPlugin(db, parsed.record);
+  if (opts.lockfilePath) {
+    await upsertPluginLockfileEntry(opts.lockfilePath, parsed.record);
+  }
 
   // Plan §3.II1 / §3.JJ1 — emit 'plugin.installed' OR
   // 'plugin.upgraded' (per opts.eventKind) so ops dashboards +

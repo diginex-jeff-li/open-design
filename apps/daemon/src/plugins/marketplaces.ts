@@ -23,6 +23,10 @@ import {
   OPEN_DESIGN_PLUGIN_SPEC_VERSION,
   type MarketplaceManifest,
 } from '@open-design/contracts';
+import {
+  parsePluginSpecifier,
+  resolveMarketplaceEntryVersion,
+} from '../registry/versioning.js';
 
 type SqliteDb = Database.Database;
 
@@ -401,12 +405,15 @@ export function resolvePluginInMarketplaces(
   pluginName: string,
 ): ResolvedPluginEntry | null {
   const rows = listMarketplaces(db);
-  const target = pluginName.trim().toLowerCase();
+  const specifier = parsePluginSpecifier(pluginName);
+  const target = specifier.name.trim().toLowerCase();
   if (!target) return null;
   for (const row of rows) {
     const entries = row.manifest.plugins ?? [];
     for (const entry of entries) {
       if (entry.name && entry.name.toLowerCase() === target) {
+        const resolvedVersion = resolveMarketplaceEntryVersion(entry, specifier.range);
+        if (!resolvedVersion) continue;
         const result: ResolvedPluginEntry = {
           marketplaceId:    row.id,
           marketplaceUrl:   row.url,
@@ -414,24 +421,12 @@ export function resolvePluginInMarketplaces(
           marketplaceSpecVersion: row.specVersion,
           marketplaceVersion: row.version,
           pluginName:       entry.name,
-          pluginVersion:    entry.version,
-          source:           entry.source,
+          pluginVersion:    resolvedVersion.version,
+          source:           resolvedVersion.source,
         };
-        if (entry.ref) result.ref = entry.ref;
-        const manifestDigest =
-          typeof entry.manifestDigest === 'string'
-            ? entry.manifestDigest
-            : typeof entry.dist?.manifestDigest === 'string'
-              ? entry.dist.manifestDigest
-              : undefined;
-        const archiveIntegrity =
-          typeof entry.integrity === 'string'
-            ? entry.integrity
-            : typeof entry.dist?.integrity === 'string'
-              ? entry.dist.integrity
-              : undefined;
-        if (manifestDigest) result.manifestDigest = manifestDigest;
-        if (archiveIntegrity) result.archiveIntegrity = archiveIntegrity;
+        if (resolvedVersion.ref) result.ref = resolvedVersion.ref;
+        if (resolvedVersion.manifestDigest) result.manifestDigest = resolvedVersion.manifestDigest;
+        if (resolvedVersion.archiveIntegrity) result.archiveIntegrity = resolvedVersion.archiveIntegrity;
         if (entry.description) result.description = entry.description;
         return result;
       }

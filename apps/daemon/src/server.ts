@@ -59,6 +59,7 @@ import {
   MissingInputError,
   pluginPromptBlock,
   pruneExpiredSnapshots,
+  readPluginLockfile,
   registerBuiltInAtomWorkers,
   registerBundledPlugins,
   resolvePluginSnapshot,
@@ -806,10 +807,10 @@ const PROMPT_TEMPLATES_DIR = resolveDaemonResourceDir(
   'prompt-templates',
   path.join(PROJECT_ROOT, 'prompt-templates'),
 );
-const COMMUNITY_DIR = resolveDaemonResourceDir(
+const PLUGIN_REGISTRY_DIR = resolveDaemonResourceDir(
   DAEMON_RESOURCE_ROOT,
-  'community',
-  path.join(PROJECT_ROOT, 'community'),
+  'plugins/registry',
+  path.join(PROJECT_ROOT, 'plugins', 'registry'),
 );
 const OFFICIAL_MARKETPLACE_ID = 'official';
 const OFFICIAL_MARKETPLACE_URL = 'https://open-design.ai/marketplace/open-design-marketplace.json';
@@ -879,6 +880,7 @@ export function resolveDataDir(raw, projectRoot) {
   return resolved;
 }
 const RUNTIME_DATA_DIR = resolveDataDir(process.env.OD_DATA_DIR, PROJECT_ROOT);
+const PLUGIN_LOCKFILE_PATH = path.join(RUNTIME_DATA_DIR, 'od-plugin-lock.json');
 // Canonical (realpath-resolved) form of RUNTIME_DATA_DIR for the few callers
 // that compare it against a user-supplied realpath() result. On macOS, /var
 // is a symlink to /private/var, so an import realpath lands in /private/var
@@ -2335,7 +2337,7 @@ export async function startServer({
   }
 
   try {
-    const seedDirs = await fs.promises.readdir(COMMUNITY_DIR, { withFileTypes: true }).catch((err) => {
+    const seedDirs = await fs.promises.readdir(PLUGIN_REGISTRY_DIR, { withFileTypes: true }).catch((err) => {
       if (err?.code === 'ENOENT') return [];
       throw err;
     });
@@ -2343,7 +2345,7 @@ export async function startServer({
     for (const dirent of seedDirs) {
       if (!dirent.isDirectory()) continue;
       const id = dirent.name;
-      const manifestPath = path.join(COMMUNITY_DIR, id, 'open-design-marketplace.json');
+      const manifestPath = path.join(PLUGIN_REGISTRY_DIR, id, 'open-design-marketplace.json');
       if (!fs.existsSync(manifestPath)) continue;
       let manifestText = await fs.promises.readFile(manifestPath, 'utf8');
       if (id === OFFICIAL_MARKETPLACE_ID && bundledMarketplaceEntries.length > 0) {
@@ -3841,6 +3843,7 @@ export async function startServer({
         source,
         _stagedFolder: pluginRoot,
         _stagedSourceKind: 'user',
+        lockfilePath: PLUGIN_LOCKFILE_PATH,
       })) {
         if (ev.message) log.push(ev.message);
         if (Array.isArray(ev.warnings)) warnings.splice(0, warnings.length, ...ev.warnings);
@@ -4012,7 +4015,13 @@ export async function startServer({
       // the same byte path that would happen if the user copy-pasted
       // the source manually.
       const { resolvePluginInMarketplaces } = await import('./plugins/marketplaces.js');
-      const resolved = resolvePluginInMarketplaces(db, source);
+      let lookupName = source;
+      const lockfile = await readPluginLockfile(PLUGIN_LOCKFILE_PATH);
+      const locked = lockfile.plugins[source];
+      if (locked?.version && !source.includes('@')) {
+        lookupName = `${source}@${locked.version}`;
+      }
+      const resolved = resolvePluginInMarketplaces(db, lookupName);
       if (!resolved) {
         return res.status(404).json({
           error: {
@@ -4046,6 +4055,7 @@ export async function startServer({
         resolvedRef: marketplaceResolution?.ref,
         manifestDigest: marketplaceResolution?.manifestDigest,
         archiveIntegrity: marketplaceResolution?.archiveIntegrity,
+        lockfilePath: PLUGIN_LOCKFILE_PATH,
       })) {
         writeEvent(ev.kind, ev);
         if (ev.kind === 'success' || ev.kind === 'error') break;
@@ -4081,6 +4091,8 @@ export async function startServer({
   // daemon's authoritative copy and confuse the next boot.
   app.post('/api/plugins/:id/upgrade', async (req, res) => {
     const id = req.params.id;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const policy = body.policy === 'pinned' ? 'pinned' : 'latest';
     const plugin = getInstalledPlugin(db, id);
     if (!plugin) {
       return res.status(404).json({
@@ -4096,7 +4108,24 @@ export async function startServer({
         },
       });
     }
-    const source = plugin.source;
+    let source = plugin.source;
+    let marketplaceResolution: {
+      marketplaceId: string;
+      marketplaceTrust: 'official' | 'trusted' | 'restricted';
+      pluginName: string;
+      pluginVersion: string;
+      source: string;
+      ref?: string;
+      manifestDigest?: string;
+      archiveIntegrity?: string;
+    } | null = null;
+    if (policy === 'latest' && plugin.sourceMarketplaceEntryName) {
+      const { resolvePluginInMarketplaces } = await import('./plugins/marketplaces.js');
+      marketplaceResolution = resolvePluginInMarketplaces(db, plugin.sourceMarketplaceEntryName);
+      if (marketplaceResolution) {
+        source = marketplaceResolution.source;
+      }
+    }
     if (!source) {
       return res.status(409).json({
         error: {
@@ -4116,20 +4145,21 @@ export async function startServer({
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
 
-    writeEvent('progress', { kind: 'progress', phase: 'resolving', message: `Upgrading ${id} from ${source}` });
+    writeEvent('progress', { kind: 'progress', phase: 'resolving', message: `Upgrading ${id} from ${source} (policy=${policy})` });
 
     try {
       for await (const ev of installPlugin(db, {
         source,
         eventKind: 'upgraded',
-        sourceMarketplaceId: plugin.sourceMarketplaceId,
-        sourceMarketplaceEntryName: plugin.sourceMarketplaceEntryName,
-        sourceMarketplaceEntryVersion: plugin.sourceMarketplaceEntryVersion,
-        marketplaceTrust: plugin.marketplaceTrust,
-        resolvedSource: plugin.resolvedSource,
-        resolvedRef: plugin.resolvedRef,
-        manifestDigest: plugin.manifestDigest,
-        archiveIntegrity: plugin.archiveIntegrity,
+        sourceMarketplaceId: marketplaceResolution?.marketplaceId ?? plugin.sourceMarketplaceId,
+        sourceMarketplaceEntryName: marketplaceResolution?.pluginName ?? plugin.sourceMarketplaceEntryName,
+        sourceMarketplaceEntryVersion: marketplaceResolution?.pluginVersion ?? plugin.sourceMarketplaceEntryVersion,
+        marketplaceTrust: marketplaceResolution?.marketplaceTrust ?? plugin.marketplaceTrust,
+        resolvedSource: marketplaceResolution?.source ?? plugin.resolvedSource,
+        resolvedRef: marketplaceResolution?.ref ?? plugin.resolvedRef,
+        manifestDigest: marketplaceResolution?.manifestDigest ?? plugin.manifestDigest,
+        archiveIntegrity: marketplaceResolution?.archiveIntegrity ?? plugin.archiveIntegrity,
+        lockfilePath: PLUGIN_LOCKFILE_PATH,
       })) {
         writeEvent(ev.kind, ev);
         if (ev.kind === 'success' || ev.kind === 'error') break;

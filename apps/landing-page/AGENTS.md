@@ -23,6 +23,10 @@ It is the deployable counterpart to:
   uses React only at build time (`renderToStaticMarkup`) for the existing
   `app/page.tsx` component. The generated page is CDN-ready HTML/CSS plus
   a small inline enhancement script; no React runtime ships to browsers.
+- Public plugin registry pages live under `app/pages/plugins/`. They are
+  generated statically from repository-owned registry files and bundled plugin
+  manifests at build time, so open-design.ai can expose searchable,
+  indexable ecosystem pages without daemon/API coupling.
 - `astro.config.ts` always uses `output: 'static'` and emits to `out/`
   so it can be served by any CDN (Vercel, Cloudflare Pages, the daemon's
   static fallback) without a Node runtime.
@@ -38,9 +42,8 @@ It is the deployable counterpart to:
   not state, routes, or runtime.
 - Not connected to `apps/daemon`. There is no `/api`, no `/artifacts`,
   no `/frames` — no proxy to set up.
-- Not multi-page. There is exactly one route (`/`) that renders the
-  full landing page. If you need a second page, add it as a sibling
-  Astro page route.
+- Not a product app router. Static sibling Astro routes are allowed for public
+  marketing or SEO surfaces, but they must remain build-time/static.
 
 ## Boundary constraints
 
