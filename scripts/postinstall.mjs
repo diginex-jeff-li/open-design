@@ -8,6 +8,9 @@ const repoRoot = resolve(scriptDir, "..");
 
 const buildTargets = [
   "packages/contracts",
+  "packages/agui-adapter",
+  "packages/plugin-runtime",
+  "packages/registry-protocol",
   "packages/sidecar-proto",
   "packages/sidecar",
   "packages/platform",
