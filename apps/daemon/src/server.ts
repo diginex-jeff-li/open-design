@@ -1023,6 +1023,11 @@ const PROMPT_TEMPLATES_DIR = resolveDaemonResourceDir(
   'prompt-templates',
   path.join(PROJECT_ROOT, 'prompt-templates'),
 );
+const BUNDLED_PLUGINS_DIR = resolveDaemonResourceDir(
+  DAEMON_RESOURCE_ROOT,
+  path.join('plugins', '_official'),
+  defaultBundledRoot(PROJECT_ROOT),
+);
 export function resolveDataDir(raw, projectRoot) {
   if (!raw) return path.join(projectRoot, '.od');
   // expandHomePrefix is shared with media-config.ts so OD_DATA_DIR and
@@ -2635,14 +2640,15 @@ export async function startServer({
   }
 
   // Plan §3.I3 / spec §23.3.5 — register every plugin under
-  // <projectRoot>/plugins/_official/** as a bundled plugin. The walker
+  // <resourceRoot>/plugins/_official/** in packaged runs, or
+  // <projectRoot>/plugins/_official/** in workspace runs, as bundled plugins. The walker
   // is idempotent (upserts on every boot) so a daemon upgrade rotates
   // the bundled set in lockstep with the code. ENOENT is silent —
   // running the daemon outside the dev tree just skips this step.
   try {
     const result = await registerBundledPlugins({
       db,
-      bundledRoot: defaultBundledRoot(PROJECT_ROOT),
+      bundledRoot: BUNDLED_PLUGINS_DIR,
     });
     if (result.registered.length > 0) {
       console.log(`[plugins] registered ${result.registered.length} bundled plugin(s)`);

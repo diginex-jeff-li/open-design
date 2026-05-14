@@ -12,6 +12,8 @@ const PACKAGE_DIRS = [
   "packages/sidecar-proto",
   "packages/sidecar",
   "packages/platform",
+  "packages/agui-adapter",
+  "packages/plugin-runtime",
   "apps/daemon",
   "apps/web",
   "apps/desktop",

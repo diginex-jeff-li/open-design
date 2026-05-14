@@ -557,6 +557,73 @@ function isMacCodeBundle(name) {
   return name.endsWith(".app") || name.endsWith(".framework");
 }
 
+async function ensureRelativeSymlink(linkPath, targetPath, type) {
+  if (await pathLstatExists(linkPath)) {
+    const metadata = await lstat(linkPath);
+    if (metadata.isSymbolicLink()) {
+      const existingTarget = await readlink(linkPath);
+      if (existingTarget === targetPath) return false;
+    }
+    await rm(linkPath, { force: true, recursive: true });
+  }
+
+  await symlink(targetPath, linkPath, type);
+  return true;
+}
+
+async function normalizeMacVersionedFramework(frameworkPath) {
+  const versionsRoot = path.join(frameworkPath, "Versions");
+  const entries = await readdir(versionsRoot, { withFileTypes: true }).catch(() => []);
+  const versionName = entries
+    .filter((entry) => entry.isDirectory() && entry.name !== "Current")
+    .map((entry) => entry.name)
+    .sort()[0];
+  if (versionName == null) return false;
+
+  const versionPath = path.join(versionsRoot, versionName);
+  await ensureRelativeSymlink(path.join(versionsRoot, "Current"), versionName, "dir");
+
+  const versionEntries = await readdir(versionPath, { withFileTypes: true }).catch(() => []);
+  let changed = false;
+  for (const entry of versionEntries) {
+    if (entry.name === "_CodeSignature") continue;
+    const targetPath = `Versions/Current/${entry.name}`;
+    const linkPath = path.join(frameworkPath, entry.name);
+    const type = entry.isDirectory() ? "dir" : "file";
+    changed = (await ensureRelativeSymlink(linkPath, targetPath, type)) || changed;
+  }
+
+  return changed;
+}
+
+async function normalizeMacVersionedFrameworks(appPath) {
+  const frameworksRoot = path.join(appPath, "Contents", "Frameworks");
+
+  async function visit(current) {
+    const entries = await readdir(current, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const entryPath = path.join(current, entry.name);
+      if (entry.name.endsWith(".framework")) {
+        await normalizeMacVersionedFramework(entryPath);
+        continue;
+      }
+      await visit(entryPath);
+    }
+  }
+
+  await visit(frameworksRoot);
+}
+
+async function resolveMacAdhocSignTarget(bundlePath, bundleName) {
+  if (!bundleName.endsWith(".framework")) return bundlePath;
+
+  const currentVersionPath = path.join(bundlePath, "Versions", "Current");
+  if (await pathExists(currentVersionPath)) return currentVersionPath;
+
+  return bundlePath;
+}
+
 async function collectMacAdhocSignTargets(appPath) {
   const frameworksRoot = path.join(appPath, "Contents", "Frameworks");
   const targets = [];
@@ -567,7 +634,7 @@ async function collectMacAdhocSignTargets(appPath) {
       if (!entry.isDirectory()) continue;
       const entryPath = path.join(current, entry.name);
       if (isMacCodeBundle(entry.name)) {
-        targets.push(entryPath);
+        targets.push(await resolveMacAdhocSignTarget(entryPath, entry.name));
         continue;
       }
       await visit(entryPath);
@@ -580,6 +647,7 @@ async function collectMacAdhocSignTargets(appPath) {
 }
 
 async function signMacAdhocBundle(appPath) {
+  await normalizeMacVersionedFrameworks(appPath);
   const targets = await collectMacAdhocSignTargets(appPath);
   for (const target of targets) {
     await execFileAsync("codesign", ["--force", "--sign", "-", "--timestamp=none", target], {

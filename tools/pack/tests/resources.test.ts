@@ -38,6 +38,9 @@ describe("copyBundledResourceTrees", () => {
         recursive: true,
       });
       await mkdir(join(workspaceRoot, "craft", "sample"), { recursive: true });
+      await mkdir(join(workspaceRoot, "plugins", "_official", "sample"), {
+        recursive: true,
+      });
       await mkdir(join(workspaceRoot, "assets", "frames"), { recursive: true });
       await mkdir(join(workspaceRoot, "assets", "community-pets", "sample"), {
         recursive: true,
@@ -47,6 +50,11 @@ describe("copyBundledResourceTrees", () => {
       });
       await writeFile(promptTemplatePath, "{\"id\":\"sample\"}\n", "utf8");
       await writeFile(communityPetPath, "{\"name\":\"sample\"}\n", "utf8");
+      await writeFile(
+        join(workspaceRoot, "plugins", "_official", "sample", "open-design.json"),
+        "{\"id\":\"sample\"}\n",
+        "utf8",
+      );
 
       await copyBundledResourceTrees({ workspaceRoot, resourceRoot });
 
@@ -62,6 +70,12 @@ describe("copyBundledResourceTrees", () => {
           "utf8",
         ),
       ).resolves.toBe("{\"name\":\"sample\"}\n");
+      await expect(
+        readFile(
+          join(resourceRoot, "plugins", "_official", "sample", "open-design.json"),
+          "utf8",
+        ),
+      ).resolves.toBe("{\"id\":\"sample\"}\n");
     } finally {
       await rm(root, { force: true, recursive: true });
     }
