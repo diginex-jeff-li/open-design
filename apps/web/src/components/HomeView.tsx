@@ -415,7 +415,11 @@ export function HomeView({
   }
 
   function removePluginContext(pluginId: string) {
+    const record = selectedPluginContexts.find((item) => item.record.id === pluginId)?.record ?? null;
     setSelectedPluginContexts((prev) => prev.filter((item) => item.record.id !== pluginId));
+    if (record) {
+      setPrompt((current) => removePluginMentionFromPrompt(current, record));
+    }
   }
 
   function handlePromptChange(nextPrompt: string) {
@@ -617,6 +621,7 @@ export function HomeView({
         onPromptChange={handlePromptChange}
         onSubmit={submit}
         activePluginTitle={activeBadgeTitle}
+        activePluginRecord={active?.record ?? null}
         activeSkillId={activeSkill?.id ?? null}
         activeSkillTitle={activeSkill?.name ?? null}
         activeChipId={active?.chipId ?? null}
@@ -630,7 +635,9 @@ export function HomeView({
         pluginInputTemplate={active?.queryTemplate ?? null}
         onPluginInputValuesChange={updateActiveInputs}
         onPluginInputValidityChange={(valid) => {
-          setActive((prev) => (prev ? { ...prev, inputsValid: valid } : prev));
+          setActive((prev) => (
+            prev && prev.inputsValid !== valid ? { ...prev, inputsValid: valid } : prev
+          ));
         }}
         pluginOptions={plugins}
         pluginsLoading={pluginsLoading}
@@ -810,6 +817,15 @@ function coercePromptInputValue(raw: string, field: InputFieldSpec): unknown {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function removePluginMentionFromPrompt(prompt: string, record: InstalledPluginRecord): string {
+  const token = `@${record.title}`;
+  return prompt
+    .replace(new RegExp(`(^|\\s)${escapeRegExp(token)}(?=\\s|$)`, 'g'), ' ')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n[ \t]+/g, '\n')
+    .trim();
 }
 
 function inputsEqual(

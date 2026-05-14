@@ -226,12 +226,14 @@ export function PluginsView({
 
   async function handleInstallAvailable(plugin: AvailableMarketplacePlugin) {
     setPendingInstallEntry(plugin.key);
-    const outcome = await finishImport(
-      () => installPluginSource(plugin.entry.name),
-      plugin.installed ? 'installed' : 'available',
-    );
-    setPendingInstallEntry(null);
-    if (outcome.ok && plugin.installed) setActiveTab('installed');
+    try {
+      await finishImport(
+        () => installPluginSource(plugin.entry.name),
+        'installed',
+      );
+    } finally {
+      setPendingInstallEntry(null);
+    }
   }
 
   async function handleMarketplaceMutation(
@@ -335,6 +337,7 @@ export function PluginsView({
               requestPluginShareTask(record, action)
             }
             onCreatePlugin={onCreatePlugin}
+            preferDefaultFacet={false}
             title="Installed plugins"
             subtitle="Plugins you imported or installed from marketplace sources."
             emptyMessage="No installed user plugins yet. Use Create / Import or install an Available entry."
@@ -346,7 +349,6 @@ export function PluginsView({
             plugins={availablePlugins}
             pendingKey={pendingInstallEntry}
             onInstall={(plugin) => void handleInstallAvailable(plugin)}
-            onUse={(record) => void handleUsePlugin(record)}
             onOpenInstalled={setDetailsRecord}
           />
         ) : null}
@@ -624,20 +626,17 @@ interface AvailableMarketplacePlugin {
   marketplace: PluginMarketplace;
   entry: PluginMarketplaceEntry;
   installed: InstalledPluginRecord | null;
-  status: 'install' | 'use' | 'upgrade';
 }
 
 function AvailablePluginsPanel({
   plugins,
   pendingKey,
   onInstall,
-  onUse,
   onOpenInstalled,
 }: {
   plugins: AvailableMarketplacePlugin[];
   pendingKey: string | null;
   onInstall: (plugin: AvailableMarketplacePlugin) => void;
-  onUse: (record: InstalledPluginRecord) => void;
   onOpenInstalled: (record: InstalledPluginRecord) => void;
 }) {
   return (
@@ -692,10 +691,10 @@ function AvailablePluginsPanel({
                   {plugin.installed && installedSameVersion ? (
                     <button
                       type="button"
-                      className="plugins-view__primary"
-                      onClick={() => onUse(plugin.installed!)}
+                      className="plugins-view__secondary"
+                      disabled
                     >
-                      Use
+                      Installed
                     </button>
                   ) : (
                     <button
@@ -1114,7 +1113,6 @@ function buildAvailablePlugins(
         marketplace,
         entry,
         installed: installedPlugin,
-        status: installedPlugin ? (sameVersion ? 'use' : 'upgrade') : 'install',
       };
     });
   });

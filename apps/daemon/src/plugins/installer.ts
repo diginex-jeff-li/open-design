@@ -117,6 +117,19 @@ interface ParsedGithubSource {
   candidates: GithubArchiveCandidate[];
 }
 
+interface GithubContentsEntry {
+  type?: string;
+  name?: string;
+  path?: string;
+  download_url?: string | null;
+}
+
+interface GithubContentsBudget {
+  bytes: number;
+  hash: ReturnType<typeof createHash>;
+  maxBytes: number;
+}
+
 // Top-level dispatcher. Picks the backend off the source string and yields
 // the same InstallEvent stream regardless of where the bytes came from.
 export async function* installPlugin(
@@ -152,6 +165,25 @@ async function* installFromGithub(
   let lastError: string | undefined;
   const triedUrls: string[] = [];
   for (const candidate of parsed.candidates) {
+    if (candidate.subpath) {
+      const contentsUrl = githubContentsUrl(parsed.owner, parsed.repo, candidate.subpath, candidate.ref);
+      triedUrls.push(contentsUrl);
+      const buffered: InstallEvent[] = [];
+      for await (const ev of installFromGithubContents(db, opts, parsed, candidate, contentsUrl)) {
+        buffered.push(ev);
+        if (ev.kind === 'error') {
+          lastError = ev.message;
+          break;
+        }
+        if (ev.kind === 'success') {
+          for (const bufferedEvent of buffered) yield bufferedEvent;
+          return;
+        }
+      }
+      if (lastError && isRetryableGithubCandidateError(lastError)) continue;
+      if (lastError) break;
+    }
+
     const tarballUrl = githubTarballUrl(parsed.owner, parsed.repo, candidate.ref);
     triedUrls.push(tarballUrl);
     const buffered: InstallEvent[] = [];
@@ -222,8 +254,165 @@ function githubTarballUrl(owner: string, repo: string, ref: string): string {
   return `https://codeload.github.com/${owner}/${repo}/tar.gz/${encodedRef}`;
 }
 
+function githubContentsUrl(owner: string, repo: string, subpath: string, ref: string): string {
+  const encodedPath = sanitizeRelativePath(subpath)
+    .split(path.sep)
+    .map((part) => encodeURIComponent(part))
+    .join('/');
+  return `https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(ref)}`;
+}
+
 function isRetryableGithubCandidateError(message: string): boolean {
   return /^Fetch failed: 404\b/.test(message) || /^Subpath .+ not found inside archive$/.test(message);
+}
+
+async function* installFromGithubContents(
+  db: SqliteDb,
+  opts: InstallOptions,
+  parsed: ParsedGithubSource,
+  candidate: GithubArchiveCandidate,
+  contentsUrl: string,
+): AsyncGenerator<InstallEvent, void, void> {
+  if (!candidate.subpath) return;
+  const fetcher = opts.fetcher ?? defaultFetcher;
+  const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;
+  const tmpRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'od-plugin-github-contents-'));
+  const stagingFolder = path.join(tmpRoot, 'plugin');
+  try {
+    yield {
+      kind: 'progress',
+      phase: 'resolving',
+      message: `Fetching GitHub contents ${contentsUrl}`,
+    };
+    await fsp.mkdir(stagingFolder, { recursive: true });
+    const budget: GithubContentsBudget = {
+      bytes: 0,
+      hash: createHash('sha256'),
+      maxBytes,
+    };
+    try {
+      await copyGithubContentsPath(
+        fetcher,
+        parsed.owner,
+        parsed.repo,
+        candidate.ref,
+        candidate.subpath,
+        stagingFolder,
+        budget,
+      );
+    } catch (err) {
+      yield {
+        kind: 'error',
+        message: (err as Error).message,
+        warnings: [],
+      };
+      return;
+    }
+
+    yield* installFromLocalFolder(db, {
+      ...opts,
+      archiveIntegrity: opts.archiveIntegrity ?? `sha256:${budget.hash.digest('hex')}`,
+      source: opts.source,
+      _stagedFolder: stagingFolder,
+      _stagedSourceKind: 'github',
+    } as InstallOptions & { _stagedFolder?: string; _stagedSourceKind?: PluginSourceKind });
+  } finally {
+    await fsp.rm(tmpRoot, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+async function copyGithubContentsPath(
+  fetcher: ArchiveFetcher,
+  owner: string,
+  repo: string,
+  ref: string,
+  githubPath: string,
+  destPath: string,
+  budget: GithubContentsBudget,
+): Promise<void> {
+  const contentsUrl = githubContentsUrl(owner, repo, githubPath, ref);
+  const payload = await fetchGithubJson(fetcher, contentsUrl);
+  const entries = Array.isArray(payload) ? payload : [payload];
+  if (entries.length === 0) {
+    throw new Error(`Subpath ${githubPath} not found inside repository`);
+  }
+  for (const entry of entries) {
+    const name = safeGithubEntryName(entry.name);
+    const childDest = Array.isArray(payload) ? path.join(destPath, name) : destPath;
+    if (entry.type === 'dir') {
+      const childPath = entry.path ?? path.posix.join(githubPath, name);
+      await fsp.mkdir(childDest, { recursive: true });
+      await copyGithubContentsPath(fetcher, owner, repo, ref, childPath, childDest, budget);
+      continue;
+    }
+    if (entry.type === 'file') {
+      if (!entry.download_url) {
+        throw new Error(`GitHub file ${entry.path ?? name} does not expose a download URL`);
+      }
+      await fsp.mkdir(path.dirname(childDest), { recursive: true });
+      await copyGithubFile(fetcher, entry.download_url, childDest, budget);
+      continue;
+    }
+    throw new Error(`GitHub entry ${entry.path ?? name} has unsupported type ${entry.type ?? 'unknown'}`);
+  }
+}
+
+async function fetchGithubJson(fetcher: ArchiveFetcher, url: string): Promise<GithubContentsEntry[] | GithubContentsEntry> {
+  const resp = await fetcher(url);
+  if (!resp.ok || !resp.body) {
+    throw new Error(`Fetch failed: ${resp.status} ${resp.statusText} for ${url}`);
+  }
+  const text = await readStreamText(resp.body, 1024 * 1024);
+  try {
+    return JSON.parse(text) as GithubContentsEntry[] | GithubContentsEntry;
+  } catch (err) {
+    throw new Error(`GitHub contents response was not valid JSON for ${url}: ${(err as Error).message}`);
+  }
+}
+
+async function copyGithubFile(
+  fetcher: ArchiveFetcher,
+  url: string,
+  destPath: string,
+  budget: GithubContentsBudget,
+): Promise<void> {
+  const resp = await fetcher(url);
+  if (!resp.ok || !resp.body) {
+    throw new Error(`Fetch failed: ${resp.status} ${resp.statusText} for ${url}`);
+  }
+  const digestStream = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      budget.bytes += chunk.length;
+      if (budget.bytes > budget.maxBytes) {
+        callback(new Error(`Downloaded GitHub contents exceed ${budget.maxBytes} bytes`));
+        return;
+      }
+      budget.hash.update(chunk);
+      callback(null, chunk);
+    },
+  });
+  await pipeline(resp.body as NodeJS.ReadableStream, digestStream, fs.createWriteStream(destPath));
+}
+
+async function readStreamText(body: Readable, maxBytes: number): Promise<string> {
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  for await (const chunk of body) {
+    const buf = Buffer.from(chunk as Buffer);
+    bytes += buf.length;
+    if (bytes > maxBytes) {
+      throw new Error(`Response body exceeds ${maxBytes} bytes`);
+    }
+    chunks.push(buf);
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+function safeGithubEntryName(name: string | undefined): string {
+  if (!name || name === '.' || name === '..' || name.includes('/') || name.includes('\\')) {
+    throw new Error(`Unsafe GitHub contents entry name: ${name ?? '(missing)'}`);
+  }
+  return name;
 }
 
 // Plain `https://…tar.gz` / `https://…tgz` source.

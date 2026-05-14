@@ -28,6 +28,7 @@ interface Props {
   onPromptChange: (value: string) => void;
   onSubmit: HomeHeroSubmitHandler;
   activePluginTitle: string | null;
+  activePluginRecord?: InstalledPluginRecord | null;
   activeChipId: string | null;
   onClearActivePlugin: () => void;
   activeSkillId?: string | null;
@@ -83,6 +84,7 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
     onPromptChange,
     onSubmit,
     activePluginTitle,
+    activePluginRecord = null,
     activeSkillId = null,
     activeSkillTitle = null,
     activeChipId,
@@ -95,7 +97,6 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
     pluginInputValues = {},
     pluginInputTemplate = null,
     onPluginInputValuesChange = () => undefined,
-    onPluginInputValidityChange = () => undefined,
     pluginOptions,
     pluginsLoading,
     skillOptions = [],
@@ -208,9 +209,26 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
     (mentionTab === 'plugins' && pluginsLoading) ||
     (mentionTab === 'skills' && skillsLoading) ||
     (mentionTab === 'mcp' && mcpLoading);
-  const promptHighlightParts = useMemo(
-    () => buildPromptHighlightParts(pluginInputTemplate, pluginInputValues, prompt),
-    [pluginInputTemplate, pluginInputValues, prompt],
+  const promptOverlayParts = useMemo(
+    () => buildPromptOverlayParts(
+      pluginInputTemplate,
+      pluginInputValues,
+      prompt,
+      selectedPluginContexts,
+    ),
+    [pluginInputTemplate, pluginInputValues, prompt, selectedPluginContexts],
+  );
+  const fieldByName = useMemo(
+    () => new Map(pluginInputFields.map((field) => [field.name, field])),
+    [pluginInputFields],
+  );
+  const inlineInputNames = useMemo(
+    () => getTemplateInputNames(pluginInputTemplate),
+    [pluginInputTemplate],
+  );
+  const remainingInputFields = useMemo(
+    () => pluginInputFields.filter((field) => !inlineInputNames.has(field.name)),
+    [inlineInputNames, pluginInputFields],
   );
 
   useEffect(() => {
@@ -222,7 +240,9 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
   }, [pickerOpen]);
 
   function pickPlugin(record: InstalledPluginRecord) {
-    const nextPrompt = mention ? replaceMentionToken(prompt, mention) ?? '' : prompt;
+    const nextPrompt = mention
+      ? replaceMentionTokenWithText(prompt, mention, pluginMentionText(record))
+      : prompt;
     onPickPlugin(record, nextPrompt);
   }
 
@@ -240,6 +260,14 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
         )
       : prompt;
     onPickMcp(server, nextPrompt);
+  }
+
+  function updatePluginInput(name: string, value: unknown) {
+    onPluginInputValuesChange({ ...pluginInputValues, [name]: value });
+  }
+
+  function openActivePluginDetails() {
+    if (activePluginRecord) onOpenPluginDetails(activePluginRecord);
   }
 
   let optionRenderIndex = 0;
@@ -289,8 +317,24 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
             ))}
             {activePluginTitle ? (
               <span className="home-hero__active-chip" data-testid="home-hero-active-plugin">
-                <span className="home-hero__active-dot" aria-hidden />
-                <span>Plugin: {activePluginTitle}</span>
+                <button
+                  type="button"
+                  className="home-hero__active-chip-body"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    openActivePluginDetails();
+                  }}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    openActivePluginDetails();
+                  }}
+                  onClick={openActivePluginDetails}
+                  disabled={!activePluginRecord}
+                  title={activePluginRecord ? `Plugin: ${activePluginRecord.title}` : undefined}
+                >
+                  <span className="home-hero__active-dot" aria-hidden />
+                  <span>Plugin: {activePluginTitle}</span>
+                </button>
                 <button
                   type="button"
                   className="home-hero__active-clear"
@@ -327,35 +371,49 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
             ) : null}
           </div>
         ) : null}
-        <div
-          className={`home-hero__prompt-surface${
-            pluginInputFields.length > 0 ? ' home-hero__prompt-surface--with-inputs' : ''
-          }`}
-        >
+        <div className="home-hero__prompt-surface">
           <div
             className={`home-hero__prompt-editor${
-              promptHighlightParts ? ' home-hero__prompt-editor--highlighted' : ''
+              promptOverlayParts ? ' home-hero__prompt-editor--highlighted' : ''
             }`}
           >
-            {promptHighlightParts ? (
+            {promptOverlayParts ? (
               <div
                 className="home-hero__prompt-highlight"
                 data-testid="home-hero-prompt-highlight"
-                aria-hidden
               >
-                {promptHighlightParts.map((part, index) => (
+                {promptOverlayParts.map((part, index) => (
                   part.kind === 'slot' ? (
-                    <span
+                    <InlinePromptInput
                       key={`${part.key}-${index}`}
-                      className="home-hero__prompt-slot"
-                      data-field-name={part.key}
-                      data-filled={part.filled}
-                      data-testid={`home-hero-prompt-slot-${part.key}`}
-                    >
-                      {part.text}
-                    </span>
+                      field={part.key ? fieldByName.get(part.key) ?? null : null}
+                      name={part.key ?? ''}
+                      value={part.key ? pluginInputValues[part.key] : undefined}
+                      fallbackText={part.text}
+                      filled={part.filled === true}
+                      onChange={(value) => {
+                        if (part.key) updatePluginInput(part.key, value);
+                      }}
+                    />
                   ) : (
-                    <span key={`text-${index}`}>{part.text}</span>
+                    part.kind === 'mention' ? (
+                      <button
+                        key={`${part.record.id}-${index}`}
+                        type="button"
+                        className="home-hero__prompt-mention"
+                        data-plugin-id={part.record.id}
+                        data-testid={`home-hero-prompt-plugin-${part.record.id}`}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => onOpenPluginDetails(part.record)}
+                        title={`Plugin: ${part.record.title}`}
+                      >
+                        @{part.record.title}
+                      </button>
+                    ) : (
+                      <span key={`text-${index}`} aria-hidden>
+                        {part.text}
+                      </span>
+                    )
                   )
                 ))}
               </div>
@@ -419,12 +477,11 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
               aria-expanded={pickerOpen}
             />
           </div>
-          {pluginInputFields.length > 0 ? (
+          {remainingInputFields.length > 0 ? (
             <PluginInputsForm
-              fields={pluginInputFields}
+              fields={remainingInputFields}
               values={pluginInputValues}
               onChange={onPluginInputValuesChange}
-              onValidityChange={onPluginInputValidityChange}
             />
           ) : null}
         </div>
@@ -594,6 +651,22 @@ interface ContextMention {
   query: string;
 }
 
+type PromptOverlayPart =
+  | {
+      kind: 'text';
+      text: string;
+    }
+  | {
+      kind: 'slot';
+      text: string;
+      key?: string;
+      filled?: boolean;
+    }
+  | {
+      kind: 'mention';
+      record: InstalledPluginRecord;
+    };
+
 interface PromptHighlightPart {
   kind: 'text' | 'slot';
   text: string;
@@ -644,6 +717,65 @@ function buildPromptHighlightParts(
   return parts;
 }
 
+function buildPromptOverlayParts(
+  template: string | null,
+  values: Record<string, unknown>,
+  prompt: string,
+  pluginContexts: InstalledPluginRecord[],
+): PromptOverlayPart[] | null {
+  const templateParts = buildPromptHighlightParts(template, values, prompt);
+  const baseParts: PromptOverlayPart[] = templateParts ?? [{ kind: 'text', text: prompt }];
+  const withMentions = injectPluginMentionParts(baseParts, pluginContexts);
+  if (templateParts || withMentions.some((part) => part.kind === 'mention')) {
+    return withMentions;
+  }
+  return null;
+}
+
+function injectPluginMentionParts(
+  parts: PromptOverlayPart[],
+  pluginContexts: InstalledPluginRecord[],
+): PromptOverlayPart[] {
+  if (pluginContexts.length === 0) return parts;
+  return parts.flatMap((part) => {
+    if (part.kind !== 'text') return [part];
+    return splitTextPartByPluginMentions(part.text, pluginContexts);
+  });
+}
+
+function splitTextPartByPluginMentions(
+  text: string,
+  pluginContexts: InstalledPluginRecord[],
+): PromptOverlayPart[] {
+  const result: PromptOverlayPart[] = [];
+  let index = 0;
+  while (index < text.length) {
+    let best: { record: InstalledPluginRecord; start: number; token: string } | null = null;
+    for (const record of pluginContexts) {
+      const token = pluginMentionText(record);
+      const start = text.indexOf(token, index);
+      if (start === -1) continue;
+      if (!best || start < best.start || (start === best.start && token.length > best.token.length)) {
+        best = { record, start, token };
+      }
+    }
+    if (!best) {
+      result.push({ kind: 'text', text: text.slice(index) });
+      break;
+    }
+    if (best.start > index) {
+      result.push({ kind: 'text', text: text.slice(index, best.start) });
+    }
+    result.push({ kind: 'mention', record: best.record });
+    index = best.start + best.token.length;
+  }
+  return result.length > 0 ? result : [{ kind: 'text', text }];
+}
+
+function pluginMentionText(record: InstalledPluginRecord): string {
+  return `@${record.title}`;
+}
+
 function stringifyTemplateValue(
   value: unknown,
   placeholder: string,
@@ -654,18 +786,169 @@ function stringifyTemplateValue(
   return { text: String(value), filled: true };
 }
 
+function getTemplateInputNames(template: string | null): Set<string> {
+  const names = new Set<string>();
+  if (!template) return names;
+  INPUT_PLACEHOLDER_PATTERN.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = INPUT_PLACEHOLDER_PATTERN.exec(template)) !== null) {
+    const key = match[1];
+    if (key) names.add(key);
+  }
+  return names;
+}
+
+interface InlinePromptInputProps {
+  field: InputFieldSpec | null;
+  name: string;
+  value: unknown;
+  fallbackText: string;
+  filled: boolean;
+  onChange: (value: unknown) => void;
+}
+
+function InlinePromptInput({
+  field,
+  name,
+  value,
+  fallbackText,
+  filled,
+  onChange,
+}: InlinePromptInputProps) {
+  const label = field?.label ?? name;
+  const type = field ? inlineFieldType(field) : 'string';
+  const displayValue = value === undefined || value === null || value === ''
+    ? fallbackText
+    : String(value);
+  const commonProps = {
+    className: 'home-hero__prompt-slot home-hero__prompt-slot-control',
+    'data-field-name': name,
+    'data-filled': filled ? 'true' : 'false',
+    'data-testid': `home-hero-prompt-slot-${name}`,
+    'aria-label': label,
+    title: label,
+  };
+
+  if (field && type === 'select' && Array.isArray(field.options)) {
+    return (
+      <select
+        {...commonProps}
+        className={`${commonProps.className} home-hero__prompt-slot-select`}
+        value={value !== undefined && value !== null ? String(value) : ''}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="">{field.placeholder ?? 'Select...'}</option>
+        {field.options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (field && type === 'number') {
+    return (
+      <input
+        {...commonProps}
+        className={`${commonProps.className} home-hero__prompt-slot-input`}
+        type="number"
+        value={value === undefined || value === null ? '' : String(value)}
+        placeholder={field.placeholder ?? fallbackText}
+        onChange={(event) => {
+          const raw = event.target.value;
+          if (raw === '') {
+            onChange(undefined);
+            return;
+          }
+          const parsed = Number(raw);
+          onChange(Number.isFinite(parsed) ? parsed : raw);
+        }}
+      />
+    );
+  }
+
+  if (field && type === 'boolean') {
+    const checked = Boolean(value);
+    return (
+      <button
+        {...commonProps}
+        type="button"
+        className={`${commonProps.className} home-hero__prompt-slot-toggle`}
+        aria-pressed={checked}
+        onClick={() => onChange(!checked)}
+      >
+        {checked ? 'true' : 'false'}
+      </button>
+    );
+  }
+
+  if (field && type === 'file') {
+    const fileLabel = fileInputLabel(value) ?? field.placeholder ?? fallbackText;
+    return (
+      <span
+        {...commonProps}
+        className={`${commonProps.className} home-hero__prompt-slot-file`}
+      >
+        <input
+          type="file"
+          aria-label={label}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            onChange(file ? fileMetadata(file) : undefined);
+          }}
+          {...(typeof field.accept === 'string' ? { accept: field.accept } : {})}
+        />
+        <span>{fileLabel}</span>
+      </span>
+    );
+  }
+
+  const width = `${Math.min(Math.max(displayValue.length + 1, 10), 52)}ch`;
+  return (
+    <input
+      {...commonProps}
+      className={`${commonProps.className} home-hero__prompt-slot-input`}
+      type="text"
+      value={value === undefined || value === null ? '' : String(value)}
+      placeholder={field?.placeholder ?? fallbackText}
+      onChange={(event) => onChange(event.target.value)}
+      style={{ width }}
+    />
+  );
+}
+
+function inlineFieldType(field: InputFieldSpec): string {
+  const rawType = (field as { type?: unknown }).type;
+  const raw = typeof rawType === 'string' ? rawType : 'string';
+  return raw === 'upload' ? 'file' : raw;
+}
+
+function fileMetadata(file: File) {
+  return {
+    name: file.name,
+    size: file.size,
+    type: file.type,
+    lastModified: file.lastModified,
+  };
+}
+
+function fileInputLabel(value: unknown): string | null {
+  if (!value || typeof value !== 'object') return null;
+  const name = (value as { name?: unknown }).name;
+  return typeof name === 'string' && name.length > 0 ? name : null;
+}
+
 function getContextMention(value: string): ContextMention | null {
-  const start = value.lastIndexOf('@');
-  if (start < 0) return null;
-  const before = value[start - 1];
-  if (before && !/\s/.test(before)) return null;
-  const tail = value.slice(start + 1);
-  const match = /^[^\s@]*/.exec(tail);
+  const match = /(^|\s)@([^\s@]*)$/.exec(value);
   if (!match) return null;
+  const prefix = match[1] ?? '';
+  const query = match[2] ?? '';
+  const start = match.index + prefix.length;
   return {
     start,
-    end: start + 1 + match[0].length,
-    query: match[0],
+    end: value.length,
+    query,
   };
 }
 

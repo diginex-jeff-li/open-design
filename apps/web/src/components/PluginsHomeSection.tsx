@@ -39,6 +39,7 @@ interface Props {
   ) => void;
   onCreatePlugin?: (goal?: string) => void;
   onBrowseRegistry?: () => void;
+  preferDefaultFacet?: boolean;
   title?: string;
   subtitle?: string;
   emptyMessage?: string;
@@ -57,6 +58,7 @@ export function PluginsHomeSection({
   onPluginShareAction,
   onCreatePlugin,
   onBrowseRegistry,
+  preferDefaultFacet = true,
   title = 'Official starters',
   subtitle = 'Ready-to-use Open Design workflows bundled with this runtime. Pick one to load a starter prompt, or browse the registry for more.',
   emptyMessage = 'Catalog is empty. Bundled plugins ship with Open Design and should appear here automatically — try restarting the daemon if this persists.',
@@ -76,7 +78,7 @@ export function PluginsHomeSection({
     query,
     setQuery,
     totalVisible,
-  } = usePluginFacets({ plugins });
+  } = usePluginFacets({ plugins, preferDefaultFacet });
   const contributionTarget = onCreatePlugin
     ? resolveContributionTarget(catalog, selection)
     : null;

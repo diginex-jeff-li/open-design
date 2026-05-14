@@ -138,8 +138,14 @@
   font: inherit;
   cursor: pointer;
 }
+.home-hero__active-chip-body:disabled {
+  cursor: default;
+}
 .home-hero__active-chip-body:hover {
   color: var(--accent);
+}
+.home-hero__active-chip-body:disabled:hover {
+  color: inherit;
 }
 .home-hero__active-dot {
   width: 7px;
@@ -172,14 +178,7 @@
   border-radius: calc(var(--radius-lg) - 6px);
 }
 .home-hero__prompt-surface--with-inputs {
-  padding: 8px;
-  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border-soft));
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--accent) 6%, transparent),
-      color-mix(in srgb, var(--accent) 2%, transparent)
-    );
+  padding: 0;
 }
 .home-hero__prompt-editor {
   position: relative;
@@ -188,7 +187,7 @@
 .home-hero__prompt-highlight {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: 2;
   overflow: hidden;
   padding: 6px;
   color: var(--text);
@@ -200,7 +199,9 @@
   overflow-wrap: anywhere;
 }
 .home-hero__prompt-slot {
-  display: inline;
+  display: inline-flex;
+  align-items: center;
+  max-width: min(100%, 52ch);
   margin: 0 1px;
   padding: 1px 5px 2px;
   border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
@@ -209,12 +210,82 @@
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
   color: var(--accent);
+  font: inherit;
   font-weight: 680;
+  line-height: 1.25;
+  vertical-align: baseline;
 }
 .home-hero__prompt-slot[data-filled='false'] {
   border-style: dashed;
   background: color-mix(in srgb, var(--accent) 8%, var(--bg-panel));
   color: color-mix(in srgb, var(--accent) 74%, var(--text-muted));
+}
+.home-hero__prompt-slot-control {
+  pointer-events: auto;
+  position: relative;
+  z-index: 3;
+  appearance: none;
+  min-width: 8ch;
+  cursor: text;
+}
+.home-hero__prompt-slot-control:focus,
+.home-hero__prompt-slot-control:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+.home-hero__prompt-slot-input {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-hero__prompt-slot-select {
+  width: auto;
+  max-width: min(100%, 32ch);
+  padding-right: 20px;
+  cursor: pointer;
+}
+.home-hero__prompt-slot-toggle {
+  cursor: pointer;
+}
+.home-hero__prompt-slot-file {
+  cursor: pointer;
+}
+.home-hero__prompt-slot-file input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.home-hero__prompt-slot-file span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-hero__prompt-mention {
+  appearance: none;
+  position: relative;
+  z-index: 3;
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  max-width: min(100%, 34ch);
+  margin: 0 1px;
+  padding: 1px 6px 2px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-panel));
+  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  font: inherit;
+  font-weight: 650;
+  line-height: 1.25;
+  vertical-align: baseline;
+  cursor: pointer;
+}
+.home-hero__prompt-mention:hover,
+.home-hero__prompt-mention:focus-visible {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-panel));
+  outline: none;
 }
 .home-hero__input {
   position: relative;
@@ -253,20 +324,20 @@
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 8px;
   padding-top: 8px;
-  border-top: 1px dashed color-mix(in srgb, var(--accent) 36%, var(--border-soft));
+  border-top: 1px dashed var(--border-soft);
 }
 .home-hero__input-card .plugin-inputs-form__field {
   min-width: 0;
   gap: 6px;
   padding: 9px 10px;
-  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border));
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--accent-tint) 62%, var(--bg-panel));
+  background: var(--bg-panel);
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 42%, transparent);
 }
 .home-hero__input-card .plugin-inputs-form__field[data-filled='true'] {
-  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
-  background: color-mix(in srgb, var(--accent-tint) 78%, var(--bg-panel));
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  background: color-mix(in srgb, var(--accent-tint) 30%, var(--bg-panel));
 }
 .home-hero__input-card .plugin-inputs-form__label {
   display: inline-flex;
