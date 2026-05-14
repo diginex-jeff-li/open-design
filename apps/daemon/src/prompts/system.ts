@@ -94,6 +94,7 @@ type ProjectMetadata = {
   platform?: string | null;
   platformTargets?: string[] | null;
   inspirationDesignSystemIds?: string[];
+  skipDiscoveryBrief?: boolean | null;
   imageModel?: string | null;
   imageAspect?: string | null;
   imageStyle?: string | null;
@@ -131,6 +132,10 @@ type AudioVoiceOption = {
 };
 
 export const BASE_SYSTEM_PROMPT = OFFICIAL_DESIGNER_PROMPT;
+
+export const SKIP_DISCOVERY_BRIEF_OVERRIDE = `# Automated project mode — skip discovery form
+
+This project was created through the daemon API with \`skipDiscoveryBrief: true\`. Override the discovery rules below: do NOT emit \`<question-form id="discovery">\`, do NOT show "Quick brief — 30 seconds", and do NOT ask a first-turn clarification form. Treat the user's first message and project metadata as the brief, then proceed directly to planning/building under the normal artifact workflow. Ask at most one concise follow-up only if a required detail is impossible to infer safely.`;
 
 export interface ComposeInput {
   agentId?: string | null | undefined;
@@ -266,6 +271,11 @@ export function composeSystemPrompt({
   // behaviour.
   if (streamFormat === 'plain') {
     parts.push(API_MODE_OVERRIDE);
+    parts.push('\n\n---\n\n');
+  }
+
+  if (metadata?.skipDiscoveryBrief === true) {
+    parts.push(SKIP_DISCOVERY_BRIEF_OVERRIDE);
     parts.push('\n\n---\n\n');
   }
 
