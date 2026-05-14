@@ -51,6 +51,9 @@ const PLUGINS_TABS: ReadonlyArray<{
   { id: 'team', label: 'Team', hint: 'Enterprise' },
 ];
 
+const COMMUNITY_MARKETPLACE_SOURCE_URL =
+  'https://raw.githubusercontent.com/nexu-io/open-design/garnet-hemisphere/plugins/registry/community/open-design-marketplace.json';
+
 const PLUGIN_SHARE_DETAILS: Record<PluginShareAction, {
   eyebrow: string;
   fallbackTitle: string;
@@ -472,7 +475,7 @@ function PluginShareConfirmModal({
             aria-label="Close share confirmation"
             title="Close"
           >
-            <Icon name="close" size={14} />
+            <Icon name="close" size={18} />
           </button>
         </header>
 
@@ -762,7 +765,7 @@ function SourcesPanel({
             id="plugin-marketplace-url"
             value={url}
             onChange={(event) => setUrl(event.target.value)}
-            placeholder="https://open-design.ai/marketplace/open-design-marketplace.json"
+            placeholder={COMMUNITY_MARKETPLACE_SOURCE_URL}
             disabled={pendingAction === 'add'}
           />
           <select

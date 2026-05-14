@@ -164,6 +164,23 @@
 .home-hero__context-summary {
   color: var(--text-muted);
 }
+.home-hero__prompt-surface {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  border-radius: calc(var(--radius-lg) - 6px);
+}
+.home-hero__prompt-surface--with-inputs {
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border-soft));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 6%, transparent),
+      color-mix(in srgb, var(--accent) 2%, transparent)
+    );
+}
 .home-hero__input {
   width: 100%;
   min-height: 84px;
@@ -185,6 +202,94 @@
 }
 .home-hero__input::placeholder {
   color: var(--text-soft);
+}
+.home-hero__input-card .plugin-inputs-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed color-mix(in srgb, var(--accent) 36%, var(--border-soft));
+}
+.home-hero__input-card .plugin-inputs-form__field {
+  min-width: 0;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent-tint) 62%, var(--bg-panel));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 42%, transparent);
+}
+.home-hero__input-card .plugin-inputs-form__field[data-filled='true'] {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+  background: color-mix(in srgb, var(--accent-tint) 78%, var(--bg-panel));
+}
+.home-hero__input-card .plugin-inputs-form__label {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-panel));
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+.home-hero__input-card .plugin-inputs-form__required {
+  color: var(--accent);
+}
+.home-hero__input-card .plugin-inputs-form__input {
+  width: 100%;
+  min-width: 0;
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
+  background: var(--bg-panel);
+  font-size: 13px;
+}
+.home-hero__input-card .plugin-inputs-form__input:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: var(--accent);
+}
+.home-hero__input-card .plugin-inputs-form__input--textarea {
+  min-height: 64px;
+}
+.home-hero__input-card .plugin-inputs-form__field[data-field-type='boolean'] {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+.home-hero__input-card .plugin-inputs-form__field[data-field-type='boolean'] .plugin-inputs-form__input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+.home-hero__input-card .plugin-inputs-form__file-shell {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+.home-hero__input-card .plugin-inputs-form__input--file {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.home-hero__input-card .plugin-inputs-form__file-label {
+  display: block;
+  overflow: hidden;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-hero__input-card .plugin-inputs-form__file-shell:focus-within .plugin-inputs-form__file-label {
+  outline: 2px solid color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: var(--accent);
 }
 .home-hero__plugin-picker {
   position: absolute;

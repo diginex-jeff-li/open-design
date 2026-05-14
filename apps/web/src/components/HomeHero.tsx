@@ -321,72 +321,78 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
             ) : null}
           </div>
         ) : null}
-        <textarea
-          ref={ref}
-          className="home-hero__input"
-          data-testid="home-hero-input"
-          value={prompt}
-          onChange={(e) => {
-            onPromptChange(e.target.value);
-            setSelectedIndex(0);
-          }}
-          onCompositionStart={() => {
-            composingRef.current = true;
-          }}
-          onCompositionEnd={() => {
-            composingRef.current = false;
-          }}
-          onKeyDown={(e) => {
-            if (isImeComposing(e, composingRef.current)) return;
-            if (pickerOpen && visiblePickerOptions.length > 0) {
-              if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                setSelectedIndex((idx) => (idx + 1) % visiblePickerOptions.length);
-                return;
-              }
-              if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                setSelectedIndex(
-                  (idx) => (idx - 1 + visiblePickerOptions.length) % visiblePickerOptions.length,
-                );
-                return;
-              }
-              if (e.key === 'Tab') {
-                e.preventDefault();
-                const selected = visiblePickerOptions[selectedIndex] ?? visiblePickerOptions[0];
-                if (selected && !selected.disabled) selected.onPick();
-                return;
-              }
-            }
-            if (
-              e.key === 'Enter' &&
-              !e.shiftKey &&
-              !e.metaKey &&
-              !e.ctrlKey &&
-              !e.altKey
-            ) {
-              e.preventDefault();
+        <div
+          className={`home-hero__prompt-surface${
+            pluginInputFields.length > 0 ? ' home-hero__prompt-surface--with-inputs' : ''
+          }`}
+        >
+          <textarea
+            ref={ref}
+            className="home-hero__input"
+            data-testid="home-hero-input"
+            value={prompt}
+            onChange={(e) => {
+              onPromptChange(e.target.value);
+              setSelectedIndex(0);
+            }}
+            onCompositionStart={() => {
+              composingRef.current = true;
+            }}
+            onCompositionEnd={() => {
+              composingRef.current = false;
+            }}
+            onKeyDown={(e) => {
+              if (isImeComposing(e, composingRef.current)) return;
               if (pickerOpen && visiblePickerOptions.length > 0) {
-                const selected = visiblePickerOptions[selectedIndex] ?? visiblePickerOptions[0];
-                if (selected && !selected.disabled) selected.onPick();
-                return;
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setSelectedIndex((idx) => (idx + 1) % visiblePickerOptions.length);
+                  return;
+                }
+                if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setSelectedIndex(
+                    (idx) => (idx - 1 + visiblePickerOptions.length) % visiblePickerOptions.length,
+                  );
+                  return;
+                }
+                if (e.key === 'Tab') {
+                  e.preventDefault();
+                  const selected = visiblePickerOptions[selectedIndex] ?? visiblePickerOptions[0];
+                  if (selected && !selected.disabled) selected.onPick();
+                  return;
+                }
               }
-              if (canSubmit) onSubmit();
-            }
-          }}
-          placeholder={placeholder}
-          rows={3}
-          aria-controls={pickerOpen ? 'home-hero-context-picker' : undefined}
-          aria-expanded={pickerOpen}
-        />
-        {pluginInputFields.length > 0 ? (
-          <PluginInputsForm
-            fields={pluginInputFields}
-            values={pluginInputValues}
-            onChange={onPluginInputValuesChange}
-            onValidityChange={onPluginInputValidityChange}
+              if (
+                e.key === 'Enter' &&
+                !e.shiftKey &&
+                !e.metaKey &&
+                !e.ctrlKey &&
+                !e.altKey
+              ) {
+                e.preventDefault();
+                if (pickerOpen && visiblePickerOptions.length > 0) {
+                  const selected = visiblePickerOptions[selectedIndex] ?? visiblePickerOptions[0];
+                  if (selected && !selected.disabled) selected.onPick();
+                  return;
+                }
+                if (canSubmit) onSubmit();
+              }
+            }}
+            placeholder={placeholder}
+            rows={3}
+            aria-controls={pickerOpen ? 'home-hero-context-picker' : undefined}
+            aria-expanded={pickerOpen}
           />
-        ) : null}
+          {pluginInputFields.length > 0 ? (
+            <PluginInputsForm
+              fields={pluginInputFields}
+              values={pluginInputValues}
+              onChange={onPluginInputValuesChange}
+              onValidityChange={onPluginInputValidityChange}
+            />
+          ) : null}
+        </div>
         {pickerOpen ? (
           <div
             id="home-hero-context-picker"

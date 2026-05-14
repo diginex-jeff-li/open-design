@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { copyBundledResourceTrees } from "../src/resources.js";
 
 describe("copyBundledResourceTrees", () => {
-  it("includes prompt templates", async () => {
+  it("includes daemon resource trees", async () => {
     const root = await mkdtemp(join(tmpdir(), "open-design-tools-pack-"));
     const workspaceRoot = join(root, "workspace");
     const resourceRoot = join(root, "resources");
@@ -25,11 +25,21 @@ describe("copyBundledResourceTrees", () => {
         "sample",
         "pet.json",
       );
+      const communityRegistryPath = join(
+        workspaceRoot,
+        "plugins",
+        "registry",
+        "community",
+        "open-design-marketplace.json",
+      );
       await mkdir(join(workspaceRoot, "skills", "sample"), { recursive: true });
       await mkdir(join(workspaceRoot, "design-systems", "sample"), {
         recursive: true,
       });
       await mkdir(join(workspaceRoot, "craft", "sample"), { recursive: true });
+      await mkdir(join(workspaceRoot, "plugins", "registry", "community"), {
+        recursive: true,
+      });
       await mkdir(join(workspaceRoot, "assets", "frames"), { recursive: true });
       await mkdir(join(workspaceRoot, "assets", "community-pets", "sample"), {
         recursive: true,
@@ -39,6 +49,7 @@ describe("copyBundledResourceTrees", () => {
       });
       await writeFile(promptTemplatePath, "{\"id\":\"sample\"}\n", "utf8");
       await writeFile(communityPetPath, "{\"name\":\"sample\"}\n", "utf8");
+      await writeFile(communityRegistryPath, "{\"plugins\":[]}\n", "utf8");
 
       await copyBundledResourceTrees({ workspaceRoot, resourceRoot });
 
@@ -54,6 +65,18 @@ describe("copyBundledResourceTrees", () => {
           "utf8",
         ),
       ).resolves.toBe("{\"name\":\"sample\"}\n");
+      await expect(
+        readFile(
+          join(
+            resourceRoot,
+            "plugins",
+            "registry",
+            "community",
+            "open-design-marketplace.json",
+          ),
+          "utf8",
+        ),
+      ).resolves.toBe("{\"plugins\":[]}\n");
     } finally {
       await rm(root, { force: true, recursive: true });
     }

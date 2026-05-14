@@ -183,7 +183,7 @@ export function HomeView({
     if (promptHandoff.focus) {
       requestAnimationFrame(() => inputRef.current?.focus());
     }
-    setPendingAuthoringChipId('plugin-authoring');
+    setPendingAuthoringChipId('create-plugin');
   }, [promptHandoff]);
 
   const contextItemCount = useMemo(
@@ -451,7 +451,7 @@ export function HomeView({
       setError(null);
       setPrompt(nextPrompt);
       setPendingAuthoringPrompt(nextPrompt);
-      setPendingAuthoringChipId(chipId ?? 'plugin-authoring');
+      setPendingAuthoringChipId(chipId ?? 'create-plugin');
       requestAnimationFrame(() => inputRef.current?.focus());
     });
   }
@@ -471,7 +471,7 @@ export function HomeView({
     }
     void usePlugin(record, pendingAuthoringPrompt, {
       projectKind: 'other',
-      chipId: pendingAuthoringChipId === 'plugin-authoring' ? undefined : pendingAuthoringChipId,
+      chipId: pendingAuthoringChipId,
       ...(authoringRecord ? {} : { inputs: AUTHORING_DEFAULT_SCENARIO_INPUTS }),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

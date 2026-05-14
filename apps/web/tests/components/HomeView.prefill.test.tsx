@@ -533,6 +533,11 @@ describe('HomeView prompt handoff', () => {
       '/api/plugins/od-plugin-authoring/apply',
       expect.anything(),
     ));
+    await waitFor(() => {
+      const badge = screen.getByTestId('home-hero-active-plugin');
+      expect(badge.textContent).toContain('Create plugin');
+      expect(badge.textContent).not.toContain('Plugin authoring');
+    });
     fireEvent.click(await screen.findByTestId('home-hero-submit'));
 
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
