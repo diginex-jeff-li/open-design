@@ -1,4 +1,4 @@
-import type { ChatMessage } from './chat.js';
+import type { ChatMessage, ChatRunStatus } from './chat.js';
 
 export type ProjectKind =
   | 'prototype'
@@ -113,6 +113,9 @@ export interface ProjectMetadata {
   promptTemplate?: PromptTemplateMetadata;
   // Absolute paths to local code folders the agent can read via --add-dir.
   linkedDirs?: string[];
+  // Batch/API-created projects can opt out of the initial discovery form so
+  // the first agent turn builds immediately from the submitted brief.
+  skipDiscoveryBrief?: boolean;
 }
 
 export interface Project {
@@ -149,6 +152,12 @@ export interface Conversation {
   title: string | null;
   createdAt: number;
   updatedAt: number;
+  latestRun?: {
+    status: ChatRunStatus;
+    startedAt?: number;
+    endedAt?: number;
+    durationMs?: number;
+  };
 }
 
 export interface CreateProjectRequest {
@@ -161,6 +170,8 @@ export interface CreateProjectRequest {
   appliedPluginSnapshotId?: string;
   pluginInputs?: Record<string, unknown>;
   customInstructions?: string;
+  /** Persisted to metadata.skipDiscoveryBrief for automated project runs. */
+  skipDiscoveryBrief?: boolean;
 }
 
 export interface UpdateProjectRequest {
