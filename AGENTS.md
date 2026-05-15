@@ -33,8 +33,10 @@ This file is the single source of truth for agents entering this repository. Rea
 ## Local deployment overrides
 
 - This VPS intentionally restricts Open Design runtime adapter detection to `hermes` and `copilot` only. Do not restore `claude` or other adapters in `apps/daemon/src/runtimes/registry.ts` unless the user explicitly asks.
-- The local patch record lives at `.local/patches/allowed-agents-hermes-copilot.patch`.
-- This note is a local operational reminder and may be overwritten by upstream pulls. If `AGENTS.md` changes upstream, preserve this local policy by keeping the registry restriction and updating the patch record under `.local/patches/`.
+- Local patches are committed on the `spa-fallback-fix` branch and pushed to the personal fork (`diginex-jeff-li/open-design`). The canonical upstream (`nexu-io/open-design`) stays clean.
+- Patch reference copies live at `.local/patches/` for documentation. The authoritative source is the commit history on the fork branch.
+- Git remotes: `origin` → personal fork, `upstream` → nexu-io/open-design. Pull workflow: `git fetch upstream && git rebase upstream/main`.
+- This note is a local operational reminder and may be overwritten by upstream pulls. If `AGENTS.md` changes upstream during rebase, the local fork commit preserves these overrides via normal git conflict resolution.
 
 # Development workflow
 
