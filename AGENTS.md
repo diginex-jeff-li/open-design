@@ -30,6 +30,12 @@ This file is the single source of truth for agents entering this repository. Rea
 - `apps/nextjs` and `packages/shared` have been removed; do not recreate or reference them.
 - `.od/`, `.tmp/`, Playwright reports, and agent scratch directories are local runtime data and must stay out of git.
 
+## Local deployment overrides
+
+- This VPS intentionally restricts Open Design runtime adapter detection to `hermes` and `copilot` only. Do not restore `claude` or other adapters in `apps/daemon/src/runtimes/registry.ts` unless the user explicitly asks.
+- The local patch record lives at `.local/patches/allowed-agents-hermes-copilot.patch`.
+- This note is a local operational reminder and may be overwritten by upstream pulls. If `AGENTS.md` changes upstream, preserve this local policy by keeping the registry restriction and updating the patch record under `.local/patches/`.
+
 # Development workflow
 
 ## Environment baseline

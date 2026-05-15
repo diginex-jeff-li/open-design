@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Product 1-Pager PDF — Example</title>
+  <script src="https://code.iconify.design/3/3.1.0/iconify.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    :root {
+      --brand-primary: #1f4e79;
+      --brand-accent: #d4a820;
+      --brand-secondary: #5b9bd5;
+      --text: #1a1a1a;
+      --text-body: #222;
+      --page-bg: #ffffff;
+      --shell-bg: #e8e8e8;
+
+      --page-width: 210mm;
+      --page-height: 297mm;
+      --page-pad: 28px;
+
+      --fs-xs: 10px;
+      --fs-sm: 11.5px;
+      --fs-base: 12px;
+      --fs-md: 16px;
+      --fs-lg: 26px;
+
+      --fw-normal: 400;
+      --fw-semi: 600;
+      --fw-bold: 800;
+      --fw-black: 900;
+
+      --radius-sm: 4px;
+      --radius-md: 12px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', Arial, sans-serif;
+      font-size: var(--fs-base);
+      color: var(--text);
+      background: var(--shell-bg);
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .page {
+      width: var(--page-width);
+      height: var(--page-height);
+      margin: 0 auto;
+      background: var(--page-bg);
+      overflow: hidden;
+    }
+
+    .bullet-list, .check-list { list-style: none; padding: 0; }
+
+    .bullet-list li {
+      position: relative;
+      padding-left: 13px;
+      margin-bottom: 4px;
+      line-height: 1.45;
+      color: var(--text-body);
+    }
+
+    .bullet-list li::before {
+      content: '•';
+      position: absolute;
+      left: 0;
+      font-size: 13px;
+      line-height: 1.3;
+      color: var(--brand-primary);
+    }
+
+    .check-list li {
+      position: relative;
+      padding-left: 17px;
+      margin-bottom: 5px;
+      line-height: 1.4;
+    }
+
+    .check-list li::before {
+      content: '✓';
+      position: absolute;
+      left: 0;
+      font-weight: var(--fw-bold);
+      color: var(--brand-primary);
+    }
+
+    .section-title {
+      font-size: var(--fs-md);
+      font-weight: var(--fw-bold);
+      color: var(--brand-primary);
+      margin-bottom: 9px;
+      letter-spacing: -0.1px;
+    }
+
+    .header-bar { background: var(--brand-primary); height: 15px; }
+
+    .header-content {
+      background: var(--page-bg);
+      padding: 14px var(--page-pad);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .header-logo {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--brand-primary);
+      letter-spacing: -0.4px;
+      line-height: 1;
+      max-width: 60%;
+    }
+
+    .header-tagline {
+      color: var(--text);
+      font-size: 10.5px;
+      font-weight: var(--fw-semi);
+      line-height: 1.65;
+      white-space: nowrap;
+      text-align: right;
+    }
+
+    .section1 {
+      padding: 26px var(--page-pad) 20px;
+      display: flex;
+      gap: 22px;
+      align-items: flex-start;
+    }
+
+    .challenge-col { flex: 1; min-width: 0; }
+    .challenge-col > p { color: var(--text-body); margin-bottom: 7px; line-height: 1.5; }
+
+    .hero-col { flex: 0 0 330px; }
+    .hero-image {
+      width: 330px;
+      height: 210px;
+      object-fit: cover;
+      background: linear-gradient(135deg, #eef4fb, #d8e7f7);
+      border: 1px solid rgba(0,0,0,.08);
+      border-radius: var(--radius-md);
+      display: block;
+    }
+
+    .section2 { display: flex; align-items: center; margin-top: 5px; }
+
+    .proof-col {
+      background: var(--brand-primary);
+      color: #fff;
+      width: 220px;
+      flex-shrink: 0;
+      padding: 22px 22px 20px;
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    }
+
+    .proof-title { font-size: var(--fs-md); font-weight: var(--fw-bold); line-height: 1.2; margin-bottom: 12px; letter-spacing: -0.2px; }
+    .proof-desc  { font-size: 14.5px; color: rgba(255,255,255,.82); line-height: 1.55; margin-bottom: 18px; }
+    .proof-big   { font-size: var(--fs-lg); font-weight: var(--fw-black); line-height: 1; }
+    .proof-sub   { font-size: 10px; color: rgba(255,255,255,.68); margin-bottom: 10px; }
+    .proof-pair  { display: flex; gap: 14px; }
+
+    .flow-solution { flex: 1; padding: 0 var(--page-pad); min-width: 0; }
+    .flow-diagram { width: 100%; max-width: 560px; margin: 0 auto; }
+    .flow-diagram svg { width: 100%; height: auto; display: block; overflow: visible; margin-bottom: -30px; }
+    .flow-diagram .iconify { color: white; }
+
+    .flow-label {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: flex-end; width: 100%; height: 100%;
+      text-align: center; line-height: 1.4;
+    }
+
+    .flow-label.below { justify-content: flex-start; }
+    .flow-label strong { display: block; font-size: 12px; font-weight: 800; color: var(--brand-primary); margin-bottom: 2px; }
+    .flow-label span { display: block; font-size: 10.5px; color: #555; }
+
+    .solution-block .section-title { margin-bottom: 7px; }
+    .solution-block p { color: var(--text-body); line-height: 1.5; margin-bottom: 8px; }
+
+    .section3 { display: flex; margin-top: 24px; position: relative; }
+    .section3-article { flex: 1; }
+
+    .why-col { padding: 18px 20px 18px var(--page-pad); }
+    .why-col .section-title { color: var(--text); }
+
+    .feature-col {
+      flex: 0.9;
+      background: var(--brand-secondary);
+      padding: 18px 20px 10px;
+      border-top-left-radius: var(--radius-md);
+    }
+
+    .feat-title { font-size: var(--fs-md); font-weight: var(--fw-bold); color: #fff; margin-bottom: 12px; }
+    .feat-item  { margin-bottom: 8px; }
+    .feat-name  { font-size: var(--fs-base); font-weight: var(--fw-bold); color: #fff; margin-bottom: 1px; }
+    .feat-desc  { font-size: var(--fs-sm); color: #fff; line-height: 1.4; }
+
+    .footer {
+      background: var(--brand-primary);
+      padding: 10px var(--page-pad);
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+    }
+
+    .footer a {
+      color: #fff;
+      font-size: 11px;
+      font-weight: var(--fw-normal);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .footer-icon {
+      width: 17px;
+      height: 17px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 8px;
+    }
+
+    @page { size: A4; margin: 0; }
+    @media print {
+      body { background: white; }
+      .page { margin: 0; width: 210mm; height: 297mm; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <div class="header-bar"></div>
+  <div class="header-content">
+    <div class="header-logo">Product 1</div>
+    <div class="header-tagline">
+      Clear operational visibility<br>
+      Faster issue resolution<br>
+      Better decisions at scale
+    </div>
+  </div>
+
+  <section class="section1">
+    <div class="challenge-col">
+      <h2 class="section-title">The business challenge</h2>
+      <p>Teams need a concise way to explain what the product does, why it matters, and what proof points support adoption.</p>
+      <ul class="bullet-list">
+        <li>Long-form product docs are hard to scan quickly.</li>
+        <li>Stakeholders need structure, clarity, and evidence in one page.</li>
+        <li>Brand consistency often breaks when teams create materials ad hoc.</li>
+        <li>Product messaging needs to adapt without redesigning the artifact each time.</li>
+      </ul>
+    </div>
+
+    <div class="hero-col">
+      <img class="hero-image" alt="Product interface preview" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='660' height='420' viewBox='0 0 660 420'><rect width='660' height='420' rx='24' fill='%23edf4fb'/><rect x='28' y='28' width='604' height='44' rx='12' fill='%231f4e79'/><rect x='44' y='100' width='180' height='18' rx='9' fill='%232f5f8a'/><rect x='44' y='132' width='250' height='10' rx='5' fill='%239db8d4'/><rect x='44' y='154' width='220' height='10' rx='5' fill='%23bfd0e3'/><rect x='44' y='196' width='272' height='170' rx='18' fill='white'/><rect x='336' y='196' width='280' height='78' rx='18' fill='white'/><rect x='336' y='288' width='280' height='78' rx='18' fill='white'/><rect x='64' y='220' width='90' height='90' rx='16' fill='%235b9bd5'/><rect x='174' y='220' width='118' height='14' rx='7' fill='%231f4e79'/><rect x='174' y='246' width='94' height='10' rx='5' fill='%23b4c8df'/><rect x='174' y='264' width='82' height='10' rx='5' fill='%23d1deec'/><rect x='356' y='218' width='110' height='12' rx='6' fill='%231f4e79'/><rect x='356' y='242' width='220' height='10' rx='5' fill='%23c8d8e8'/><rect x='356' y='310' width='110' height='12' rx='6' fill='%231f4e79'/><rect x='356' y='334' width='220' height='10' rx='5' fill='%23c8d8e8'/></svg>">
+    </div>
+  </section>
+
+  <section class="section2">
+    <div class="proof-col">
+      <div class="proof-title">Proof points</div>
+      <div class="proof-desc">A reusable product brief gives teams a consistent way to communicate value and evidence.</div>
+      <div class="proof-big">3×</div>
+      <div class="proof-sub">faster stakeholder review</div>
+      <div class="proof-pair">
+        <div><div class="proof-big">1</div><div class="proof-sub">standard structure</div></div>
+        <div><div class="proof-big">4</div><div class="proof-sub">workflow stages</div></div>
+      </div>
+    </div>
+
+    <div class="flow-solution">
+      <div class="flow-diagram">
+        <svg viewBox="0 0 509 250" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="sd" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="8" markerHeight="8">
+              <circle cx="5" cy="5" r="4" fill="var(--brand-accent)"/>
+            </marker>
+            <marker id="ed" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="8" markerHeight="8">
+              <circle cx="5" cy="5" r="4" fill="var(--brand-accent)"/>
+            </marker>
+          </defs>
+          <path d="M 10,110 L 25,110 C 25,188 141,188 141,110 C 141,32 257,32 257,110 C 257,188 373,188 373,110 C 373,32 489,32 489,110 L 499,110" stroke="var(--brand-accent)" stroke-width="2.3" fill="none" marker-start="url(#sd)" marker-end="url(#ed)"/>
+          <circle cx="83" cy="110" r="43" fill="var(--brand-primary)"/>
+          <circle cx="199" cy="110" r="43" fill="var(--brand-primary)"/>
+          <circle cx="315" cy="110" r="43" fill="var(--brand-primary)"/>
+          <circle cx="431" cy="110" r="43" fill="var(--brand-primary)"/>
+          <foreignObject x="69" y="96" width="28" height="28"><span xmlns="http://www.w3.org/1999/xhtml" class="iconify" data-icon="mdi:file-document-edit-outline" data-width="28" data-height="28" data-color="white"></span></foreignObject>
+          <foreignObject x="185" y="96" width="28" height="28"><span xmlns="http://www.w3.org/1999/xhtml" class="iconify" data-icon="mdi:palette-outline" data-width="28" data-height="28" data-color="white"></span></foreignObject>
+          <foreignObject x="301" y="96" width="28" height="28"><span xmlns="http://www.w3.org/1999/xhtml" class="iconify" data-icon="mdi:view-dashboard-outline" data-width="28" data-height="28" data-color="white"></span></foreignObject>
+          <foreignObject x="417" y="96" width="28" height="28"><span xmlns="http://www.w3.org/1999/xhtml" class="iconify" data-icon="mdi:file-pdf-box" data-width="28" data-height="28" data-color="white"></span></foreignObject>
+          <foreignObject x="28" y="0" width="110" height="62"><div xmlns="http://www.w3.org/1999/xhtml" class="flow-label"><strong>Brief</strong><span>capture product context</span></div></foreignObject>
+          <foreignObject x="144" y="158" width="110" height="72"><div xmlns="http://www.w3.org/1999/xhtml" class="flow-label below"><strong>Brand</strong><span>apply the chosen design system</span></div></foreignObject>
+          <foreignObject x="260" y="0" width="110" height="62"><div xmlns="http://www.w3.org/1999/xhtml" class="flow-label"><strong>Render</strong><span>build the one-page HTML artifact</span></div></foreignObject>
+          <foreignObject x="376" y="158" width="110" height="72"><div xmlns="http://www.w3.org/1999/xhtml" class="flow-label below"><strong>Export</strong><span>produce an A4-ready PDF output</span></div></foreignObject>
+        </svg>
+      </div>
+
+      <div class="solution-block">
+        <h2 class="section-title">The solution</h2>
+        <p>The base template turns a product brief into a concise, reusable one-pager while keeping structure, brand, and content cleanly separated.</p>
+        <ul class="bullet-list">
+          <li>Stable A4 layout with reusable sections</li>
+          <li>Design-system-aware appearance layer</li>
+          <li>Brief-driven content extraction and proof mapping</li>
+          <li>HTML artifact optimized for PDF export</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section3">
+    <article class="section3-article">
+      <div class="why-col">
+        <h2 class="section-title">Why it matters</h2>
+        <ul class="check-list">
+          <li>Keep messaging consistent across teams</li>
+          <li>Reduce rework when changing brands or products</li>
+          <li>Give stakeholders a fast way to understand value</li>
+          <li>Preserve a high-quality floor for printable briefs</li>
+        </ul>
+      </div>
+      <footer class="footer">
+        <a href="https://example.com/product-briefs">
+          <div class="footer-icon">🌐</div>
+          example.com/product-briefs
+        </a>
+        <a href="mailto:product@example.com">
+          <div class="footer-icon">✉</div>
+          product@example.com
+        </a>
+      </footer>
+    </article>
+
+    <div class="feature-col">
+      <div class="feat-title">Feature snapshot</div>
+      <div class="feat-item"><div class="feat-name">Reusable structure</div><div class="feat-desc">A standard one-page anatomy that works across multiple products.</div></div>
+      <div class="feat-item"><div class="feat-name">Brand overlays</div><div class="feat-desc">Apply different design systems without rewriting the template.</div></div>
+      <div class="feat-item"><div class="feat-name">Evidence slots</div><div class="feat-desc">Keep proof points, stats, and workflow in predictable places.</div></div>
+      <div class="feat-item"><div class="feat-name">PDF-ready output</div><div class="feat-desc">Generate HTML that exports cleanly to one-page A4 PDF.</div></div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

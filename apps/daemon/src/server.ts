@@ -2065,7 +2065,7 @@ function resolveChatRunShutdownGraceMs() {
 
 export async function startServer({
   port = 7456,
-  host = process.env.OD_BIND_HOST || '127.0.0.1',
+  host = process.env.OD_BIND_HOST || '0.0.0.0',
   returnServer = false,
   desktopPdfExporter = null,
 }: StartServerOptions = {}) {

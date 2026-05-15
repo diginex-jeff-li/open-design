@@ -3961,16 +3961,42 @@ function HtmlViewer({
     setManualEditSaving(true);
     setManualEditError(null);
     try {
-      const baseSource = source;
-      const result = applyManualEditPatch(baseSource, patch);
+      // Rebase: always fetch the latest disk version so the patch applies
+      // against current state. If the file drifted (daemon restart, agent
+      // run, another tab), try the patch on the new source. Only bail when
+      // the patch genuinely cannot apply to what's on disk.
+      let latestSource: string | null = source;
+      const persisted = await fetchProjectFileText(projectId, file.name, {
+        cache: 'no-store',
+        cacheBustKey: Date.now(),
+      });
+      if (persisted != null && persisted !== source) {
+        // File changed outside manual edit mode. Rebase the patch onto
+        // the current disk version instead of rejecting the edit outright.
+        const rebased = applyManualEditPatch(persisted, patch);
+        if (rebased.ok) {
+          latestSource = persisted;
+        } else {
+          // Patch targets something that no longer exists in the new
+          // source. Fall back to the original guard message so the user
+          // knows the editor state is stale.
+          setSource(persisted);
+          setInlinedSource(null);
+          setManualEditHistory([]);
+          setManualEditUndone([]);
+          setManualEditDraft((current) => ({ ...current, fullSource: persisted }));
+          setManualEditError(
+            'The file changed outside manual edit mode and your edit could not be reapplied. Refreshing editor state.',
+          );
+          return;
+        }
+      }
+
+      const result = applyManualEditPatch(latestSource, patch);
       if (!result.ok) {
         setManualEditError(result.error ?? 'Could not apply edit.');
         return;
       }
-      if (!(await confirmManualEditHistorySource(
-        baseSource,
-        'The file changed outside manual edit mode. Refreshing before applying manual edits.',
-      ))) return;
       const saved = await writeProjectTextFile(projectId, file.name, result.source, {
         artifactManifest: file.artifactManifest,
       });
@@ -3982,7 +4008,7 @@ function HtmlViewer({
         id: `${Date.now()}-${manualEditHistory.length}`,
         label,
         patch,
-        beforeSource: baseSource,
+        beforeSource: latestSource,
         afterSource: result.source,
         createdAt: Date.now(),
       };
