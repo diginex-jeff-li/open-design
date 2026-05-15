@@ -572,7 +572,10 @@ export function ProjectView({
   // active id. Falls through to a no-op for stale / missing routes so
   // the default picker above keeps its result.
   useEffect(() => {
-    if (!routeConversationId) return;
+    if (!routeConversationId) {
+      lastSeenRouteConversationIdRef.current = null;
+      return;
+    }
     if (conversations.length === 0) return;
     if (routeConversationId === activeConversationId) return;
     // When the route still points at the conversation this view last
@@ -582,8 +585,11 @@ export function ProjectView({
     // route here would fight that sync and remount ChatPane in a loop,
     // so only react to a genuinely external navigation.
     if (routeConversationId === lastSyncedConversationIdRef.current) return;
+    if (lastSeenRouteConversationIdRef.current === routeConversationId) return;
+    lastSeenRouteConversationIdRef.current = routeConversationId;
     const match = conversations.find((c) => c.id === routeConversationId);
-    if (match) setActiveConversationId(match.id);
+    if (!match) return;
+    setActiveConversationId(routeConversationId);
   }, [routeConversationId, conversations, activeConversationId]);
 
   useEffect(() => {
@@ -922,6 +928,7 @@ export function ProjectView({
   // target lost that update because the early-return saw `target` unchanged
   // and skipped the navigate (lefarcen P1 on PR #1508).
   const lastSyncedRouteKeyRef = useRef<string | null>(null);
+  const lastSeenRouteConversationIdRef = useRef<string | null>(null);
   useEffect(() => {
     const target = openTabsState.active && (
       openTabsState.tabs.includes(openTabsState.active)
