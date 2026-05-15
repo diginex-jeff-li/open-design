@@ -89,6 +89,7 @@ import type {
   LiveArtifactSummary,
   SkillSummary,
 } from '../types';
+import { historyWithApiAttachmentContext } from '../api-attachment-context';
 import {
   commentsToAttachments,
   historyWithCommentAttachmentContext,
@@ -457,6 +458,10 @@ export function ProjectView({
   // correctly gate new-conversation creation even during async loads.
   const messagesConversationIdRef = useRef<string | null>(null);
   const creatingConversationRef = useRef(false);
+  // Last conversation id this view pushed into the URL. Lets the
+  // route -> active-conversation sync tell a genuine external navigation
+  // apart from the URL merely lagging a local conversation switch.
+  const lastSyncedConversationIdRef = useRef<string | null>(null);
   // Live mirror of the currently-viewed project id. Used to bail out of
   // the conversation-created async refresh (#1361) if the user switches
   // projects while the refetch is in flight — the existing project-load
@@ -570,6 +575,13 @@ export function ProjectView({
     if (!routeConversationId) return;
     if (conversations.length === 0) return;
     if (routeConversationId === activeConversationId) return;
+    // When the route still points at the conversation this view last
+    // pushed to the URL, the mismatch means a local switch (new
+    // conversation, history pick) moved activeConversationId ahead and
+    // the URL sync below has not caught up yet. Following the stale
+    // route here would fight that sync and remount ChatPane in a loop,
+    // so only react to a genuinely external navigation.
+    if (routeConversationId === lastSyncedConversationIdRef.current) return;
     const match = conversations.find((c) => c.id === routeConversationId);
     if (match) setActiveConversationId(match.id);
   }, [routeConversationId, conversations, activeConversationId]);
@@ -921,6 +933,7 @@ export function ProjectView({
     const nextKey = `${activeConversationId ?? ''}:${target ?? ''}`;
     if (nextKey === lastSyncedRouteKeyRef.current) return;
     lastSyncedRouteKeyRef.current = nextKey;
+    lastSyncedConversationIdRef.current = activeConversationId;
     // PerishCode + Codex P1 on PR #1508: the prior version of this
     // sync stripped any `/conversations/:cid` segment from the URL as
     // soon as a tab became active, which regressed the deep-link
@@ -1946,7 +1959,12 @@ export function ProjectView({
           }
         }
         const systemPrompt = await composedSystemPrompt();
-        const apiHistory = historyWithCommentAttachmentContext(nextHistory, userMsg.id);
+        const apiHistory = await historyWithApiAttachmentContext(
+          historyWithCommentAttachmentContext(nextHistory, userMsg.id),
+          userMsg.id,
+          project.id,
+          projectFiles,
+        );
         pushEvent({ kind: 'status', label: 'requesting', detail: config.model });
         let accumulatedAssistantText = '';
         void streamMessage(config, systemPrompt, apiHistory, controller.signal, {
@@ -2253,8 +2271,23 @@ export function ProjectView({
     setConversationLoadError(null);
     messagesConversationIdRef.current = null;
     setActiveConversationId(id);
+    // Push the new conversation id into the URL synchronously so the
+    // route-sync effect at L512 sees a matching `routeConversationId`
+    // before it can find the previous conversation in the list and
+    // revert `activeConversationId` to it. Without this, the same
+    // effect that fights handleNewConversation also fights chat
+    // switching, ping-ponging until React's nested-update guard fires.
+    navigate(
+      {
+        kind: 'project',
+        projectId: project.id,
+        conversationId: id,
+        fileName: openTabsState.active ?? null,
+      },
+      { replace: true },
+    );
     setMessageLoadRetryNonce((nonce) => nonce + 1);
-  }, [activeConversationId, failedMessagesConversationId]);
+  }, [activeConversationId, failedMessagesConversationId, project.id, openTabsState.active]);
 
   const handleDeleteConversation = useCallback(
     async (id: string) => {
@@ -2945,6 +2978,7 @@ export function ProjectView({
           projectKind={projectKindToTracking(project.metadata?.kind) ?? 'prototype'}
           files={projectFiles}
           liveArtifacts={liveArtifacts}
+          filesRefreshKey={filesRefresh}
           onRefreshFiles={() => {
             void refreshWorkspaceItems();
           }}
