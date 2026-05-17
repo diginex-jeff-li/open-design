@@ -58,7 +58,7 @@ import {
   requestPreviewSnapshot,
 } from '../runtime/exports';
 import { buildReactComponentSrcdoc } from '../runtime/react-component';
-import { buildSrcdoc } from '../runtime/srcdoc';
+import { buildLazySrcdocTransport, buildSrcdoc } from '../runtime/srcdoc';
 import {
   hasUrlModeBridge,
   htmlNeedsSandboxShim,
@@ -3500,6 +3500,20 @@ function HtmlViewer({
   const [manualEditViewportWidth, setManualEditViewportWidth] = useState<number | null>(null);
   const [previewBodyRef, previewBodySize] = usePreviewCanvasSize<HTMLDivElement>();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const urlPreviewIframeRef = useRef<HTMLIFrameElement | null>(null);
+  const srcDocPreviewIframeRef = useRef<HTMLIFrameElement | null>(null);
+  const activatedSrcDocTransportHtmlRef = useRef<string | null>(null);
+  const isActivePreviewIframeSource = useCallback((source: MessageEventSource | null) => {
+    return !!source && source === iframeRef.current?.contentWindow;
+  }, []);
+  const isOurPreviewIframeSource = useCallback((source: MessageEventSource | null) => {
+    if (!source) return false;
+    return (
+      source === iframeRef.current?.contentWindow ||
+      source === urlPreviewIframeRef.current?.contentWindow ||
+      source === srcDocPreviewIframeRef.current?.contentWindow
+    );
+  }, []);
   const previewScrollRestoreRef = useRef<{
     hostLeft: number;
     hostTop: number;
@@ -3896,14 +3910,16 @@ function HtmlViewer({
   useEffect(() => {
     setPreviewSrcUrl(basePreviewSrcUrl);
   }, [basePreviewSrcUrl]);
+  useEffect(() => {
+    iframeRef.current = useUrlLoadPreview ? urlPreviewIframeRef.current : srcDocPreviewIframeRef.current;
+  }, [useUrlLoadPreview]);
 
   useEffect(() => {
-    if (!useUrlLoadPreview) return;
     if (filesRefreshKey === 0) return;
     const nextSrc = `${basePreviewSrcUrl}&fr=${filesRefreshKey}`;
     const timeout = window.setTimeout(() => {
-      if (iframeRef.current?.contentWindow) {
-        iframeRef.current.contentWindow.location.replace(nextSrc);
+      if (useUrlLoadPreview && urlPreviewIframeRef.current?.contentWindow) {
+        urlPreviewIframeRef.current.contentWindow.location.replace(nextSrc);
       } else {
         setPreviewSrcUrl(nextSrc);
       }
@@ -3929,21 +3945,51 @@ function HtmlViewer({
       deck: effectiveDeck,
       baseHref: projectRawUrl(projectId, baseDirFor(file.name)),
       initialSlideIndex: htmlPreviewSlideState.get(previewStateKey)?.active ?? 0,
-      commentBridge: (boardMode && !manualEditMode) || drawClickSelectionMode,
-      inspectBridge: inspectMode,
+      selectionBridge: true,
       editBridge: manualEditMode,
       paletteBridge: true,
       initialPalette: selectedPalette,
     }) : ''),
-    [previewSource, effectiveDeck, projectId, file.name, previewStateKey, boardMode, manualEditMode, drawClickSelectionMode, inspectMode, selectedPalette],
+    [previewSource, effectiveDeck, projectId, file.name, previewStateKey, manualEditMode, selectedPalette],
   );
+  const lazySrcDocTransport = useMemo(() => buildLazySrcdocTransport(), []);
+  const [hasLazySrcDocTransport, setHasLazySrcDocTransport] = useState(useUrlLoadPreview);
+  const [srcDocTransportResetKey, setSrcDocTransportResetKey] = useState(0);
+  const wasUrlLoadPreviewRef = useRef(useUrlLoadPreview);
+  useEffect(() => {
+    if (useUrlLoadPreview) setHasLazySrcDocTransport(true);
+  }, [useUrlLoadPreview]);
+  const useLazySrcDocTransport = useUrlLoadPreview || hasLazySrcDocTransport;
+  const srcDocTransportContent = useLazySrcDocTransport ? lazySrcDocTransport : srcDoc;
+  const urlTransportSrc = useUrlLoadPreview ? previewSrcUrl : 'about:blank';
+  const activateSrcDocTransport = useCallback((target: HTMLIFrameElement | null = srcDocPreviewIframeRef.current) => {
+    const win = target?.contentWindow;
+    if (!win || !srcDoc || useUrlLoadPreview || !useLazySrcDocTransport) return false;
+    if (activatedSrcDocTransportHtmlRef.current === srcDoc) return false;
+    win.postMessage({ type: 'od:srcdoc-transport-activate', html: srcDoc }, '*');
+    activatedSrcDocTransportHtmlRef.current = srcDoc;
+    return true;
+  }, [srcDoc, useLazySrcDocTransport, useUrlLoadPreview]);
+  useEffect(() => {
+    if (useUrlLoadPreview) {
+      activatedSrcDocTransportHtmlRef.current = null;
+      if (!wasUrlLoadPreviewRef.current) {
+        setSrcDocTransportResetKey((key) => key + 1);
+      }
+      wasUrlLoadPreviewRef.current = true;
+      return;
+    }
+    wasUrlLoadPreviewRef.current = false;
+    activateSrcDocTransport();
+  }, [activateSrcDocTransport, useUrlLoadPreview]);
   useEffect(() => {
     restorePreviewScrollPosition();
   }, [boardMode, manualEditMode, srcDoc, restorePreviewScrollPosition]);
 
   useEffect(() => {
     function onMessage(ev: MessageEvent) {
-      if (ev.source !== iframeRef.current?.contentWindow) return;
+      if (!isOurPreviewIframeSource(ev.source)) return;
+      if (!isActivePreviewIframeSource(ev.source)) return;
       const data = ev.data as {
         type?: string;
         frameLeft?: number;
@@ -3968,7 +4014,8 @@ function HtmlViewer({
       };
     }
     function onRestoreRequest(ev: MessageEvent) {
-      if (ev.source !== iframeRef.current?.contentWindow) return;
+      if (!isOurPreviewIframeSource(ev.source)) return;
+      if (!isActivePreviewIframeSource(ev.source)) return;
       const data = ev.data as { type?: string } | null;
       if (!data || data.type !== 'od:preview-scroll-request') return;
       previewScrollRequestAtRef.current = Date.now();
@@ -3988,7 +4035,8 @@ function HtmlViewer({
       }, '*');
     }
     function onDcViewportMessage(ev: MessageEvent) {
-      if (ev.source !== iframeRef.current?.contentWindow) return;
+      if (!isOurPreviewIframeSource(ev.source)) return;
+      if (!isActivePreviewIframeSource(ev.source)) return;
       const data = ev.data as {
         type?: string;
         x?: number;
@@ -4026,7 +4074,7 @@ function HtmlViewer({
       window.removeEventListener('message', onRestoreRequest);
       window.removeEventListener('message', onDcViewportMessage);
     };
-  }, []);
+  }, [isActivePreviewIframeSource, isOurPreviewIframeSource]);
 
   useEffect(() => {
     if (!effectiveDeck) {
@@ -4035,7 +4083,8 @@ function HtmlViewer({
     }
     setSlideState(htmlPreviewSlideState.get(previewStateKey) ?? null);
     function onMessage(ev: MessageEvent) {
-      if (ev.source !== iframeRef.current?.contentWindow) return;
+      if (!isOurPreviewIframeSource(ev.source)) return;
+      if (!isActivePreviewIframeSource(ev.source)) return;
       const data = ev?.data as
         | { type?: string; active?: number; count?: number }
         | null;
@@ -4047,7 +4096,7 @@ function HtmlViewer({
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [effectiveDeck, previewStateKey]);
+  }, [effectiveDeck, isActivePreviewIframeSource, isOurPreviewIframeSource, previewStateKey]);
 
   useEffect(() => {
     const win = iframeRef.current?.contentWindow;
@@ -4073,14 +4122,14 @@ function HtmlViewer({
     return true;
   }, []);
 
-  function postSelectedManualEditTargetToIframe(id: string | null) {
-    const win = iframeRef.current?.contentWindow;
+  function postSelectedManualEditTargetToIframe(id: string | null, target: HTMLIFrameElement | null = iframeRef.current) {
+    const win = target?.contentWindow;
     if (!win) return;
     win.postMessage({ type: 'od-edit-selected-target', id }, '*');
   }
 
-  function syncBridgeModes() {
-    const win = iframeRef.current?.contentWindow;
+  function syncBridgeModes(target: HTMLIFrameElement | null = iframeRef.current) {
+    const win = target?.contentWindow;
     if (!win) return;
     win.postMessage({
       type: 'od:comment-mode',
@@ -4088,7 +4137,10 @@ function HtmlViewer({
       mode: drawClickSelectionMode ? 'picker' : boardTool,
     }, '*');
     win.postMessage({ type: 'od-edit-mode', enabled: manualEditMode }, '*');
-    postSelectedManualEditTargetToIframe(manualEditMode ? selectedManualEditTarget?.id ?? null : null);
+    postSelectedManualEditTargetToIframe(manualEditMode ? selectedManualEditTarget?.id ?? null : null, target);
+    win.postMessage({ type: 'od:inspect-mode', enabled: inspectMode }, '*');
+    const palette = previewPalette ?? selectedPalette;
+    win.postMessage({ type: 'od:palette', palette }, '*');
   }
 
   useEffect(() => {
@@ -4121,7 +4173,7 @@ function HtmlViewer({
       return;
     }
     function onMessage(ev: MessageEvent) {
-      if (ev.source !== iframeRef.current?.contentWindow) return;
+      if (!isOurPreviewIframeSource(ev.source)) return;
       const data = ev.data as
         | {
             type?: string;
@@ -4154,7 +4206,7 @@ function HtmlViewer({
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [inspectMode, boardMode, drawClickSelectionMode, file.name]);
+  }, [inspectMode, boardMode, drawClickSelectionMode, file.name, isOurPreviewIframeSource]);
 
   useEffect(() => {
     setActiveCommentTarget(null);
@@ -4251,7 +4303,7 @@ function HtmlViewer({
       podMembers: Array.isArray(data.podMembers) ? data.podMembers : undefined,
     });
     function onMessage(ev: MessageEvent) {
-      if (ev.source !== iframeRef.current?.contentWindow) return;
+      if (!isOurPreviewIframeSource(ev.source)) return;
       const data = ev.data as (Partial<PreviewCommentSnapshot> & {
         type?: string;
         targets?: Array<Partial<PreviewCommentSnapshot>>;
@@ -4348,7 +4400,7 @@ function HtmlViewer({
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [boardMode, drawClickSelectionMode, file.name, previewComments]);
+  }, [boardMode, drawClickSelectionMode, file.name, isOurPreviewIframeSource, previewComments]);
 
   useEffect(() => {
     if (!manualEditMode) {
@@ -4363,7 +4415,7 @@ function HtmlViewer({
       return;
     }
     function onMessage(ev: MessageEvent) {
-      if (ev.source !== iframeRef.current?.contentWindow) return;
+      if (!isOurPreviewIframeSource(ev.source)) return;
       const data = ev.data as ManualEditBridgeMessage | null;
       if (!data?.type) return;
       if (data.type === 'od-edit-targets' && Array.isArray(data.targets)) {
@@ -4385,7 +4437,7 @@ function HtmlViewer({
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [manualEditMode, source]);
+  }, [isOurPreviewIframeSource, manualEditMode, source]);
 
   function nextManualEditPreviewVersion(): number {
     manualEditPreviewVersionRef.current += 1;
@@ -4645,7 +4697,7 @@ function HtmlViewer({
   useEffect(() => {
     if (!inspectMode) return;
     function onMessage(ev: MessageEvent) {
-      if (ev.source !== iframeRef.current?.contentWindow) return;
+      if (!isOurPreviewIframeSource(ev.source)) return;
       const data = ev.data as
         | { type?: string; elementId?: string; selector?: string; label?: string; text?: string; style?: InspectStyleSnapshot }
         | null;
@@ -4663,7 +4715,7 @@ function HtmlViewer({
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [inspectMode]);
+  }, [inspectMode, isOurPreviewIframeSource]);
 
   function postSlide(action: 'next' | 'prev' | 'first' | 'last') {
     const win = iframeRef.current?.contentWindow;
@@ -4706,8 +4758,8 @@ function HtmlViewer({
   // the bridge's DOM-hydrated one and silently strip the persisted styles
   // from preview. Re-derive synchronously from `source` whenever the
   // hydration ref disagrees so onLoad never sends a stale snapshot.
-  function replayInspectOverridesToIframe() {
-    const win = iframeRef.current?.contentWindow;
+  function replayInspectOverridesToIframe(target: HTMLIFrameElement | null = iframeRef.current) {
+    const win = target?.contentWindow;
     if (!win) return;
     const overrides = inspectHydratedSourceRef.current === source
       ? inspectOverrides
@@ -5844,46 +5896,55 @@ function HtmlViewer({
                   sendDisabled={streaming}
                   sendDisabledReason="当前正有任务在执行"
                 >
-                  {useUrlLoadPreview ? (
+                  <div className="artifact-preview-transport-stack">
                     <iframe
-                      ref={iframeRef}
-                      data-testid="artifact-preview-frame"
+                      ref={urlPreviewIframeRef}
+                      data-testid={useUrlLoadPreview ? 'artifact-preview-frame' : 'artifact-preview-frame-url-load'}
                       data-od-render-mode="url-load"
+                      data-od-active={useUrlLoadPreview ? 'true' : 'false'}
+                      aria-hidden={useUrlLoadPreview ? undefined : true}
+                      tabIndex={useUrlLoadPreview ? 0 : -1}
                       title={file.name}
                       sandbox="allow-scripts allow-downloads"
-                      src={previewSrcUrl}
+                      src={urlTransportSrc}
                       onLoad={() => {
+                        const frame = urlPreviewIframeRef.current;
+                        if (useUrlLoadPreview) iframeRef.current = frame;
                         dcViewportRestoreAtRef.current = Date.now();
-                        iframeRef.current?.contentWindow?.postMessage({
+                        frame?.contentWindow?.postMessage({
                           type: '__dc_set_viewport',
                           ...dcViewportRef.current,
                         }, '*');
-                        syncBridgeModes();
-                        restorePreviewScrollPosition();
+                        syncBridgeModes(frame);
+                        if (useUrlLoadPreview) restorePreviewScrollPosition();
                       }}
-                      style={{ width: '100%', height: '100%', border: 0 }}
                     />
-                  ) : (
                     <iframe
-                      ref={iframeRef}
-                      data-testid="artifact-preview-frame"
+                      key={srcDocTransportResetKey}
+                      ref={srcDocPreviewIframeRef}
+                      data-testid={useUrlLoadPreview ? 'artifact-preview-frame-srcdoc' : 'artifact-preview-frame'}
                       data-od-render-mode="srcdoc"
+                      data-od-active={useUrlLoadPreview ? 'false' : 'true'}
+                      aria-hidden={useUrlLoadPreview ? true : undefined}
+                      tabIndex={useUrlLoadPreview ? -1 : 0}
                       title={file.name}
                       sandbox="allow-scripts allow-downloads"
-                      srcDoc={srcDoc}
+                      srcDoc={srcDocTransportContent}
                       onLoad={() => {
+                        const frame = srcDocPreviewIframeRef.current;
+                        if (!useUrlLoadPreview) iframeRef.current = frame;
+                        activateSrcDocTransport(frame);
                         dcViewportRestoreAtRef.current = Date.now();
-                        iframeRef.current?.contentWindow?.postMessage({
+                        frame?.contentWindow?.postMessage({
                           type: '__dc_set_viewport',
                           ...dcViewportRef.current,
                         }, '*');
-                        replayInspectOverridesToIframe();
-                        syncBridgeModes();
-                        restorePreviewScrollPosition();
+                        replayInspectOverridesToIframe(frame);
+                        syncBridgeModes(frame);
+                        if (!useUrlLoadPreview) restorePreviewScrollPosition();
                       }}
-                      style={{ width: '100%', height: '100%', border: 0 }}
                     />
-                  )}
+                  </div>
                 </PreviewDrawOverlay>
               </div>
             </div>
