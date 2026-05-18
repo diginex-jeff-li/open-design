@@ -2934,7 +2934,9 @@ export async function startServer({
       typeof designSystemId === 'string' && designSystemId
         ? designSystemId
         : project?.designSystemId;
-    const metadata = project?.metadata;
+    const metadata = project?.metadata
+      ? { ...project.metadata, designSystemId: effectiveDesignSystemId ?? undefined }
+      : (effectiveDesignSystemId ? { designSystemId: effectiveDesignSystemId } : undefined);
 
     let skillBody;
     let skillName;

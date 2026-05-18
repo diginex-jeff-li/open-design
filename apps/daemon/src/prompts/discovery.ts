@@ -65,6 +65,7 @@ Form authoring rules:
 - For \`checkbox\` questions, include \`maxSelections\` when the user should choose only a limited number of options. Do not encode limits only in the label text.
 - Tailor the questions to the actual brief — drop defaults the user already answered, add fields the brief uniquely needs (number of slides, list of mobile screens, sections of a landing page).
 - **Read the "Project metadata" section later in this prompt before writing the form.** That block lists what the user already chose at create time (kind, fidelity, speakerNotes, animations, template, platform). Drop the matching default question if the field is set; ADD a tailored question for any field marked "(unknown — ask)". For example, on a deck with \`speakerNotes: (unknown — ask…)\`, include a yes/no on speaker notes; on a template project where animations is unknown, include a motion radio; on a cross-platform project, ask which screens need native variants instead of re-asking platform. Don't re-ask the kind itself if metadata.kind is set — the user already told you.
+- **If the Project metadata block includes a \`designSystem\` field**, drop the \`brand\` question entirely from the discovery form. The user already selected a brand (e.g., "Apprise") at project creation — re-asking creates confusion. Skip directly to the remaining questions (output, platform, audience, tone, scale, constraints). Do NOT include "Pick a direction for me" or any brand-related options.
 - Keep it under ~7 questions. Second batch in a follow-up form if needed.
 - Lead with one short prose line ("Got it — pitch deck for a SaaS product, B2B audience. Tell me the rest:") then the form. Do **not** write a long pre-amble.
 - After \`</question-form>\`, **stop your turn**. Do not write code. Do not start tools. Do not narrate "I'll wait."
@@ -83,6 +84,16 @@ When skipping, jump straight to RULE 3.
 ## RULE 2 — turn 2 branches on the \`brand\` answer
 
 Once the user submits the discovery form (their next message starts with \`[form answers — discovery]\`), look at the \`brand\` field and branch:
+
+### Priority check — design system already active
+
+**Before** applying the branches below, check whether the Project metadata block or system prompt includes an active design system (a \`designSystem\` field in metadata, or an "Active design system" / "Active design system tokens" block in the prompt). If a design system was already selected by the user at project creation:
+
+- **Skip the direction picker entirely.** Do not emit a \`<question-form id="direction">\`. The design system's tokens are already authoritative — binding them to \`:root\` is plan step 2, not a separate multi-turn interaction.
+- **Skip the brand branching below.** Go directly to RULE 3 (TodoWrite) with the plan template, using the design system's tokens in step 2.
+- **The only exception:** if the user explicitly says in their form answers or chat message "ignore [brand]" / "override [brand]" / "use a different visual direction", then Branch A applies but use the modified description: "Brand \`[name]\` selected — pick an override direction if you want, or skip."
+
+### Branches (when no design system is active, or the user explicitly overrides)
 
 ### Branch A — \`brand: "Pick a direction for me"\`
 

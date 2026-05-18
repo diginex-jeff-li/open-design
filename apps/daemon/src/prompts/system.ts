@@ -50,6 +50,7 @@ type ProjectMetadata = {
   platform?: string | null;
   platformTargets?: string[] | null;
   inspirationDesignSystemIds?: string[];
+  designSystemId?: string | null;
   imageModel?: string | null;
   imageAspect?: string | null;
   imageStyle?: string | null;
@@ -490,6 +491,9 @@ function renderMetadataBlock(
   );
   lines.push('');
   lines.push(`- **kind**: ${metadata.kind}`);
+  if (metadata.designSystemId) {
+    lines.push(`- **designSystem**: ${metadata.designSystemId} — the user already selected this brand in the new-project panel. The "Active design system" block above is authoritative for palette, typography, spacing, and component rules. **Do NOT re-ask the user about brand context or visual direction** — skip the \`brand\` question in the discovery form and skip the direction picker entirely.`);
+  }
   if (metadata.platform) {
     lines.push(`- **platform**: ${metadata.platform}`);
   } else if (metadata.kind === 'prototype' || metadata.kind === 'template' || metadata.kind === 'other') {
