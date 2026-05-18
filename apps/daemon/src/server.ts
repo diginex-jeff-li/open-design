@@ -169,9 +169,11 @@ import {
 import { listProviderModels } from './providerModels.js';
 import { importClaudeDesignZip } from './claude-design-import.js';
 import {
+  defaultBaseUrlForFinalizeProtocol,
   finalizeDesignPackage,
   FinalizePackageLockedError,
   FinalizeUpstreamError,
+  isFinalizeProviderProtocol,
 } from './finalize-design.js';
 import { listPromptTemplates, readPromptTemplate } from './prompt-templates.js';
 import { buildDocumentPreview } from './document-preview.js';
@@ -3596,9 +3598,11 @@ export async function startServer({
     verifyDesktopImportToken,
   };
   const finalizeDeps = {
+    defaultBaseUrlForFinalizeProtocol,
     finalizeDesignPackage,
     FinalizePackageLockedError,
     FinalizeUpstreamError,
+    isFinalizeProviderProtocol,
     redactSecrets,
   };
   const validationDeps = { isSafeId, validateExternalApiBaseUrl, validateBaseUrl };
