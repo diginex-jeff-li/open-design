@@ -5,10 +5,14 @@ import type {
   OpenDesignHostActionResult,
   OpenDesignHostFailure,
   OpenDesignHostProjectImportResult,
+  OpenDesignHostUpdaterActionOptions,
+  OpenDesignHostUpdaterStatusListener,
+  OpenDesignHostUpdaterStatusSnapshot,
 } from '@open-design/host';
 
 const OPEN_DESIGN_HOST_GLOBAL: typeof import('@open-design/host').OPEN_DESIGN_HOST_GLOBAL = '__od__';
 const OPEN_DESIGN_HOST_VERSION: typeof import('@open-design/host').OPEN_DESIGN_HOST_VERSION = 1;
+const UPDATER_STATUS_EVENT = 'od:update:status-changed';
 
 type PrintPdfOptions = {
   deck?: boolean;
@@ -116,6 +120,40 @@ const shell = {
   },
 };
 
+function invokeUpdater(
+  action: 'check' | 'download' | 'install' | 'status',
+  options?: OpenDesignHostUpdaterActionOptions,
+): Promise<OpenDesignHostUpdaterStatusSnapshot> {
+  return ipcRenderer.invoke(`od:update:${action}`, options ?? null);
+}
+
+const updater = {
+  check: (options?: OpenDesignHostUpdaterActionOptions): Promise<OpenDesignHostUpdaterStatusSnapshot> =>
+    invokeUpdater('check', options),
+  download: (options?: OpenDesignHostUpdaterActionOptions): Promise<OpenDesignHostUpdaterStatusSnapshot> =>
+    invokeUpdater('download', options),
+  install: (options?: OpenDesignHostUpdaterActionOptions): Promise<OpenDesignHostUpdaterStatusSnapshot> =>
+    invokeUpdater('install', options),
+  quit: async (options?: OpenDesignHostUpdaterActionOptions): Promise<OpenDesignHostActionResult> => {
+    try {
+      return await ipcRenderer.invoke('od:update:quit', options ?? null);
+    } catch (error) {
+      return actionFailure(reasonFromError(error));
+    }
+  },
+  status: (options?: OpenDesignHostUpdaterActionOptions): Promise<OpenDesignHostUpdaterStatusSnapshot> =>
+    invokeUpdater('status', options),
+  subscribe: (listener: OpenDesignHostUpdaterStatusListener): (() => void) => {
+    const handler = (_event: unknown, status: OpenDesignHostUpdaterStatusSnapshot): void => {
+      listener(status);
+    };
+    ipcRenderer.on(UPDATER_STATUS_EVENT, handler);
+    return () => {
+      ipcRenderer.removeListener(UPDATER_STATUS_EVENT, handler);
+    };
+  },
+};
+
 const hostBridge = {
   version: OPEN_DESIGN_HOST_VERSION,
   client: {
@@ -138,6 +176,7 @@ const hostBridge = {
     setVisible: (visible: boolean): void =>
       ipcRenderer.send('desktop-pet:set-visible', Boolean(visible)),
   },
+  updater,
 } satisfies OpenDesignHostBridge;
 
 contextBridge.exposeInMainWorld(OPEN_DESIGN_HOST_GLOBAL, hostBridge);

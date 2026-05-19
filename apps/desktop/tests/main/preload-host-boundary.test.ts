@@ -17,6 +17,10 @@ describe("desktop preload host boundary", () => {
     expect(runtimeRequires).toEqual(["'electron'"]);
     expect(source).toContain("OPEN_DESIGN_HOST_GLOBAL");
     expect(source).toContain("satisfies OpenDesignHostBridge");
+    expect(source).toContain("updater");
+    expect(source).toContain("invokeUpdater('install'");
+    expect(source).toContain("od:update:quit");
+    expect(source).toContain("od:update:status-changed");
     expect(source).not.toContain("@open-design/contracts");
     expect(source).not.toContain("exposeInMainWorld('electronAPI'");
     expect(source).not.toContain('exposeInMainWorld("__odDesktop"');

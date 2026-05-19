@@ -29,9 +29,9 @@ import {
 } from "@open-design/sidecar";
 import { readProcessStamp } from "@open-design/platform";
 
-import { createDesktopRuntime } from "./runtime.js";
+import { createDesktopRuntime, type DesktopRuntime } from "./runtime.js";
 import { attachDesktopProcessErrorFilter } from "./uncaught-exception.js";
-import { createDesktopUpdater, type DesktopUpdater } from "./updater.js";
+import { createDesktopUpdater, createDesktopUpdaterScheduler, type DesktopUpdater, type DesktopUpdaterScheduler } from "./updater.js";
 
 // Re-export pure URL-policy helpers so the packaged workspace's
 // vitest can pin their behaviour without spinning up a full Electron
@@ -273,17 +273,6 @@ function installDesktopMenu(updater: DesktopUpdater): () => void {
   return updater.subscribe(rebuild);
 }
 
-function scheduleStartupUpdateCheck(updater: DesktopUpdater): void {
-  if (!updater.shouldAutoCheck()) return;
-  setTimeout(() => {
-    void updater.checkForUpdates().then(async (status) => {
-      if (status.state === "downloaded") await showUpdateResultDialog(updater, status);
-    }).catch((error: unknown) => {
-      console.error("desktop update auto-check failed", error);
-    });
-  }, 5000).unref();
-}
-
 const REGISTER_DESKTOP_AUTH_RETRY_DELAYS_MS = [120, 240, 480, 960, 1500];
 const REGISTER_DESKTOP_AUTH_TIMEOUT_MS = 800;
 
@@ -375,7 +364,39 @@ export async function runDesktopMain(
     );
   }
 
-  const desktop = await createDesktopRuntime({
+  const updater = createDesktopUpdater(
+    {
+      currentVersion: options.update?.currentVersion,
+      downloadRoot: options.update?.downloadRoot,
+      runtimeBase: runtime.base,
+      source: runtime.source,
+    },
+    { openPath: (path) => shell.openPath(path) },
+  );
+  let desktop: DesktopRuntime | null = null;
+  let disposeMenu: () => void = () => undefined;
+  let updateScheduler: DesktopUpdaterScheduler | null = null;
+  let ipcServer: JsonIpcServerHandle | null = null;
+  let shuttingDown = false;
+
+  async function shutdown(): Promise<void> {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    await options.beforeShutdown?.().catch((error: unknown) => {
+      console.error("desktop beforeShutdown failed", error);
+    });
+    updateScheduler?.stop("shutdown");
+    disposeMenu();
+    await ipcServer?.close().catch(() => undefined);
+    await desktop?.close().catch(() => undefined);
+    app.quit();
+  }
+
+  function shutdownAndExit(): void {
+    void shutdown().finally(() => process.exit(0));
+  }
+
+  desktop = await createDesktopRuntime({
     desktopAuthSecret,
     discoverUrl: options.discoverWebUrl ?? createWebDiscovery(runtime),
     discoverDaemonUrl: options.discoverDaemonUrl,
@@ -386,36 +407,17 @@ export async function runDesktopMain(
     // runtime then mints a FRESH token (new nonce + new exp — replay
     // protection still works) and POSTs once more.
     registerDesktopAuthWithDaemon: () => registerDesktopAuthWithDaemon(runtime, desktopAuthSecret),
+    requestQuit: shutdownAndExit,
+    updater,
   });
-  const updater = createDesktopUpdater(
-    {
-      currentVersion: options.update?.currentVersion,
-      downloadRoot: options.update?.downloadRoot,
-      runtimeBase: runtime.base,
-      source: runtime.source,
-    },
-    { openPath: (path) => shell.openPath(path) },
-  );
-  const disposeMenu = installDesktopMenu(updater);
-  scheduleStartupUpdateCheck(updater);
-  let ipcServer: JsonIpcServerHandle | null = null;
-  let shuttingDown = false;
-
-  async function shutdown(): Promise<void> {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    await options.beforeShutdown?.().catch((error: unknown) => {
-      console.error("desktop beforeShutdown failed", error);
-    });
-    disposeMenu();
-    await ipcServer?.close().catch(() => undefined);
-    await desktop.close().catch(() => undefined);
-    app.quit();
-  }
-
-  function shutdownAndExit(): void {
-    void shutdown().finally(() => process.exit(0));
-  }
+  disposeMenu = installDesktopMenu(updater);
+  updateScheduler = createDesktopUpdaterScheduler(updater, {
+    backoffInitialMs: updater.config.checkBackoffInitialMs,
+    backoffMaxMs: updater.config.checkBackoffMaxMs,
+    initialDelayMs: updater.config.checkInitialDelayMs,
+    intervalMs: updater.config.checkIntervalMs,
+  });
+  if (updater.shouldAutoCheck()) updateScheduler.start();
 
   attachParentMonitor(shutdown);
 
@@ -429,19 +431,23 @@ export async function runDesktopMain(
     socketPath: runtime.ipc,
     handler: async (message: unknown) => {
       const request = normalizeDesktopSidecarMessage(message);
+      const activeDesktop = desktop;
+      if (activeDesktop == null) {
+        throw new Error("desktop runtime is not initialized");
+      }
       switch (request.type) {
         case SIDECAR_MESSAGES.STATUS:
-          return { ...desktop.status(), update: await updater.status() };
+          return { ...activeDesktop.status(), update: await updater.status() };
         case SIDECAR_MESSAGES.EVAL:
-          return await desktop.eval(request.input as DesktopEvalInput);
+          return await activeDesktop.eval(request.input as DesktopEvalInput);
         case SIDECAR_MESSAGES.SCREENSHOT:
-          return await desktop.screenshot(request.input as DesktopScreenshotInput);
+          return await activeDesktop.screenshot(request.input as DesktopScreenshotInput);
         case SIDECAR_MESSAGES.CONSOLE:
-          return desktop.console();
+          return activeDesktop.console();
         case SIDECAR_MESSAGES.CLICK:
-          return await desktop.click(request.input as DesktopClickInput);
+          return await activeDesktop.click(request.input as DesktopClickInput);
         case SIDECAR_MESSAGES.EXPORT_PDF:
-          return await desktop.exportPdf(request.input as DesktopExportPdfInput);
+          return await activeDesktop.exportPdf(request.input as DesktopExportPdfInput);
         case SIDECAR_MESSAGES.UPDATE:
           return await updater.handle((request.input as DesktopUpdateInput).action);
         case SIDECAR_MESSAGES.SHUTDOWN:
@@ -464,7 +470,7 @@ export async function runDesktopMain(
   });
 
   app.on("activate", () => {
-    desktop.show();
+    desktop?.show();
   });
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
