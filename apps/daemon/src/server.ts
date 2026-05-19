@@ -1390,12 +1390,40 @@ export function createAgentRuntimeEnv(
   toolTokenGrant: { token?: string } | null = null,
   nodeBin: string = process.execPath,
 ): NodeJS.ProcessEnv {
-  const env = {
+  const env: NodeJS.ProcessEnv = {
     ...baseEnv,
     OD_DATA_DIR: RUNTIME_DATA_DIR,
     OD_DAEMON_URL: daemonUrl,
     OD_NODE_BIN: nodeBin,
   };
+
+  // Ensure the node binary directory is on PATH so agent sub-processes —
+  // in particular npm .cmd shims on Windows that run `"node" script.js` —
+  // can find the same node binary that runs the daemon even when the daemon
+  // was launched with a full path to node and the directory was not on PATH.
+  const nodeBinDir = path.dirname(nodeBin);
+  if (nodeBinDir) {
+    // On Windows, process.env spreads with the search path under 'Path' rather
+    // than 'PATH'. Locate the key case-insensitively so we read and write the
+    // same entry that child_process.spawn consults. If we blindly write a new
+    // 'PATH' key alongside an existing 'Path', Node's case-insensitive env
+    // de-duplication on Windows lets the new key win — dropping all inherited
+    // directories (git, npm, agent shims, etc.) from the child's search path.
+    const pathKey = Object.keys(env).find((k) => k.toLowerCase() === 'path') ?? 'PATH';
+    const existingPath = typeof env[pathKey] === 'string' ? (env[pathKey] as string) : '';
+    const parts = existingPath.split(path.delimiter).filter((p) => p.length > 0);
+    const normalize = (p: string) => p.replace(/[/\\]+$/, '');
+    const normalizedDir = normalize(nodeBinDir);
+    const alreadyIncluded = parts.some((p) => {
+      const n = normalize(p);
+      return process.platform === 'win32'
+        ? n.toLowerCase() === normalizedDir.toLowerCase()
+        : n === normalizedDir;
+    });
+    if (!alreadyIncluded) {
+      env[pathKey] = [nodeBinDir, ...parts].join(path.delimiter);
+    }
+  }
 
   if (toolTokenGrant?.token) {
     env.OD_TOOL_TOKEN = toolTokenGrant.token;
@@ -9416,7 +9444,12 @@ export async function startServer({
         // crash the daemon. Swallow it — the regular exit/close handlers
         // below already route the underlying failure to SSE via stderr.
         child.stdin.on('error', (err) => {
-          if (err.code !== 'EPIPE') {
+          // EPIPE = Unix broken-pipe when child closes its stdin read end
+          // early. 'write EOF' (err.code 'EOF') = Windows equivalent of
+          // the same condition via UV_EOF. Both mean the child exited before
+          // reading stdin — the process exit/close handlers already route
+          // the underlying failure to SSE via stderr, so swallow these here.
+          if (err.code !== 'EPIPE' && err.code !== 'EOF' && err.message !== 'write EOF') {
             send(
               'error',
               createSseErrorPayload(
