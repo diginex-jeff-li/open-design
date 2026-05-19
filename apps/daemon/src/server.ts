@@ -71,6 +71,7 @@ import {
   listUserDesignSystemFiles,
   listUserDesignSystemRevisions,
   readDesignSystem,
+  readDesignSystemPackageInfo,
   readUserDesignSystemFile,
   resolveDesignSystemAssets,
   updateUserDesignSystem,
@@ -346,6 +347,7 @@ import { registerActiveContextRoutes } from './active-context-routes.js';
 import { registerMcpRoutes } from './mcp-routes.js';
 import { registerXaiRoutes } from './xai-routes.js';
 import { registerLiveArtifactRoutes } from './live-artifact-routes.js';
+import { registerDesignSystemToolRoutes } from './design-system-tool-routes.js';
 import { registerDeployRoutes, registerDeploymentCheckRoutes } from './deploy-routes.js';
 import { registerMediaRoutes } from './media-routes.js';
 import { registerProjectRoutes, registerProjectArtifactRoutes, registerProjectFileRoutes, registerProjectUploadRoutes } from './project-routes.js';
@@ -2790,6 +2792,16 @@ export async function startServer({
     );
   }
 
+  async function readAvailableDesignSystemPackageInfo(id) {
+    if (typeof id === 'string' && id.startsWith('user:')) {
+      return readDesignSystemPackageInfo(USER_DESIGN_SYSTEMS_DIR, id, { idPrefix: 'user:' });
+    }
+    return (
+      (await readDesignSystemPackageInfo(DESIGN_SYSTEMS_DIR, id))
+      ?? (await readDesignSystemPackageInfo(USER_DESIGN_SYSTEMS_DIR, id))
+    );
+  }
+
   function isProjectUsableDesignSystem(summary) {
     return summary?.status !== 'draft';
   }
@@ -4199,6 +4211,12 @@ export async function startServer({
     liveArtifacts: liveArtifactDeps,
     projectStore: projectStoreDeps,
   });
+  registerDesignSystemToolRoutes(app, {
+    auth: authDeps,
+    http: httpDeps,
+    paths: pathDeps,
+    projects: { getProject },
+  });
   app.use('/artifacts', express.static(ARTIFACTS_DIR));
   registerDeployRoutes(app, {
     db,
@@ -4769,7 +4787,8 @@ export async function startServer({
       const body = projectBody ?? await readAvailableDesignSystem(req.params.id);
       if (body === null || !summary)
         return res.status(404).json({ error: 'design system not found' });
-      const detail = { ...summary, body };
+      const packageInfo = await readAvailableDesignSystemPackageInfo(req.params.id);
+      const detail = { ...summary, body, ...(packageInfo ? { packageInfo } : {}) };
       res.json({ ...detail, designSystem: detail });
     } catch (err) {
       res.status(500).json({ error: String(err) });
@@ -8317,13 +8336,6 @@ export async function startServer({
 
     let craftBody;
     let craftSections;
-    if (skillCraftRequires.length > 0) {
-      const loaded = await loadCraftSections(CRAFT_DIR, skillCraftRequires);
-      if (loaded.body) {
-        craftBody = loaded.body;
-        craftSections = loaded.sections;
-      }
-    }
 
     // Personal-memory body is always recomputed at compose time so a
     // memory the user just edited in settings shows up on the very next
@@ -8363,9 +8375,14 @@ export async function startServer({
     // including the structured ones. Any other value (unset, `1`,
     // `true`, etc.) keeps the new default. Drift on prose-only brands
     // is pinned by `scripts/check-design-system-flag-parity.ts`.
+    let designSystemUsageMd;
     let designSystemTokensCss;
     let designSystemComponentsManifest;
     let designSystemFixtureHtml;
+    let designSystemPullIndex;
+    let designSystemImportMode;
+    let designSystemCraftApplies = [];
+    let designSystemCraftExemptions = [];
     if (effectiveDesignSystemId) {
       let systems = await listAllDesignSystems();
       let summary = systems.find((s) => s.id === effectiveDesignSystemId);
@@ -8391,9 +8408,26 @@ export async function startServer({
           DESIGN_SYSTEMS_DIR,
           USER_DESIGN_SYSTEMS_DIR,
         );
+        designSystemUsageMd = assets.usageMd;
         designSystemTokensCss = assets.tokensCss;
         designSystemComponentsManifest = assets.componentsManifest;
         designSystemFixtureHtml = assets.fixtureHtml;
+        designSystemPullIndex = assets.pullIndex;
+        designSystemImportMode = assets.importMode;
+        designSystemCraftApplies = Array.isArray(assets.craftApplies) ? assets.craftApplies : [];
+        designSystemCraftExemptions = Array.isArray(assets.craftExemptions) ? assets.craftExemptions : [];
+      }
+    }
+
+    const excludedCraft = new Set(designSystemCraftExemptions);
+    const requestedCraft = Array.from(
+      new Set([...skillCraftRequires, ...designSystemCraftApplies]),
+    ).filter((slug) => !excludedCraft.has(slug));
+    if (requestedCraft.length > 0) {
+      const loaded = await loadCraftSections(CRAFT_DIR, requestedCraft);
+      if (loaded.body) {
+        craftBody = loaded.body;
+        craftSections = loaded.sections;
       }
     }
 
@@ -8548,9 +8582,12 @@ export async function startServer({
       skillMode,
       designSystemBody,
       designSystemTitle,
+      designSystemUsageMd,
       designSystemTokensCss,
       designSystemComponentsManifest,
       designSystemFixtureHtml,
+      designSystemPullIndex,
+      designSystemImportMode,
       craftBody,
       craftSections,
       memoryBody,
