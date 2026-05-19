@@ -1326,7 +1326,11 @@ export function App() {
           floating banner never intercepts modal interactions. */}
       {showPrivacyConsent ? (
         <PrivacyConsentModal
-          onShare={() => {
+          onAccept={() => {
+            // Default opt-in: clicking "I get it" enables the same telemetry
+            // surface the previous two-button "Share usage data" path opted
+            // into. The banner footer + PrivacySection give the user a
+            // one-click path to flip everything off later.
             const installationId = generateInstallationIdSafe();
             void handleConfigPersist({
               ...latestPersistedConfigRef.current,
@@ -1337,18 +1341,6 @@ export function App() {
             // Hand the foreground over to the welcome modal now that the
             // privacy decision is recorded — bootstrap deferred opening
             // it while consent was pending.
-            if (!latestPersistedConfigRef.current.onboardingCompleted) {
-              setSettingsWelcome(true);
-              setSettingsOpen(true);
-            }
-          }}
-          onDecline={() => {
-            void handleConfigPersist({
-              ...latestPersistedConfigRef.current,
-              installationId: null,
-              privacyDecisionAt: Date.now(),
-              telemetry: { metrics: false, content: false, artifactManifest: false },
-            });
             if (!latestPersistedConfigRef.current.onboardingCompleted) {
               setSettingsWelcome(true);
               setSettingsOpen(true);
