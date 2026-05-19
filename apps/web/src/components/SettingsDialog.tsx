@@ -69,6 +69,7 @@ import { testAgent, testApiProvider } from '../providers/connection-test';
 import { fetchProviderModels } from '../providers/provider-models';
 import { fetchConnectors, fetchDesignTemplates } from '../providers/registry';
 import { MEDIA_PROVIDERS } from '../media/models';
+import { XaiOAuthControl } from './XaiOAuthControl';
 import type { MediaProvider } from '../media/models';
 import { Toast } from './Toast';
 import { PetSettings } from './pet/PetSettings';
@@ -4386,6 +4387,7 @@ function MediaProvidersSection({
                   as warnings; one chip reads as status.
                 */}
               </div>
+              {provider.id === 'grok' ? <XaiOAuthControl /> : null}
               <div className="media-provider-body">
                 <div className="media-provider-secret-field">
                   <input
