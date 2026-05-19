@@ -46,6 +46,10 @@ import { navigate } from '../router';
 import { agentDisplayName, agentModelDisplayName } from '../utils/agentLabels';
 import { isMacPlatform } from '../utils/platform';
 import {
+  canAutoRenameProjectFromPrompt,
+  summarizeProjectNameFromPrompt,
+} from '../utils/projectName';
+import {
   apiProtocolAgentId,
   apiProtocolModelLabel,
 } from '../utils/apiProtocol';
@@ -1798,6 +1802,27 @@ export function ProjectView({
           );
           void patchConversation(project.id, runConversationId, { title });
         }
+        const projectName = summarizeProjectNameFromPrompt(prompt);
+        if (
+          projectName &&
+          projectName !== project.name &&
+          canAutoRenameProjectFromPrompt(project)
+        ) {
+          const metadata = project.metadata
+            ? { ...project.metadata, nameSource: 'prompt' as const }
+            : undefined;
+          const updated: Project = {
+            ...project,
+            name: projectName,
+            ...(metadata ? { metadata } : {}),
+            updatedAt: Date.now(),
+          };
+          onProjectChange(updated);
+          void patchProject(project.id, {
+            name: projectName,
+            ...(metadata ? { metadata } : {}),
+          });
+        }
       }
 
       // Snapshot the file list at turn-start so we can diff after the
@@ -2188,6 +2213,7 @@ export function ProjectView({
       composedSystemPrompt,
       onTouchProject,
       project.id,
+      project.name,
       projectFiles,
       refreshProjectFiles,
       refreshLiveArtifacts,
@@ -2201,6 +2227,7 @@ export function ProjectView({
       clearStreamingMarker,
       clearActiveRunRefs,
       onProjectsRefresh,
+      onProjectChange,
     ],
   );
 
@@ -2657,9 +2684,20 @@ export function ProjectView({
     (newName: string) => {
       const trimmed = newName.trim();
       if (!trimmed || trimmed === project.name) return;
-      const updated: Project = { ...project, name: trimmed, updatedAt: Date.now() };
+      const metadata = project.metadata
+        ? { ...project.metadata, nameSource: 'user' as const }
+        : undefined;
+      const updated: Project = {
+        ...project,
+        name: trimmed,
+        ...(metadata ? { metadata } : {}),
+        updatedAt: Date.now(),
+      };
       onProjectChange(updated);
-      void patchProject(project.id, { name: trimmed });
+      void patchProject(project.id, {
+        name: trimmed,
+        ...(metadata ? { metadata } : {}),
+      });
     },
     [project, onProjectChange],
   );

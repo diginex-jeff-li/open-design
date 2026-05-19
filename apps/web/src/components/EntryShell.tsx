@@ -323,6 +323,7 @@ export function EntryShell({
     const metadata: ProjectMetadata = {
       ...(payload.projectMetadata ?? {}),
       kind: payload.projectKind ?? payload.projectMetadata?.kind ?? 'prototype',
+      nameSource: 'prompt',
       ...(payload.contextPlugins && payload.contextPlugins.length > 0
         ? { contextPlugins: payload.contextPlugins }
         : {}),
