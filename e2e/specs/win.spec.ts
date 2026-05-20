@@ -11,6 +11,7 @@ import { promisify } from 'node:util';
 import { describe, expect, test } from 'vitest';
 
 import { createPackagedSmokeReport } from '@/vitest/packaged-report';
+import { releaseAppVersionArgs, resolvePackagedWinInstallIdentity } from '@/vitest/packaged-win-identity';
 
 const execFileAsync = promisify(execFile);
 const e2eRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -21,7 +22,9 @@ const toolsPackBin = join(workspaceRoot, 'tools', 'pack', 'bin', 'tools-pack.mjs
 const toolsServeBin = join(workspaceRoot, 'tools', 'serve', 'bin', 'tools-serve.mjs');
 const maxInstallDurationMs = Number.parseInt(process.env.OD_PACKAGED_E2E_WIN_MAX_INSTALL_MS ?? '120000', 10);
 const verifyReinstallWhileRunning = process.env.OD_PACKAGED_E2E_WIN_VERIFY_REINSTALL !== '0';
-const installIdentity = resolveInstallIdentity(namespace);
+const releaseVersion = process.env.OD_PACKAGED_E2E_RELEASE_VERSION;
+const installIdentity = resolvePackagedWinInstallIdentity({ namespace, releaseVersion });
+const toolsPackReleaseVersionArgs = releaseAppVersionArgs(releaseVersion);
 
 const outputNamespaceRoot = join(toolsPackDir, 'out', 'win', 'namespaces', namespace);
 const runtimeNamespaceRoot = join(toolsPackDir, 'runtime', 'win', 'namespaces', namespace);
@@ -450,6 +453,7 @@ async function runToolsPackJson<T>(action: string, extraArgs: string[] = []): Pr
     toolsPackDir,
     '--namespace',
     namespace,
+    ...toolsPackReleaseVersionArgs,
     '--json',
     ...extraArgs,
   ];
@@ -768,18 +772,6 @@ function defaultWindowsAppDataRoot(appName: string): string {
 
 function resolveFromWorkspace(filePath: string): string {
   return isAbsolute(filePath) ? filePath : resolve(workspaceRoot, filePath);
-}
-
-function resolveInstallIdentity(value: string): { displayName: string; namespaceToken: string } {
-  const namespaceToken = value.replace(/[^A-Za-z0-9._-]+/g, '-');
-  const displayName = /(^|[-_.])beta($|[-_.])/i.test(value)
-    ? 'Open Design Beta'
-    : /(^|[-_.])preview($|[-_.])/i.test(value)
-      ? 'Open Design Preview'
-    : value === 'default'
-      ? 'Open Design'
-      : `Open Design ${namespaceToken}`;
-  return { displayName, namespaceToken };
 }
 
 function delay(ms: number): Promise<void> {
