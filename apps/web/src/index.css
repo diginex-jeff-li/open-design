@@ -16953,7 +16953,6 @@ body.entry-resizing { cursor: col-resize; user-select: none; }
   align-items: center;
   justify-content: center;
   min-height: 26px;
-  margin-top: 8px;
   padding: 4px 10px;
   border: 1px solid var(--accent-soft);
   border-radius: var(--radius-pill);
@@ -16969,6 +16968,27 @@ body.entry-resizing { cursor: col-resize; user-select: none; }
 .assistant-feedback-submit:disabled {
   opacity: 0.45;
   cursor: default;
+}
+.assistant-feedback-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.assistant-feedback-discord-note {
+  margin: 7px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.assistant-feedback-discord-note a {
+  color: #5865f2;
+  font-weight: 650;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+.assistant-feedback-discord-note a:hover {
+  color: color-mix(in srgb, #5865f2 78%, var(--text-strong));
 }
 
 .unfinished-todos {
@@ -26171,9 +26191,6 @@ body.desktop-pet-shell .pet-task-item {
   color: var(--text-muted);
   font-weight: 560;
 }
-.app .msg > .role {
-  display: none;
-}
 .app .msg .role > span:first-child {
   color: var(--text);
   font-weight: 650;
@@ -26191,21 +26208,21 @@ body.desktop-pet-shell .pet-task-item {
   font-weight: 500;
 }
 .app .msg.user .user-text {
-  padding: 10px 34px 10px 13px;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--accent) 8%, var(--bg-subtle));
-  color: var(--text-strong);
-  line-height: 1.52;
+  padding: 8px 34px 8px 11px;
+  border: 1px solid color-mix(in srgb, var(--selected) 88%, #000);
+  border-radius: 14px 14px 4px 14px;
+  background: var(--selected);
+  color: #fff;
+  line-height: 1.45;
   font-size: 13.5px;
-  box-shadow: none;
+  box-shadow: var(--shadow-xs);
 }
 .app .msg.user .user-copy-btn {
-  color: var(--text-muted);
+  color: rgba(255, 255, 255, 0.85);
 }
 .app .msg.user .user-copy-btn:hover {
-  background: color-mix(in srgb, var(--text) 6%, transparent);
-  color: var(--text);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
 }
 .app .msg.assistant .assistant-flow {
   gap: 7px;
