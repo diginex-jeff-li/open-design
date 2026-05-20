@@ -538,6 +538,11 @@ export const hu: Dict = {
     'Bármit módosíthatsz — a változtatásaid beépülnek az ügynök briefjébe.',
   'newproj.promptTemplateBodyEmpty':
     'Üres törzs — az ügynök nem kap sablonhivatkozást.',
+  'newproj.deleteTemplateTitle': 'Sablon törlése',
+  'newproj.deleteTemplateConfirm': 'Törlöd a(z) „{name}" sablont? Ez nem vonható vissza.',
+  'newproj.deleteTemplateConfirmCta': 'Sablon törlése',
+  'newproj.deleteTemplateError':
+    'A sablon törlése nem sikerült. Próbáld újra.',
 
   'designs.subRecent': 'Legutóbbi',
   'designs.subYours': 'A te terveid',

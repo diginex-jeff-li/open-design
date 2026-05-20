@@ -550,6 +550,11 @@ export const ptBR: Dict = {
     'Edite o que quiser — suas alterações entram no briefing do agente.',
   'newproj.promptTemplateBodyEmpty':
     'Corpo vazio — o agente não receberá nenhuma referência de modelo.',
+  'newproj.deleteTemplateTitle': 'Excluir template',
+  'newproj.deleteTemplateConfirm': 'Excluir "{name}"? Esta ação não pode ser desfeita.',
+  'newproj.deleteTemplateConfirmCta': 'Excluir template',
+  'newproj.deleteTemplateError':
+    'Não foi possível excluir este template. Tente novamente.',
 
   'designs.subRecent': 'Recentes',
   'designs.subYours': 'Seus designs',

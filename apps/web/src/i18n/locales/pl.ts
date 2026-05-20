@@ -538,6 +538,11 @@ export const pl: Dict = {
       'Możesz edytować wszystko — Twoje zmiany zostaną uwzględnione w instrukcjach dla agenta.',
   'newproj.promptTemplateBodyEmpty':
       'Pusta treść — agent nie otrzyma referencji do szablonu.',
+  'newproj.deleteTemplateTitle': 'Usuń szablon',
+  'newproj.deleteTemplateConfirm': 'Usunąć „{name}"? Tej operacji nie można cofnąć.',
+  'newproj.deleteTemplateConfirmCta': 'Usuń szablon',
+  'newproj.deleteTemplateError':
+    'Nie udało się usunąć tego szablonu. Spróbuj ponownie.',
 
   'designs.subRecent': 'Ostatnie',
   'designs.subYours': 'Twoje projekty',
