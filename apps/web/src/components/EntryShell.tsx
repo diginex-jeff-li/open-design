@@ -19,6 +19,11 @@ import {
   pickAndImportHostProject,
   type OpenDesignHostProjectImportSuccess,
 } from '@open-design/host';
+import { useAnalytics } from '../analytics/provider';
+import {
+  trackHomeNavClick,
+  trackHomeToolbarClick,
+} from '../analytics/events';
 import { LOCALE_LABEL, LOCALES, useI18n, useT, type Locale } from '../i18n';
 import { navigate, useRoute } from '../router';
 import type {
@@ -273,6 +278,38 @@ interface Props {
   onCompleteOnboarding: () => void;
 }
 
+// Map an EntryNavRail view id to the analytics `element` enum on
+// `home/nav` ui_click. Returns `null` for views without a dedicated nav
+// button (the rail's "Home" target is the brand logo, which gets its own
+// element value via the logo click handler — not the changeView path).
+function navElementForView(
+  next: EntryViewKind,
+):
+  | 'home'
+  | 'projects'
+  | 'automations'
+  | 'plugins'
+  | 'design_systems'
+  | 'integrations'
+  | null {
+  switch (next) {
+    case 'home':
+      return 'home';
+    case 'projects':
+      return 'projects';
+    case 'tasks':
+      return 'automations';
+    case 'plugins':
+      return 'plugins';
+    case 'design-systems':
+      return 'design_systems';
+    case 'integrations':
+      return 'integrations';
+    default:
+      return null;
+  }
+}
+
 export function EntryShell({
   skills,
   designTemplates,
@@ -339,6 +376,7 @@ export function EntryShell({
   const [chipImporting, setChipImporting] = useState(false);
   const [integrationTab, setIntegrationTab] = useState<IntegrationTab>(integrationInitialTab);
   const [homePromptHandoff, setHomePromptHandoff] = useState<HomePromptHandoff | null>(null);
+  const analytics = useAnalytics();
   const avatarMenuRef = useRef<HTMLDivElement | null>(null);
   // Star count + active-model summary are kept in render scope so
   // the dropdown's collapsed rows can mirror what the chips show
@@ -350,7 +388,16 @@ export function EntryShell({
     [config, agents, t],
   );
 
+
   function changeView(next: EntryViewKind) {
+    const navElement = navElementForView(next);
+    if (navElement) {
+      trackHomeNavClick(analytics.track, {
+        page_name: 'home',
+        area: 'nav',
+        element: navElement,
+      });
+    }
     navigate({ kind: 'home', view: next });
   }
 
@@ -732,6 +779,18 @@ export function EntryShell({
             className="avatar-item"
             onClick={() => {
               setAvatarMenuOpen(false);
+              // Toolbar→settings telemetry (CSV row "home_toolbar_click /
+              // element=settings") fires here rather than on the avatar
+              // icon: that icon now toggles the popover (a navigation
+              // step), and the Settings dialog only opens from this row.
+              // Co-locating the event with the dialog-opening side effect
+              // keeps the funnel honest against the prior single-click
+              // behavior.
+              trackHomeToolbarClick(analytics.track, {
+                page_name: 'home',
+                area: 'toolbar',
+                element: 'settings',
+              });
               onOpenSettings();
             }}
           >
@@ -794,7 +853,14 @@ export function EntryShell({
               <button
                 type="button"
                 className="use-everywhere-chip"
-                onClick={() => openIntegrationTab('use-everywhere')}
+                onClick={() => {
+                  trackHomeToolbarClick(analytics.track, {
+                    page_name: 'home',
+                    area: 'toolbar',
+                    element: 'use_everywhere',
+                  });
+                  openIntegrationTab('use-everywhere');
+                }}
                 title={t('entry.useEverywhereTitle')}
                 aria-label={t('entry.useEverywhereAria')}
                 data-testid="entry-use-everywhere-button"
