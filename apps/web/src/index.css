@@ -19624,6 +19624,26 @@ body.desktop-pet-shell .pet-task-item {
   max-width: 180px;
   cursor: pointer;
 }
+
+.library-toolbar.library-toolbar-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.library-toolbar.library-toolbar-row .library-search {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.library-toolbar.library-toolbar-row .library-filter-select {
+  flex: 0 0 auto;
+}
+
+.library-toolbar.library-toolbar-row .library-filter-select select {
+  min-height: 36px;
+}
+
 .library-filter-select select:hover:not(:disabled) {
   border-color: var(--border-strong);
 }
@@ -19828,21 +19848,48 @@ body.desktop-pet-shell .pet-task-item {
 
 .library-ds-card {
   position: relative;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
-  padding: 12px;
-  gap: 8px;
+  padding: 10px;
+  gap: 10px;
+  transition:
+    border-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    background 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .library-ds-card.disabled {
   opacity: 0.45;
 }
 
+.library-ds-card.highlighted {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-panel));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
 .library-ds-card-content {
+  min-width: 0;
+  padding: 2px;
+  border-radius: 6px;
   cursor: pointer;
+  transition:
+    background 120ms cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 120ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.library-ds-card-content:hover {
+  background: var(--bg-hover);
+}
+
+.library-ds-card-content:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--selected-soft);
+  background: var(--bg-hover);
 }
 
 .library-ds-swatches {
@@ -19874,8 +19921,17 @@ body.desktop-pet-shell .pet-task-item {
   overflow: hidden;
 }
 
-.library-ds-card .toggle-switch {
-  align-self: flex-end;
+.library-ds-toggle-cell {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-left: 10px;
+  border-left: 1px solid var(--border-subtle);
+  cursor: default;
+}
+
+.library-ds-toggle-cell .toggle-switch {
+  margin-top: 1px;
 }
 
 .library-preview {
@@ -21246,12 +21302,6 @@ body.desktop-pet-shell .pet-task-item {
 
 /* Library install UI */
 
-.library-toolbar-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
 .library-install-btn {
   display: inline-flex;
   align-items: center;
@@ -21274,19 +21324,100 @@ body.desktop-pet-shell .pet-task-item {
 .library-install-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 10px;
-  margin-top: 8px;
+  gap: 12px;
+  margin: 0;
+  border: none;
+  background: transparent;
+}
+
+.library-section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0;
+}
+
+.library-section-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.library-section-count {
+  margin-left: 6px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.library-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.library-add-btn[aria-expanded="true"] {
+  border-color: var(--border-strong);
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+}
+
+.library-add-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  color: currentColor;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.library-hidden-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin: -2px 0 10px;
+  padding: 5px 8px;
   border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.library-hidden-banner-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.library-hidden-banner-link:hover {
+  text-decoration: underline;
+}
+
+.library-add-panel .library-install-form {
+  padding: 12px;
+  margin: 0 0 12px;
+  border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg-primary);
 }
 
 .library-import-controls {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 14px;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .library-install-form .library-import-source-control,
@@ -21328,53 +21459,79 @@ body.desktop-pet-shell .pet-task-item {
   box-shadow: var(--shadow-xs);
 }
 
-.library-import-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
+.library-import-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 14px;
   align-items: center;
-}
-
-.library-import-option-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   min-width: 0;
 }
 
 .library-import-option-label {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .library-import-mode-control {
   --seg-cols: 3;
 }
 
-.library-import-checkbox {
-  display: inline-flex;
-  flex-direction: row;
+.library-import-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
+  gap: 8px 12px;
+  min-height: 30px;
+}
+
+.library-import-checkbox {
+  display: inline-grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  column-gap: 6px;
   color: var(--text-secondary);
   font-size: 12px;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
 .library-import-checkbox input {
+  width: 14px;
+  height: 14px;
   margin: 0;
+  flex: 0 0 auto;
 }
 
 .library-install-row {
   display: flex;
   gap: 8px;
   align-items: center;
+  min-width: 0;
 }
-.library-install-row .library-search {
+
+.library-import-input {
   flex: 1;
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+
+.library-import-input:hover {
+  border-color: var(--border-strong);
+}
+
+.library-import-input:focus {
+  border-color: var(--selected);
+  box-shadow: 0 0 0 3px var(--selected-soft);
 }
 
 .library-install-submit {
@@ -21389,7 +21546,10 @@ body.desktop-pet-shell .pet-task-item {
   flex-shrink: 0;
 }
 .library-install-submit:disabled {
-  opacity: 0.5;
+  border-color: var(--border-subtle);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  opacity: 1;
   cursor: not-allowed;
 }
 
@@ -21400,9 +21560,57 @@ body.desktop-pet-shell .pet-task-item {
 }
 
 .library-install-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   color: var(--text-secondary);
   font-size: 12px;
   margin: 0;
+}
+
+.library-install-status-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.library-install-status-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 720px) {
+  .library-import-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .library-import-row,
+  .library-install-row {
+    display: flex;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .library-install-form .library-import-source-control,
+  .library-install-form .library-import-mode-control {
+    width: 100%;
+  }
+
+  .library-install-form .library-import-source-control button,
+  .library-install-form .library-import-mode-control button {
+    flex: 1 1 0;
+  }
+
+  .library-install-submit {
+    width: 100%;
+  }
 }
 
 .library-source-badge {
