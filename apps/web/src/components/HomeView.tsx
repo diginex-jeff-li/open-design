@@ -224,6 +224,8 @@ export function HomeView({
   const [pendingPluginUseHandoff, setPendingPluginUseHandoff] =
     useState<PendingPluginUseHandoff | null>(null);
   const [fallbackProjectKind, setFallbackProjectKind] = useState<ProjectKind | null>(null);
+  const [fallbackProjectMetadata, setFallbackProjectMetadata] =
+    useState<ProjectMetadata | null>(null);
   const [active, setActive] = useState<ActivePlugin | null>(null);
   const [activeSkill, setActiveSkill] = useState<SkillSummary | null>(null);
   const [selectedPluginContexts, setSelectedPluginContexts] = useState<SelectedPluginContext[]>([]);
@@ -409,6 +411,7 @@ export function HomeView({
     setSelectedMcpContexts([]);
     setSelectedConnectorContexts([]);
     setFallbackProjectKind('other');
+    setFallbackProjectMetadata(null);
     if (promptHandoff.focus) {
       pendingPromptFocusEndRef.current = true;
     }
@@ -625,6 +628,7 @@ export function HomeView({
       suppressPromptSync: suppressPromptUpdate,
     });
     setFallbackProjectKind(null);
+    setFallbackProjectMetadata(null);
     setDetailsRecord(null);
     if (!suppressPromptUpdate && optimisticPrompt !== null) {
       setPrompt(optimisticPrompt);
@@ -860,14 +864,18 @@ export function HomeView({
 
   function useExamplePlugin(record: InstalledPluginRecord, chipId: string, promptText: string) {
     const projectKind = projectKindForExamplePlugin(record, chipId);
-    requestActivePlugin(record, promptText, {
-      projectKind,
-      chipId,
-      inputs: {},
-      inputFields: [],
-      queryTemplate: null,
-      replaceWithoutConfirmation: true,
-    });
+    const projectMetadata = projectMetadataForExamplePlugin(chipId);
+    activePluginApplyRequestRef.current += 1;
+    setActive(null);
+    setActiveSkill(null);
+    setFallbackProjectKind(projectKind);
+    setFallbackProjectMetadata(projectMetadata);
+    setPendingApplyId(null);
+    setPendingChipId(null);
+    setError(null);
+    setPrompt(promptText);
+    setPromptEditedByUser(false);
+    focusPromptAtEnd();
   }
 
   function removePluginContext(pluginId: string) {
@@ -968,6 +976,7 @@ export function HomeView({
     activePluginApplyRequestRef.current += 1;
     setActive(null);
     setFallbackProjectKind(null);
+    setFallbackProjectMetadata(null);
     setPendingApplyId(null);
     setPendingChipId(null);
     setPrompt('');
@@ -978,6 +987,7 @@ export function HomeView({
     activePluginApplyRequestRef.current += 1;
     setActive(null);
     setFallbackProjectKind(null);
+    setFallbackProjectMetadata(null);
     setPendingApplyId(null);
     setPendingChipId(null);
     setError(null);
@@ -987,6 +997,8 @@ export function HomeView({
 
   function useSkill(skill: SkillSummary, nextPrompt: string | null) {
     setActiveSkill(skill);
+    setFallbackProjectKind(null);
+    setFallbackProjectMetadata(null);
     setError(null);
     const replacement = nextPrompt ?? skill.examplePrompt ?? '';
     if (replacement.trim().length > 0) {
@@ -1026,6 +1038,7 @@ export function HomeView({
       setActive(null);
       setActiveSkill(null);
       setFallbackProjectKind('other');
+      setFallbackProjectMetadata(null);
       setError(null);
       setPrompt(nextPrompt);
       setPromptEditedByUser(false);
@@ -1235,7 +1248,7 @@ export function HomeView({
       : homeCreateProjectMetadata(
           submittedProjectKind,
           submittedActive?.inputs ?? null,
-          submittedActive?.projectMetadata ?? null,
+          submittedActive?.projectMetadata ?? fallbackProjectMetadata ?? null,
         );
     onSubmit({
       prompt: trimmed,
@@ -1457,13 +1470,6 @@ function projectKindForExamplePlugin(
   record: InstalledPluginRecord,
   chipId: string,
 ): ProjectKind {
-  const mode = homePluginManifestField(record, 'mode');
-  const surface = homePluginManifestField(record, 'surface');
-  if (mode === 'deck') return 'deck';
-  if (mode === 'prototype') return 'prototype';
-  if (mode === 'image' || surface === 'image') return 'image';
-  if (mode === 'video' || surface === 'video') return 'video';
-  if (mode === 'audio' || surface === 'audio') return 'audio';
   const chip = findChip(chipId);
   if (
     chip?.action.kind === 'apply-scenario' ||
@@ -1471,7 +1477,25 @@ function projectKindForExamplePlugin(
   ) {
     return chip.action.projectKind;
   }
+  const mode = homePluginManifestField(record, 'mode');
+  const surface = homePluginManifestField(record, 'surface');
+  if (mode === 'deck') return 'deck';
+  if (mode === 'prototype') return 'prototype';
+  if (mode === 'image' || surface === 'image') return 'image';
+  if (mode === 'video' || surface === 'video') return 'video';
+  if (mode === 'audio' || surface === 'audio') return 'audio';
   return 'other';
+}
+
+function projectMetadataForExamplePlugin(chipId: string): ProjectMetadata | null {
+  const chip = findChip(chipId);
+  if (
+    chip?.action.kind === 'apply-scenario' ||
+    chip?.action.kind === 'apply-figma-migration'
+  ) {
+    return chip.action.projectMetadata ?? null;
+  }
+  return null;
 }
 
 function homePluginManifestField(
