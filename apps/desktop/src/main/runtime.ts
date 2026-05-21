@@ -307,6 +307,13 @@ export type DesktopRuntimeOptions = {
    * and the runtime falls back to `discoverUrl` for API calls too.
   */
   discoverDaemonUrl?: () => Promise<string | null>;
+  /**
+   * BCP-47 locale string read from the OS by main process, forwarded
+   * to the preload via `webPreferences.additionalArguments` so the
+   * renderer can mirror it onto `__od__.client.osLocale`. Optional;
+   * when omitted the renderer falls back to navigator/localStorage.
+   */
+  osLocale?: string;
   preloadPath?: string;
   /**
    * Round-5 (lefarcen P1, mrcfps): lazy re-handshake hook. The runtime
@@ -785,7 +792,14 @@ function desktopPetUrl(baseUrl: string): string {
   return url.toString();
 }
 
-function createDesktopPetWindow(preloadPath: string): BrowserWindow {
+// Encode the OS locale before stuffing it into a Chromium argv value
+// — BCP-47 region tags shouldn't contain `;` or `=`, but the renderer's
+// `process.argv` parser is happier if we never have to worry about it.
+function osLocaleAdditionalArguments(osLocale: string | undefined): string[] | undefined {
+  return osLocale ? [`--od-os-locale=${encodeURIComponent(osLocale)}`] : undefined;
+}
+
+function createDesktopPetWindow(preloadPath: string, osLocale: string | undefined): BrowserWindow {
   const { workArea } = screen.getPrimaryDisplay();
   const petWindow = new BrowserWindow({
     width: DESKTOP_PET_WINDOW_WIDTH,
@@ -802,6 +816,7 @@ function createDesktopPetWindow(preloadPath: string): BrowserWindow {
     hasShadow: false,
     focusable: false,
     webPreferences: {
+      additionalArguments: osLocaleAdditionalArguments(osLocale),
       contextIsolation: true,
       nodeIntegration: false,
       preload: preloadPath,
@@ -1173,7 +1188,7 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
   });
 
   const consoleEntries: DesktopConsoleEntry[] = [];
-  const petWindow = createDesktopPetWindow(preloadPath);
+  const petWindow = createDesktopPetWindow(preloadPath, options.osLocale);
   const window = new BrowserWindow({
     height: 900,
     icon: resolveDesktopIconPath(),
@@ -1187,6 +1202,7 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
     title: "Open Design",
     ...MAC_WINDOW_CHROME,
     webPreferences: {
+      additionalArguments: osLocaleAdditionalArguments(options.osLocale),
       contextIsolation: true,
       nodeIntegration: false,
       preload: preloadPath,
