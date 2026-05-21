@@ -15,6 +15,7 @@
 import type { ReactNode } from 'react';
 import { EntryHelpMenu } from './EntryHelpMenu';
 import { Icon } from './Icon';
+import { UpdaterPopup } from './UpdaterPopup';
 import { useT } from '../i18n';
 
 export type EntryView =
@@ -77,19 +78,20 @@ export function EntryNavRail({ view, onViewChange, onNewProject }: Props) {
           data-testid="entry-nav-logo"
         >
           <img
-            src="/app-icon.svg?v=rail-clean"
+            src="/app-icon.svg"
             alt=""
             className="entry-nav-rail__logo-img"
             draggable={false}
           />
         </button>
+        <UpdaterPopup />
         <NavButton
           ariaLabel={t('entry.navNewProject')}
           tooltip={t('entry.navNewProject')}
           onClick={onNewProject}
           testId="entry-nav-new-project"
         >
-          <Icon name="plus-filled" size={18} />
+          <Icon name="plus" size={18} />
         </NavButton>
         <NavButton
           active={view === 'projects'}
@@ -98,7 +100,7 @@ export function EntryNavRail({ view, onViewChange, onNewProject }: Props) {
           onClick={() => onViewChange('projects')}
           testId="entry-nav-projects"
         >
-          <Icon name="folder-filled" size={18} />
+          <Icon name="folder" size={18} />
         </NavButton>
         <NavButton
           active={view === 'tasks'}
@@ -107,7 +109,7 @@ export function EntryNavRail({ view, onViewChange, onNewProject }: Props) {
           onClick={() => onViewChange('tasks')}
           testId="entry-nav-tasks"
         >
-          <Icon name="layers-filled" size={18} />
+          <Icon name="kanban" size={18} />
         </NavButton>
         <NavButton
           active={view === 'design-systems'}
@@ -116,19 +118,19 @@ export function EntryNavRail({ view, onViewChange, onNewProject }: Props) {
           onClick={() => onViewChange('design-systems')}
           testId="entry-nav-design-systems"
         >
-          <Icon name="palette-filled" size={18} />
+          <Icon name="blocks" size={18} />
         </NavButton>
       </div>
       <div className="entry-nav-rail__footer">
         <div className="entry-nav-rail__divider" role="separator" />
         <NavButton
           active={view === 'plugins'}
-          ariaLabel={t('entry.navPlugins')}
-          tooltip={t('entry.navPlugins')}
+          ariaLabel="Plugins"
+          tooltip="Plugins"
           onClick={() => onViewChange('plugins')}
           testId="entry-nav-plugins"
         >
-          <Icon name="puzzle" size={18} />
+          <Icon name="grid" size={18} />
         </NavButton>
         <NavButton
           active={view === 'integrations'}
@@ -137,7 +139,7 @@ export function EntryNavRail({ view, onViewChange, onNewProject }: Props) {
           onClick={() => onViewChange('integrations')}
           testId="entry-nav-integrations"
         >
-          <Icon name="integrations-filled" size={18} />
+          <Icon name="link" size={18} />
         </NavButton>
         <EntryHelpMenu />
       </div>
