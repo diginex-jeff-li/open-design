@@ -2556,11 +2556,29 @@ function homeHeroExamplePluginsForChip(
   plugins: InstalledPluginRecord[],
   locale: Locale,
 ): InstalledPluginRecord[] {
-  return plugins
+  const presets = plugins
     .filter((plugin) => pluginMatchesExampleChip(plugin, chipId))
     .filter((plugin) => Boolean(pluginPresetQuery(plugin, locale)))
     .sort((a, b) => pluginPresetRank(b, chipId) - pluginPresetRank(a, chipId))
     .slice(0, 18);
+  if (chipId === 'image') {
+    return movePluginPresetToEnd(presets, 'example-hatch-pet');
+  }
+  return presets;
+}
+
+function movePluginPresetToEnd(
+  records: InstalledPluginRecord[],
+  pluginId: string,
+): InstalledPluginRecord[] {
+  const index = records.findIndex((record) => record.id === pluginId);
+  if (index < 0 || index === records.length - 1) return records;
+  const record = records[index]!;
+  return [
+    ...records.slice(0, index),
+    ...records.slice(index + 1),
+    record,
+  ];
 }
 
 function pluginMatchesExampleChip(record: InstalledPluginRecord, chipId: string): boolean {
@@ -2579,8 +2597,10 @@ function pluginMatchesExampleChip(record: InstalledPluginRecord, chipId: string)
       return has('deck', 'slides', 'slide-deck') || hasPart('slide', 'deck');
     case 'hyperframes':
       return hasPart('hyperframes', 'hyperframe');
+    case 'live-artifact':
+      return has('live-artifact') || hasPart('live-artifact');
     case 'image':
-      return (has('image') || hasPart('image-template')) && !hasPart('video', 'audio');
+      return (has('image') || hasPart('image-template')) && !hasPart('video', 'audio', 'live-artifact');
     case 'video':
       return (has('video') || hasPart('video-template')) && !hasPart('hyperframes', 'audio');
     case 'audio':

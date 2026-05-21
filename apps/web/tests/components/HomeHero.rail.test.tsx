@@ -22,7 +22,12 @@ afterEach(() => {
   cleanup();
 });
 
-function makePlugin(id: string, mode: string, title = id): InstalledPluginRecord {
+function makePlugin(
+  id: string,
+  mode: string,
+  title = id,
+  extraTags: string[] = [],
+): InstalledPluginRecord {
   return {
     id,
     title,
@@ -36,7 +41,7 @@ function makePlugin(id: string, mode: string, title = id): InstalledPluginRecord
       version: '1.0.0',
       title,
       description: 'Plugin preset fixture',
-      tags: [mode],
+      tags: [mode, ...extraTags],
       od: {
         mode,
         useCase: {
@@ -165,6 +170,51 @@ describe('HomeHero intent rail', () => {
       'deck',
       'Create with a focused brief using Investor deck',
     );
+  });
+
+  it('keeps Hatch Pet at the end of the image example presets', () => {
+    const hatchPet = makePlugin('example-hatch-pet', 'image', 'Hatch Pet');
+    const imagePoster = makePlugin('image-template-poster', 'image', 'Image Poster');
+    const stoneInfographic = makePlugin('image-template-stone', 'image', 'Stone Infographic');
+    renderHero({
+      activeChipId: 'image',
+      pluginOptions: [hatchPet, imagePoster, stoneInfographic],
+    });
+
+    const presets = screen.getAllByTestId('home-hero-plugin-preset');
+    expect(presets.map((preset) => preset.textContent)).toEqual([
+      expect.stringContaining('Image Poster'),
+      expect.stringContaining('Stone Infographic'),
+      expect.stringContaining('Hatch Pet'),
+    ]);
+  });
+
+  it('moves live artifact presets out of Image and into Live artifact examples', () => {
+    const imagePoster = makePlugin('image-template-poster', 'image', 'Image Poster');
+    const notionDashboard = makePlugin(
+      'image-template-notion-team-dashboard-live-artifact',
+      'image',
+      'Notion-style Team Dashboard (Live Artifact)',
+      ['live-artifact'],
+    );
+    renderHero({
+      activeChipId: 'image',
+      pluginOptions: [imagePoster, notionDashboard],
+    });
+
+    let presets = screen.getAllByTestId('home-hero-plugin-preset');
+    expect(presets).toHaveLength(1);
+    expect(presets[0]?.textContent).toContain('Image Poster');
+
+    cleanup();
+    renderHero({
+      activeChipId: 'live-artifact',
+      pluginOptions: [imagePoster, notionDashboard],
+    });
+
+    presets = screen.getAllByTestId('home-hero-plugin-preset');
+    expect(presets).toHaveLength(1);
+    expect(presets[0]?.textContent).toContain('Notion-style Team Dashboard (Live Artifact)');
   });
 
   it('disables every visible chip while a plugin apply is in flight', () => {

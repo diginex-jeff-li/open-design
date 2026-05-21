@@ -581,6 +581,55 @@ describe('HomeView prompt handoff', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
+  it('uses example preset cards as plain-text prompt fillers without binding plugin inputs', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (url) => {
+      if (typeof url === 'string' && url === '/api/plugins') {
+        return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (typeof url === 'string' && url.includes('/apply')) {
+        return new Response(JSON.stringify(WEB_PROTOTYPE_APPLY_RESULT), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    stubAnimationFrame();
+
+    render(
+      <HomeView
+        projects={[]}
+        onSubmit={() => undefined}
+        onOpenProject={() => undefined}
+        onViewAllProjects={() => undefined}
+      />,
+    );
+
+    await clearActiveTypeChip();
+    fireEvent.click(await screen.findByTestId('home-hero-rail-prototype'));
+    fireEvent.click(await screen.findByTestId('home-hero-plugin-preset'));
+
+    const input = screen.getByTestId('home-hero-input') as HTMLTextAreaElement;
+    await waitFor(() => {
+      expect(input.value).toBe(
+        'Build a high-fidelity web prototype for product evaluators using the active project design system from the bundled web prototype seed.',
+      );
+    });
+    expect(fetchMock.mock.calls.some(([url]) => (
+      typeof url === 'string' && url.includes('/api/plugins/example-web-prototype/apply')
+    ))).toBe(false);
+    expect(screen.queryByTestId('home-hero-active-type-chip')).toBeNull();
+    expect(screen.queryByTestId('plugin-inputs-form')).toBeNull();
+    expect(screen.queryByTestId('home-hero-prompt-slot-fidelity')).toBeNull();
+    expect(screen.queryByTestId('home-hero-prompt-slot-artifactKind')).toBeNull();
+    expect(screen.queryByTestId('home-hero-prompt-slot-designSystem')).toBeNull();
+    expect(screen.queryByTestId('home-hero-prompt-slot-template')).toBeNull();
+  });
+
   it('binds the Home rail Live artifact chip with live-artifact metadata and applies it on submit', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {

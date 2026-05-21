@@ -860,14 +860,16 @@ export function HomeView({
 
   function useExamplePlugin(record: InstalledPluginRecord, chipId: string, promptText: string) {
     const projectKind = projectKindForExamplePlugin(record, chipId);
-    requestActivePlugin(record, promptText, {
-      projectKind,
-      chipId,
-      inputs: {},
-      inputFields: [],
-      queryTemplate: null,
-      replaceWithoutConfirmation: true,
-    });
+    activePluginApplyRequestRef.current += 1;
+    setActive(null);
+    setActiveSkill(null);
+    setFallbackProjectKind(projectKind);
+    setPendingApplyId(null);
+    setPendingChipId(null);
+    setError(null);
+    setPrompt(promptText);
+    setPromptEditedByUser(false);
+    focusPromptAtEnd();
   }
 
   function removePluginContext(pluginId: string) {
