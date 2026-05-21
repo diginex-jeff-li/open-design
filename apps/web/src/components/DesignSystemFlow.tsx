@@ -69,6 +69,21 @@ import type {
   TrackingDesignSystemsEntryFrom,
 } from '@open-design/contracts/analytics';
 
+// Source counts the embedded DS creation flow can report back to its
+// wrapper at Generate-click time. OnboardingView uses this to emit the
+// `generate` ui_click + `onboarding_complete_result` events with the
+// runtime/about-you context that only it knows; without this hook the
+// onboarding wrapper would have no way to see the user-pinned source
+// material because the form state lives inside `DesignSystemCreationFlow`.
+export interface DesignSystemGenerateSnapshot {
+  sourceCount: number;
+  hasBrandDescription: boolean;
+  githubRepoCount: number;
+  localFolderCount: number;
+  figFileCount: number;
+  assetFileCount: number;
+}
+
 interface CreationProps {
   onBack: () => void;
   onCreated: (projectId: string, project?: Project) => void;
@@ -77,6 +92,21 @@ interface CreationProps {
   config?: AppConfig;
   onOpenConnectorsTab?: () => void;
   chrome?: 'standalone' | 'embedded';
+  // Intent signal: user clicked Generate. Fires before any async work,
+  // so a wrapper (OnboardingView) can emit the `generate` ui_click row
+  // even when generation later fails.
+  onBeforeGenerate?: (snapshot: DesignSystemGenerateSnapshot) => void;
+  // Outcome signal: generation either kicked off successfully (workspace
+  // opened, project handed off) or hit a failure branch. Wrappers use
+  // this to emit lifecycle completion events with the right result so
+  // a draft-create error or workspace-open error doesn't ship as
+  // `completed_with_design_system`. `error_code` is the daemon's
+  // generic failure code; the exact message stays in the local error
+  // toast.
+  onGenerateSettled?: (
+    snapshot: DesignSystemGenerateSnapshot,
+    outcome: { result: 'success' } | { result: 'failed'; errorCode: string },
+  ) => void;
 }
 
 interface DetailProps {
@@ -199,6 +229,8 @@ export function DesignSystemCreationFlow({
   config,
   onOpenConnectorsTab,
   chrome = 'standalone',
+  onBeforeGenerate,
+  onGenerateSettled,
 }: CreationProps) {
   const [step, setStep] = useState<SetupStep>('setup');
   const [state, setState] = useState<SetupState>(EMPTY_SETUP);
@@ -377,6 +409,27 @@ export function DesignSystemCreationFlow({
 
   async function generate() {
     if (generationStarting) return;
+    // Snapshot the user-pinned source state up front. Used for the
+    // pre-async ui_click intent signal AND the post-async lifecycle
+    // outcome — both rides need the same numbers so the
+    // dashboard can correlate "user attempted generate with N
+    // sources" → "generate eventually succeeded / failed with the
+    // same N". Computed here because OnboardingView can't peek into
+    // this flow's setup form.
+    const githubRepoCount = state.githubUrls?.length ?? 0;
+    const localFolderCount = state.codeFolders?.length ?? 0;
+    const figFileCount = state.figFiles?.length ?? 0;
+    const assetFileCount = state.assetFiles?.length ?? 0;
+    const snapshot = {
+      sourceCount:
+        githubRepoCount + localFolderCount + figFileCount + assetFileCount,
+      hasBrandDescription: Boolean(state.company?.trim()),
+      githubRepoCount,
+      localFolderCount,
+      figFileCount,
+      assetFileCount,
+    };
+    onBeforeGenerate?.(snapshot);
     setGenerationStarting(true);
     setError(null);
     try {
@@ -394,18 +447,27 @@ export function DesignSystemCreationFlow({
       if (!created) {
         setError('Could not generate this design system.');
         setStep('setup');
+        onGenerateSettled?.(snapshot, {
+          result: 'failed',
+          errorCode: 'DS_DRAFT_CREATE_FAILED',
+        });
         return;
       }
       const workspace = await ensureDesignSystemWorkspace(created.id);
       if (!workspace) {
         setError('Could not open the design system workspace.');
         setStep('setup');
+        onGenerateSettled?.(snapshot, {
+          result: 'failed',
+          errorCode: 'DS_WORKSPACE_OPEN_FAILED',
+        });
         return;
       }
       const project = workspace.project;
       const setupState = state;
       const connector = githubConnector;
       onCreated(project.id, project);
+      onGenerateSettled?.(snapshot, { result: 'success' });
       scheduleAfterProjectHandoff(() => {
         void prepareCreatedDesignSystemProject({
           project,
@@ -419,6 +481,12 @@ export function DesignSystemCreationFlow({
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not prepare the design system project.');
       setStep('setup');
+      onGenerateSettled?.(snapshot, {
+        result: 'failed',
+        errorCode: err instanceof Error
+          ? `DS_GENERATE_THREW:${err.message.slice(0, 80)}`
+          : 'DS_GENERATE_THREW',
+      });
     } finally {
       setGenerationStarting(false);
     }

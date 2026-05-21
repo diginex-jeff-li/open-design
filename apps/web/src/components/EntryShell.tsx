@@ -15,10 +15,14 @@ import {
   type InstalledPluginRecord,
 } from '@open-design/contracts';
 import type { OpenDesignHostProjectImportSuccess } from '@open-design/host';
+import type { DesignSystemGenerateSnapshot } from './DesignSystemFlow';
 import { useAnalytics } from '../analytics/provider';
 import {
   trackHomeNavClick,
   trackHomeToolbarClick,
+  trackOnboardingClick,
+  trackOnboardingCompleteResult,
+  trackOnboardingRuntimeScanResult,
   trackPageView,
 } from '../analytics/events';
 import {
@@ -29,7 +33,14 @@ import type {
   TrackingOnboardingArea,
   TrackingOnboardingStepIndex,
   TrackingOnboardingStepName,
+  TrackingOnboardingClickElement,
+  TrackingOnboardingClickAction,
+  TrackingOnboardingRuntimeType,
+  TrackingOnboardingCompletionResult,
+  TrackingOnboardingCompletionType,
+  TrackingCliProviderId,
 } from '@open-design/contracts/analytics';
+import { agentIdToTracking } from '@open-design/contracts/analytics';
 import { useT } from '../i18n';
 import { navigate, useRoute } from '../router';
 import type {
@@ -238,7 +249,18 @@ interface Props {
   onRenameProject: (id: string, name: string) => void;
   onChangeDefaultDesignSystem: (id: string) => void;
   onCreateDesignSystem?: () => void;
-  renderDesignSystemCreation?: (onBack: () => void) => ReactNode;
+  renderDesignSystemCreation?: (
+    onBack: () => void,
+    hooks?: {
+      onBeforeGenerate?: (snapshot: DesignSystemGenerateSnapshot) => void;
+      onGenerateSettled?: (
+        snapshot: DesignSystemGenerateSnapshot,
+        outcome:
+          | { result: 'success' }
+          | { result: 'failed'; errorCode: string },
+      ) => void;
+    },
+  ) => ReactNode;
   onOpenDesignSystem?: (id: string) => void;
   onDesignSystemsRefresh?: () => Promise<void> | void;
   onPersistComposioKey: (composio: AppConfig['composio']) => Promise<void> | void;
@@ -729,7 +751,18 @@ function OnboardingView({
   onApiModelChange: (model: string) => void;
   onConfigPersist: (cfg: AppConfig) => Promise<void> | void;
   onRefreshAgents: () => Promise<AgentInfo[]> | AgentInfo[];
-  renderDesignSystemCreation?: (onBack: () => void) => ReactNode;
+  renderDesignSystemCreation?: (
+    onBack: () => void,
+    hooks?: {
+      onBeforeGenerate?: (snapshot: DesignSystemGenerateSnapshot) => void;
+      onGenerateSettled?: (
+        snapshot: DesignSystemGenerateSnapshot,
+        outcome:
+          | { result: 'success' }
+          | { result: 'failed'; errorCode: string },
+      ) => void;
+    },
+  ) => ReactNode;
   onFinish: () => void;
 }) {
   const t = useT();
@@ -817,18 +850,23 @@ function OnboardingView({
   // exposure. The fourth step (`generation`) lives in
   // `DesignSystemDetailView` because the user navigates out of this
   // component once the design system project opens; that emission
-  // reads the same `onboarding_session_id` from sessionStorage.
-  // `clearOnboardingSessionId` runs on `onFinish` / unmount so a
-  // later DS visit unrelated to onboarding doesn't inherit the id.
+  // reads the same `onboarding_session_id` from sessionStorage and
+  // clears it once it fires.
+  //
+  // We do NOT clear on unmount: the Generate path unmounts
+  // OnboardingView *before* the post-Generate chat_panel page_view
+  // mounts in ProjectView, so an unmount-clear would race the 4th-step
+  // emission and consistently wipe the id before it could be read
+  // (observed on PostHog 2026-05-21 — `area=generation_progress` had
+  // zero events with the unmount-clear in place). Skip / Back / last-
+  // step Continue clear inline in their respective handlers below; the
+  // Generate path clears from `ProjectView` after the
+  // generation_progress page_view lands; abandoned sessions clear on
+  // sessionStorage tab close.
   const onboardingSessionIdRef = useRef<string>('');
   if (!onboardingSessionIdRef.current) {
     onboardingSessionIdRef.current = getOrCreateOnboardingSessionId();
   }
-  useEffect(() => {
-    return () => {
-      clearOnboardingSessionId();
-    };
-  }, []);
   useEffect(() => {
     const onboardingSessionId = onboardingSessionIdRef.current;
     if (!onboardingSessionId) return;
@@ -857,6 +895,115 @@ function OnboardingView({
     });
   }, [analytics.track, step]);
 
+  // Onboarding analytics helpers. Wall-clock start so the lifecycle
+  // result event can carry `duration_ms`; `runtime` state is the user's
+  // current pick at click time so `runtime_type` rides along on every
+  // click. The `_lifecycleReportedRef` guards against double-firing the
+  // completion event when the user fires both Skip and unmount in the
+  // same tick (the unmount path also clears the session id; see the
+  // PR #2453 follow-up).
+  const onboardingStartedAtRef = useRef<number>(Date.now());
+  const lifecycleReportedRef = useRef(false);
+  function currentRuntimeType(): TrackingOnboardingRuntimeType {
+    if (runtime === 'local') return 'local_cli';
+    if (runtime === 'byok') return 'byok';
+    return 'none';
+  }
+  function stepInfo(stepIdx: number): {
+    area: TrackingOnboardingArea;
+    stepIndex: TrackingOnboardingStepIndex;
+    stepName: TrackingOnboardingStepName;
+  } {
+    if (stepIdx === 0) return { area: 'runtime', stepIndex: '1', stepName: 'connect' };
+    if (stepIdx === 1) return { area: 'about_you', stepIndex: '2', stepName: 'about_you' };
+    return { area: 'design_system', stepIndex: '3', stepName: 'design_system' };
+  }
+  // Pure mapping from `DesignSystemGenerateSnapshot` to the v2
+  // `TrackingOnboardingSourceType` enum. Single-source batches collapse
+  // to that source's literal; mixed batches go to `'mixed'`; the empty
+  // batch falls back to `'text'` when the user typed a brand
+  // description (prompt-only path, which the v2 contract reserves the
+  // `'text'` literal for) and `'none'` otherwise. The pre-fix version
+  // shipped `'none'` for prompt-only too, losing the prompt-only vs
+  // truly-empty distinction the dashboard needs.
+  function deriveOnboardingSourceType(
+    snapshot: DesignSystemGenerateSnapshot,
+  ): import('@open-design/contracts/analytics').TrackingOnboardingSourceType {
+    if (snapshot.sourceCount === 0) {
+      return snapshot.hasBrandDescription ? 'text' : 'none';
+    }
+    if (snapshot.githubRepoCount === snapshot.sourceCount) return 'github_repo';
+    if (snapshot.localFolderCount === snapshot.sourceCount) return 'local_code';
+    if (snapshot.figFileCount === snapshot.sourceCount) return 'fig';
+    if (snapshot.assetFileCount === snapshot.sourceCount) return 'assets';
+    return 'mixed';
+  }
+  function emitOnboardingClick(
+    element: TrackingOnboardingClickElement,
+    action: TrackingOnboardingClickAction,
+    extra: Partial<Omit<
+      Parameters<typeof trackOnboardingClick>[1],
+      'page_name' | 'area' | 'element' | 'action' | 'step_index' | 'step_name' | 'onboarding_session_id'
+    >> = {},
+  ): void {
+    const onboardingSessionId = onboardingSessionIdRef.current;
+    if (!onboardingSessionId) return;
+    const info = stepInfo(step);
+    trackOnboardingClick(analytics.track, {
+      page_name: 'onboarding',
+      area: info.area,
+      element,
+      action,
+      step_index: info.stepIndex,
+      step_name: info.stepName,
+      onboarding_session_id: onboardingSessionId,
+      ...extra,
+    });
+  }
+  function emitOnboardingComplete(
+    result: TrackingOnboardingCompletionResult,
+    completionType: TrackingOnboardingCompletionType,
+    extra: {
+      errorCode?: string;
+      // Generate-path callers pass the embedded DS creation flow's
+      // snapshot so the wire row reflects the actual source-count
+      // and brand-description the user typed, not the (always-null)
+      // `designSource` card-pick state. E2E (2026-05-21) showed the
+      // user can click Generate without first clicking one of the
+      // three source-type cards — they go straight to typing a
+      // brand prompt — so reading `designSource` alone yielded
+      // `has_design_system_request: false` despite a real request.
+      sourceSnapshot?: DesignSystemGenerateSnapshot;
+    } = {},
+  ): void {
+    if (lifecycleReportedRef.current) return;
+    const onboardingSessionId = onboardingSessionIdRef.current;
+    if (!onboardingSessionId) return;
+    lifecycleReportedRef.current = true;
+    const info = stepInfo(step);
+    const snapshot = extra.sourceSnapshot;
+    const hasRequest = snapshot
+      ? snapshot.sourceCount > 0 || snapshot.hasBrandDescription
+      : Boolean(designSource);
+    const sourceCount = snapshot ? snapshot.sourceCount : 0;
+    trackOnboardingCompleteResult(analytics.track, {
+      page_name: 'onboarding',
+      area: 'onboarding',
+      result,
+      exit_step_name: info.stepName,
+      completion_type: completionType,
+      runtime_type: currentRuntimeType(),
+      has_about_you: Boolean(
+        profile.role || profile.orgSize || profile.useCase.length > 0 || profile.source,
+      ),
+      has_design_system_request: hasRequest,
+      source_count: sourceCount,
+      ...(extra.errorCode ? { error_code: extra.errorCode } : {}),
+      duration_ms: Math.max(0, Date.now() - onboardingStartedAtRef.current),
+      onboarding_session_id: onboardingSessionId,
+    });
+  }
+
   const steps = [
     t('settings.onboardingStepConnect'),
     t('settings.onboardingStepProfile'),
@@ -877,6 +1024,9 @@ function OnboardingView({
       title: t('settings.onboardingLocalTitle'),
       body: t('settings.onboardingLocalBody'),
       onSelect: () => {
+        emitOnboardingClick('local_coding_agent', 'select_runtime', {
+          runtime_type: 'local_cli',
+        });
         void scanCliAgents();
       },
     },
@@ -886,6 +1036,7 @@ function OnboardingView({
       title: t('settings.onboardingByokTitle'),
       body: t('settings.onboardingByokBody'),
       onSelect: () => {
+        emitOnboardingClick('byok', 'select_runtime', { runtime_type: 'byok' });
         setRuntime('byok');
         onModeChange('api');
       },
@@ -904,21 +1055,36 @@ function OnboardingView({
       icon: 'github',
       title: t('settings.onboardingGithubTitle'),
       body: t('settings.onboardingGithubBody'),
-      onSelect: () => setDesignSource('github'),
+      onSelect: () => {
+        emitOnboardingClick('github_repo', 'add_source', {
+          source_type: 'github_repo',
+        });
+        setDesignSource('github');
+      },
     },
     {
       id: 'upload',
       icon: 'upload',
       title: t('settings.onboardingUploadTitle'),
       body: t('settings.onboardingUploadBody'),
-      onSelect: () => setDesignSource('upload'),
+      onSelect: () => {
+        emitOnboardingClick('local_code', 'upload_source', {
+          source_type: 'local_code',
+        });
+        setDesignSource('upload');
+      },
     },
     {
       id: 'prompt',
       icon: 'sparkles',
       title: t('settings.onboardingPromptTitle'),
       body: t('settings.onboardingPromptBody'),
-      onSelect: () => setDesignSource('prompt'),
+      onSelect: () => {
+        emitOnboardingClick('fig_upload', 'upload_source', {
+          source_type: 'fig',
+        });
+        setDesignSource('prompt');
+      },
     },
   ];
   const roleOptions = [
@@ -1021,11 +1187,36 @@ function OnboardingView({
     agentRevealTimersRef.current = [];
   }
 
+  function handleSkipWithTracking(): void {
+    emitOnboardingClick('skip', 'skip');
+    emitOnboardingComplete('skipped', 'skipped');
+    clearOnboardingSessionId();
+    onFinish();
+  }
+  function handleBackWithTracking(): void {
+    if (step === 0) {
+      // Step 0 "Back" semantically maps to Skip — there's nowhere
+      // earlier to go. Match the Skip telemetry shape rather than
+      // emit a back-without-prior-step row.
+      handleSkipWithTracking();
+      return;
+    }
+    emitOnboardingClick('back', 'back');
+    setStep((current) => current - 1);
+  }
   function handlePrimaryAction() {
     if (isLastStep) {
+      emitOnboardingClick('continue', 'continue');
+      // Last-step Continue without a DS generation = "completed
+      // without design system". The Generate path inside the
+      // embedded DesignSystemCreationFlow takes a different route
+      // (navigation to project) and emits its own completion.
+      emitOnboardingComplete('completed', 'completed_without_design_system');
+      clearOnboardingSessionId();
       onFinish();
       return;
     }
+    emitOnboardingClick('continue', 'continue');
     setStep((current) => current + 1);
   }
 
@@ -1037,14 +1228,58 @@ function OnboardingView({
     onModeChange('daemon');
     setCliScanStatus('scanning');
     setVisibleAgentIds([]);
+    const scanStartedAt = Date.now();
+    const onboardingSessionId = onboardingSessionIdRef.current;
+    const emitScanResult = (
+      args: {
+        result: 'success' | 'failed';
+        detected: number;
+        available: number;
+        selectedCliId?: TrackingCliProviderId;
+        errorCode?: string;
+      },
+    ): void => {
+      if (!onboardingSessionId) return;
+      trackOnboardingRuntimeScanResult(analytics.track, {
+        page_name: 'onboarding',
+        area: 'runtime',
+        runtime_type: 'local_cli',
+        result: args.result,
+        detected_cli_count: args.detected,
+        available_cli_count: args.available,
+        ...(args.selectedCliId ? { selected_cli_id: args.selectedCliId } : {}),
+        ...(args.errorCode ? { error_code: args.errorCode } : {}),
+        duration_ms: Math.max(0, Date.now() - scanStartedAt),
+        onboarding_session_id: onboardingSessionId,
+      });
+    };
     try {
       const nextAgents = await onRefreshAgents();
       if (cliScanTokenRef.current !== scanToken) return;
       const availableAgents = nextAgents.filter((agent) => agent.available);
+      // Scan-result semantics: zero available CLIs is a `failed` outcome
+      // because the user's runtime path is blocked, even though the
+      // detect call itself returned successfully. `detected_cli_count`
+      // separately reports the raw catalog so the dashboard can split
+      // "user has no CLI installed" from "detect crashed".
       if (availableAgents.length === 0) {
         setCliScanStatus('done');
+        emitScanResult({
+          result: 'failed',
+          detected: nextAgents.length,
+          available: 0,
+          errorCode: 'NO_AVAILABLE_CLI',
+        });
         return;
       }
+      emitScanResult({
+        result: 'success',
+        detected: nextAgents.length,
+        available: availableAgents.length,
+        ...(availableAgents[0]
+          ? { selectedCliId: agentIdToTracking(availableAgents[0].id) }
+          : {}),
+      });
       availableAgents.forEach((agent, index) => {
         const timer = setTimeout(() => {
           if (cliScanTokenRef.current !== scanToken) return;
@@ -1057,9 +1292,15 @@ function OnboardingView({
         }, 110 * (index + 1));
         agentRevealTimersRef.current.push(timer);
       });
-    } catch {
+    } catch (err) {
       if (cliScanTokenRef.current === scanToken) {
         setCliScanStatus('done');
+        emitScanResult({
+          result: 'failed',
+          detected: 0,
+          available: 0,
+          errorCode: err instanceof Error ? err.message : 'AGENT_REFRESH_THREW',
+        });
       }
     }
   }
@@ -1267,7 +1508,14 @@ function OnboardingView({
                   placeholder={t('settings.onboardingSelectPlaceholder')}
                   value={profile.orgSize}
                   options={orgSizeOptions}
-                  onChange={(value) => setProfile((current) => ({ ...current, orgSize: value }))}
+                  onChange={(value) => {
+                    if (typeof value === 'string' && value) {
+                      emitOnboardingClick('organization_size', 'select_option', {
+                        organization_size: value,
+                      });
+                    }
+                    setProfile((current) => ({ ...current, orgSize: value }));
+                  }}
                 />
                 <OnboardingDropdown
                   label={t('settings.onboardingUseCaseLabel')}
@@ -1277,6 +1525,16 @@ function OnboardingView({
                   multiple
                   onChange={(value) => {
                     if (!Array.isArray(value)) return;
+                    // Multi-select: emit one click per newly added
+                    // value (delta), not per render of the whole
+                    // selection. The dashboard then sees one row per
+                    // use_case chosen.
+                    const previous = new Set(profile.useCase);
+                    for (const v of value) {
+                      if (!previous.has(v)) {
+                        emitOnboardingClick('use_case', 'select_option', { use_case: v });
+                      }
+                    }
                     setProfile((current) => ({ ...current, useCase: value }));
                   }}
                 />
@@ -1285,7 +1543,14 @@ function OnboardingView({
                   placeholder={t('settings.onboardingSelectPlaceholder')}
                   value={profile.source}
                   options={sourceOptions}
-                  onChange={(value) => setProfile((current) => ({ ...current, source: value }))}
+                  onChange={(value) => {
+                    if (typeof value === 'string' && value) {
+                      emitOnboardingClick('hear_about_us', 'select_option', {
+                        discovery_source: value,
+                      });
+                    }
+                    setProfile((current) => ({ ...current, source: value }));
+                  }}
                 />
               </div>
             </div>
@@ -1308,11 +1573,65 @@ function OnboardingView({
                     <span>{t('settings.onboardingDesignIntroReuseBody')}</span>
                   </div>
                 </div>
-                <button type="button" className="onboarding-view__ds-skip" onClick={onFinish}>
+                <button type="button" className="onboarding-view__ds-skip" onClick={handleSkipWithTracking}>
                   {t('settings.onboardingSkip')}
                 </button>
               </div>
-              {renderDesignSystemCreation(() => setStep(1))}
+              {renderDesignSystemCreation(() => setStep(1), {
+                onBeforeGenerate: (snapshot) => {
+                  // INTENT signal — fires before async DS-draft create
+                  // / workspace-open work runs. Use it ONLY for the
+                  // `generate` click row so the dashboard captures
+                  // user intent even when generation later errors.
+                  // The lifecycle `onboarding_complete_result` row
+                  // moved to `onGenerateSettled` below so a draft
+                  // create failure no longer ships as
+                  // `completion_type=completed_with_design_system`.
+                  emitOnboardingClick('generate', 'generate', {
+                    source_type: deriveOnboardingSourceType(snapshot),
+                    source_count: snapshot.sourceCount,
+                    has_brand_description: snapshot.hasBrandDescription,
+                  });
+                },
+                onGenerateSettled: (snapshot, outcome) => {
+                  // OUTCOME signal — fires from `DesignSystemCreationFlow`
+                  // *after* the create/workspace branch settles.
+                  // Success → emit lifecycle complete row with
+                  //   `completion_type=completed_with_design_system`.
+                  //   Generation hand-off navigates away from this
+                  //   tab; the post-Generate `chat_panel` page_view
+                  //   in ProjectView fires the 4th-step
+                  //   `area=generation_progress` row and clears the
+                  //   session id. Don't clear here.
+                  // Failure → emit lifecycle complete with
+                  //   `result=failed`, the daemon's failure code, and
+                  //   `completed_without_design_system` so we don't
+                  //   overstate completed-with-DS funnel. Then re-arm
+                  //   the lifecycle guard (don't clear the session
+                  //   id) so the user's retry attempt — which
+                  //   DesignSystemCreationFlow leaves them in by
+                  //   bouncing back to its setup step — emits a
+                  //   second complete row under the SAME
+                  //   onboarding_session_id, and any eventual
+                  //   success can still navigate to ProjectView with
+                  //   the id intact for step 4. Tracked by mrcfps
+                  //   review on PR #2590 (2026-05-21 14:45).
+                  if (outcome.result === 'success') {
+                    emitOnboardingComplete(
+                      'completed',
+                      'completed_with_design_system',
+                      { sourceSnapshot: snapshot },
+                    );
+                    return;
+                  }
+                  emitOnboardingComplete(
+                    'failed',
+                    'completed_without_design_system',
+                    { sourceSnapshot: snapshot, errorCode: outcome.errorCode },
+                  );
+                  lifecycleReportedRef.current = false;
+                },
+              })}
             </div>
           ) : null}
 
@@ -1342,7 +1661,7 @@ function OnboardingView({
               <button
                 type="button"
                 className="onboarding-view__secondary"
-                onClick={() => (step === 0 ? onFinish() : setStep((current) => current - 1))}
+                onClick={handleBackWithTracking}
               >
                 {step === 0 ? t('settings.onboardingSkip') : t('settings.onboardingBack')}
               </button>
