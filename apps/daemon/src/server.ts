@@ -184,7 +184,10 @@ import { renderDesignSystemPreview } from './design-system-preview.js';
 import { renderDesignSystemShowcase } from './design-system-showcase.js';
 import { createChatRunService } from './runs.js';
 import { deriveRunErrorCode, runResultFromStatus } from './run-result.js';
-import { reportRunCompletedFromDaemon } from './langfuse-bridge.js';
+import {
+  reportRunCompletedFromDaemon,
+  reportRunFeedbackFromDaemon,
+} from './langfuse-bridge.js';
 import {
   createAnalyticsService,
   newInsertId,
@@ -4618,6 +4621,19 @@ export async function startServer({
     reportedRuns,
     getAppVersion: () => cachedAppVersion,
   });
+
+  const reportFeedback = (req: {
+    runId: string;
+    rating: 'positive' | 'negative';
+    reasonCodes: string[];
+    hasCustomReason: boolean;
+    customReason: string;
+    scoreMetadata?: Record<string, unknown>;
+  }) =>
+    reportRunFeedbackFromDaemon({
+      dataDir: RUNTIME_DATA_DIR,
+      ...req,
+    });
 
   // DNS-aware wrapper. The sync `validateBaseUrl` only inspects the literal
   // hostname string, so a public DNS name pointing at an internal address
@@ -11770,7 +11786,7 @@ export async function startServer({
     critique: critiqueDeps,
     validation: validationDeps,
     lifecycle: { isDaemonShuttingDown: () => daemonShuttingDown },
-
+    telemetry: { reportFinalizedMessage, reportFeedback },
   });
 
   registerStaticSpaFallback(app, STATIC_DIR);
