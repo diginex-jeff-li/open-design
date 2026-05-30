@@ -213,6 +213,22 @@ export const BRAND_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
   openai: [
     "--space-16", // 64px — major section gap in OpenAI's DESIGN.md §5 spacing scale
   ],
+  Apprise: [
+    "--link",           // #3E7BFA — hyperlink color (third accent in a 3-accent brand)
+    "--brand-accent",   // #EDCD55 — decorative yellow accent (logo, gradients, NOT UI state)
+    "--font-ui",        // Roboto stack — nav chrome and button labels (complement to Inter)
+    "--nav-bg",         // #F3F4FA — sidebar background
+    "--nav-active-bg",  // #E6EEF5 — active nav item fill
+    "--nav-dark",       // #2E3061 — page title text in top nav
+    "--space-10",       // 40px — APPRISE spacing scale extension
+    "--space-15",       // 60px — APPRISE spacing scale extension
+    "--space-24",       // 96px — APPRISE spacing scale extension
+    "--elev-button",    // Elevation 02 — button shadow
+    "--elev-navbar",    // Elevation 03 — navigation menu bar
+    "--elev-card",      // Elevation 04 — raised card shadow
+    "--elev-popover",   // Elevation 05 — pickers, popovers, dropdowns
+    "--elev-modal",     // Elevation 06 — modals, dialogs
+  ],
   kami: [
     "--accent-light", // brighter ink-blue for links on dark surfaces
     "--text-md", // 15px lede tier between --text-base and --text-lg

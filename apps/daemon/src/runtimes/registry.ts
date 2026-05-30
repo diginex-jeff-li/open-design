@@ -1,41 +1,18 @@
-import { claudeAgentDef } from './defs/claude.js';
-import { codexAgentDef } from './defs/codex.js';
-import { devinAgentDef } from './defs/devin.js';
-import { geminiAgentDef } from './defs/gemini.js';
-import { opencodeAgentDef } from './defs/opencode.js';
 import { hermesAgentDef } from './defs/hermes.js';
-import { grokBuildAgentDef } from './defs/grok-build.js';
-import { kimiAgentDef } from './defs/kimi.js';
-import { cursorAgentDef } from './defs/cursor-agent.js';
-import { qwenAgentDef } from './defs/qwen.js';
-import { qoderAgentDef } from './defs/qoder.js';
 import { copilotAgentDef } from './defs/copilot.js';
 import { piAgentDef } from './defs/pi.js';
-import { kiroAgentDef } from './defs/kiro.js';
-import { kiloAgentDef } from './defs/kilo.js';
-import { vibeAgentDef } from './defs/vibe.js';
-import { deepseekAgentDef } from './defs/deepseek.js';
 import { readLocalAgentProfileDefs as readLocalAgentProfileDefsFromFile } from './local-profiles.js';
 import type { RuntimeAgentDef } from './types.js';
 
+// Local deployment policy: only expose Hermes, GitHub Copilot, and Pi adapters.
+// Upstream ships many more (claude, codex, gemini, grok-build, cursor, qwen, etc.),
+// but this VPS should not detect or offer them. Other CLIs may be installed on the
+// host for unrelated reasons — keep OD's agent picker restricted to the supported set.
+// Maintained as a local patch across upstream pulls. See .local/bin/README.md.
 const BASE_AGENT_DEFS: RuntimeAgentDef[] = [
-  claudeAgentDef,
-  codexAgentDef,
-  devinAgentDef,
-  geminiAgentDef,
-  opencodeAgentDef,
   hermesAgentDef,
-  grokBuildAgentDef,
-  kimiAgentDef,
-  cursorAgentDef,
-  qwenAgentDef,
-  qoderAgentDef,
   copilotAgentDef,
   piAgentDef,
-  kiroAgentDef,
-  kiloAgentDef,
-  vibeAgentDef,
-  deepseekAgentDef,
 ];
 
 export function readLocalAgentProfileDefs(
