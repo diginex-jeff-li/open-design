@@ -69,3 +69,6 @@ apps/landing-page/public/previews/
 
 # local migration tooling store (never commit pnpm content-addressed store)
 .pnpm-store/
+
+# VPS-local patches and documentation (never push to fork)
+.local/
