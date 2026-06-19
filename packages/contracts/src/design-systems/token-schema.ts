@@ -229,6 +229,46 @@ export const BRAND_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
     "--radius-xl", // 16px — kami hero containers
     "--elev-ring-accent", // 1px brand ring used as primary-button edge
   ],
+  Apprise: [
+    "--link",           // #3E7BFA — hyperlink color (third accent in a 3-accent brand)
+    "--brand-accent",   // #EDCD55 — decorative yellow accent (logo, gradients, NOT UI state)
+    "--font-ui",        // Roboto stack — nav chrome and button labels (complement to Inter)
+    "--nav-bg",         // #F3F4FA — sidebar background
+    "--nav-active-bg",  // #E6EEF5 — active nav item fill
+    "--nav-dark",       // #2E3061 — page title text in top nav
+    "--space-10",       // 40px — APPRISE spacing scale extension
+    "--space-15",       // 60px — APPRISE spacing scale extension
+    "--space-24",       // 96px — APPRISE spacing scale extension
+    "--elev-button",    // Elevation 02 — button shadow
+    "--elev-navbar",    // Elevation 03 — navigation menu bar
+    "--elev-card",      // Elevation 04 — raised card shadow
+    "--elev-popover",   // Elevation 05 — pickers, popovers, dropdowns
+    "--elev-modal",     // Elevation 06 — modals, dialogs
+  ],
+  ESG: [
+    "--primary-low",        // #eff5ff — ghost / plain button background
+    "--primary-med",        // #d6e4ff — hover backgrounds, chips
+    "--primary-high",       // #1a4fd4 — pressed / active states
+    "--surface-low",        // #FAFBFC — subtle lift
+    "--surface-med",        // #F3F4FA — moderate lift
+    "--surface-black",      // #1a1d26 — highest contrast overlay
+    "--nav-bg",             // #F3F4FA — sidebar / nav panel background
+    "--border-med",         // #D1D5DC — prominent section dividers
+    "--border-high",        // #9CA3AF — strong visual boundaries
+    "--border-focus",       // #2b61f5 — focus ring color
+    "--border-disabled",    // #E5E7EB — dimmed border for disabled elements
+    "--elev-button",        // Elevation 02 — button shadow
+    "--elev-navbar",        // Elevation 03 — navigation bar shadow
+    "--elev-card",          // Elevation 04 — raised card shadow
+    "--elev-popover",       // Elevation 05 — pickers, popovers, dropdowns
+    "--elev-modal",         // Elevation 06 — modals, dialogs
+    "--gradient-climate",   // linear-gradient(135deg, #06C270, #0EA5E9)
+    "--gradient-climate-1", // linear-gradient(135deg, #06C270, #10B981)
+    "--gradient-climate-2", // linear-gradient(135deg, #0EA5E9, #6366F1)
+    "--gradient-special",   // linear-gradient(135deg, #2b61f5, #8B5CF6)
+    "--gradient-special-bg",// linear-gradient w/ 40% opacity over white
+    "--gradient-dark-purple",// #4C1D95 — governance/social accent
+  ],
 };
 
 /**

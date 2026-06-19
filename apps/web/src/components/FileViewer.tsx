@@ -6325,15 +6325,37 @@ function HtmlViewer({
     setManualEditError(null);
     try {
       const baseSource = sourceRef.current;
-      const result = applyManualEditPatch(baseSource, patch);
+      let result = applyManualEditPatch(baseSource, patch);
       if (!result.ok) {
         setManualEditError(result.error ?? 'Could not apply edit.');
         return false;
       }
-      if (!(await confirmManualEditHistorySource(
-        baseSource,
-        'The file changed outside manual edit mode. Refreshing before applying manual edits.',
-      ))) return false;
+      // Rebase: check the latest disk version. If the file drifted (daemon
+      // restart, agent run, another tab), re-apply the patch onto current
+      // disk state. Only bail when the patch genuinely cannot apply.
+      let latestSource = baseSource;
+      const persisted = await fetchProjectFileText(projectId, file.name, {
+        cache: 'no-store',
+        cacheBustKey: Date.now(),
+      });
+      if (persisted != null && persisted !== baseSource) {
+        const rebased = applyManualEditPatch(persisted, patch);
+        if (rebased.ok) {
+          latestSource = persisted;
+          result = rebased;
+        } else {
+          setSource(persisted);
+          sourceRef.current = persisted;
+          setInlinedSource(null);
+          setManualEditHistory([]);
+          setManualEditUndone([]);
+          setManualEditDraft((current) => ({ ...current, fullSource: persisted }));
+          setManualEditError(
+            'The file changed outside manual edit mode and your edit could not be reapplied. Refreshing editor state.',
+          );
+          return false;
+        }
+      }
       const saved = await writeProjectTextFileDetailed(projectId, file.name, result.source, {
         artifactManifest: file.artifactManifest,
       });
@@ -6350,7 +6372,7 @@ function HtmlViewer({
         id: `${Date.now()}-${manualEditHistory.length}`,
         label,
         patch,
-        beforeSource: baseSource,
+        beforeSource: latestSource,
         afterSource: result.source,
         createdAt: Date.now(),
       };

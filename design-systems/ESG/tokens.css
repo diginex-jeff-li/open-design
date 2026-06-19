@@ -1,0 +1,196 @@
+/* ─────────────────────────────────────────────────────────────────────────
+ * design-systems/ESG/tokens.css
+ *
+ * Structured token bindings for ESG — sustainability platform.
+ * Vivid corporate blue (#2b61f5) paired with Inter's geometric neutrality.
+ *
+ * Every declaration below satisfies the shared token schema
+ * (_schema/tokens.schema.ts). The :root block is designed to be
+ * pasted verbatim into artifacts referencing var(--*) exclusively.
+ *
+ * Schema layers present:
+ *   A1-identity  — --bg, --fg, --accent, font stacks
+ *   A1-structure — type scale, layout, section rhythm
+ *   A2           — motion, elevation, radius, spacing scale
+ *   B-slot       --fg-2, --meta, --surface-warm, --border-soft
+ *   C-extension  — brand-specific tokens (see BRAND_EXTENSIONS in schema)
+ *
+ * Keep this file additive: never invent token names not also
+ * documented in DESIGN.md or the craft contracts.
+ * ─────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ─── Surface (3 levels) ──────────────────────────────────────────
+   * ESG Page Background (#F7F8FA) is a cool off-white that gives
+   * cards and modals lift against the canvas. --surface-warm uses the
+   * nav surface (#F3F4FA) — warmer and slightly more present. */
+  --bg: #F7F8FA;
+  --surface: #FFFFFF;
+  --surface-warm: #F3F4FA;   /* independent — nav / secondary panels */
+
+  /* ─── Foreground ramp (4 levels) ──────────────────────────────────
+   * ESG has a full 4-tier text ramp:
+   *   --fg     → #1a1d26  body text, headings, high-emphasis
+   *   --fg-2   → #555770  descriptions, supporting copy
+   *   --muted  → #8F90A6  category labels, overlines
+   *   --meta   → #9C9DB4  disabled/inactive text, placeholders */
+  --fg: #1a1d26;
+  --fg-2: #555770;             /* independent — Text Secondary */
+  --muted: #8F90A6;            /* Text Muted — category labels, overlines */
+  --meta: #9C9DB4;             /* independent — Text Primary Disabled / placeholders */
+
+  /* ─── Border (2 levels) ───────────────────────────────────────────
+   * --border is the default card/input edge (#E1E5EB).
+   * --border-soft is a lighter tint for inner row separators that
+   * should not visually compete with the primary border. */
+  --border: #E1E5EB;
+  --border-soft: #EDF1F5;      /* independent — lighter tint of --border */
+
+  /* ─── Accent ──────────────────────────────────────────────────────
+   * ESG Blue (#2b61f5) is the single brand-primary anchor.
+   * Primary buttons, active links, focus rings, selected states.
+   * Hard cap: ≤2 visible uses per screen. */
+  --accent: #2b61f5;
+  --accent-on: #FFFFFF;        /* white text on blue buttons */
+
+  /* Accent states: hand-picked values from the ESG design spec.
+   * #2b61f5 darkens to #1a4fd4 on hover (Primary High). */
+  --accent-hover: #1a4fd4;     /* Primary High — brand-specified hover */
+  --accent-active: #1440b0;    /* darker pressed state */
+
+  /* ─── Semantic ────────────────────────────────────────────────────
+   * ESG functional colors from the design spec. Reserved for
+   * state, not decoration. Keep total semantic-color pixels under
+   * 5% of any surface. */
+  --success: #06C270;
+  --warn: #FFCC00;
+  --danger: #FF3B3B;
+
+  /* ─── Typography — fonts ──────────────────────────────────────────
+   * ESG is a single-font brand: Inter handles display, body, and UI.
+   * No secondary font — Inter's geometric neutrality covers all roles. */
+  --font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+
+  /* ─── Typography — type scale ─────────────────────────────────────
+   * Matches DESIGN.md §Typography Rules hierarchy table exactly.
+   * ESG uses a compact scale: 12px floor, 14px body, 30px/38px headings. */
+  --text-xs: 12px;    /* Tag / Caption / Badges */
+  --text-sm: 13px;    /* Small UI labels (between caption and body) */
+  --text-base: 14px;  /* Body Regular / Medium / Semibold — default */
+  --text-lg: 16px;    /* Subheading / featured body */
+  --text-xl: 18px;    /* Card title / emphasized metric */
+  --text-2xl: 20px;   /* Section label / widget header */
+  --text-3xl: 30px;   /* H2 / Large Heading 2 */
+  --text-4xl: 38px;   /* H1 / Large Heading 1 */
+
+  --leading-body: 1.428;       /* 20px line-height on 14px body */
+  --leading-tight: 1.2;        /* headings */
+  --tracking-display: 0;       /* ESG does not use negative tracking */
+
+  /* ─── Spacing — base scale ────────────────────────────────────────
+   * 4px base unit from DESIGN.md §Layout Principles. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* ─── Section rhythm ──────────────────────────────────────────────
+   * ESG sections maintain 48–80px vertical space above content.
+   * 64px desktop default is the midpoint of that range. */
+  --section-y-desktop: 64px;
+  --section-y-tablet: 48px;
+  --section-y-phone: 32px;
+
+  /* ─── Radius ──────────────────────────────────────────────────────
+   * ESG uses escalating radius by size tier:
+   *   8px on small/default interactive elements, 12px on large ones. */
+  --radius-sm: 8px;     /* buttons (default/small), inputs, nav items, cards */
+  --radius-md: 10px;    /* intermediate containers */
+  --radius-lg: 12px;    /* large buttons, modals, hero containers */
+  --radius-pill: 9999px;
+
+  /* ─── Elevation ───────────────────────────────────────────────────
+   * ESG has a surface tier system. The schema provides 3 slots:
+   *   --elev-flat   = Flat (0) — page background
+   *   --elev-ring   = hairline edge
+   *   --elev-raised = Elevation 01 — default card shadow
+   * Levels 02–06 are C-extensions (--elev-button through --elev-modal). */
+  --elev-flat: none;
+  --elev-ring: 0 0 0 1px var(--border);
+  --elev-raised: 0px 1px 3px rgba(26,29,38,0.08), 0px 1px 2px rgba(26,29,38,0.06);
+
+  /* ─── Focus ring ──────────────────────────────────────────────────
+   * ESG uses a brand-blue glow at 25% opacity matching --accent.
+   * 2px spread — tighter and more precise than the schema default. */
+  --focus-ring: 0px 0px 0px 2px rgba(43,97,245,0.25);
+
+  /* ─── Motion ────────────────────────────────────────────────────── */
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ─── Layout ──────────────────────────────────────────────────────
+   * Desktop: 1200px max content width.
+   * ESG uses a 12-column grid inside --container-max. */
+  --container-max: 1200px;
+  --container-gutter-desktop: 32px;
+  --container-gutter-tablet: 24px;
+  --container-gutter-phone: 16px;
+
+
+  /* ═══════════════════════════════════════════════════════════════════
+   * C-EXTENSIONS — brand-specific tokens (not in shared schema)
+   *
+   * These are registered in BRAND_EXTENSIONS["ESG"] in
+   * _schema/tokens.schema.ts. Cross-brand components must NOT
+   * reference these. Promote to B-slot / A2 when ≥2 brands need them.
+   * ═══════════════════════════════════════════════════════════════ */
+
+  /* ─── Primary accent extensions ───────────────────────────────────
+   * ESG is a single-accent brand, but defines opacity tiers for
+   * ghost buttons and hover/chip backgrounds. */
+  --primary-low: #eff5ff;      /* ghost / plain button background */
+  --primary-med: #d6e4ff;      /* hover backgrounds, chips */
+  --primary-high: #1a4fd4;     /* pressed / active states (already --accent-hover) */
+
+  /* ─── Surface extensions ──────────────────────────────────────────
+   * ESG's semantic surface tier system beyond the schema's 3 levels. */
+  --surface-low: #FAFBFC;      /* subtle lift — hover states */
+  --surface-med: #F3F4FA;      /* moderate lift — dropdowns, popovers */
+  --surface-black: #1a1d26;    /* highest contrast overlay */
+
+  /* ─── Navigation ────────────────────────────────────────────────── */
+  --nav-bg: #F3F4FA;           /* sidebar / nav panel background */
+
+  /* ─── Border extensions ───────────────────────────────────────────
+   * ESG has a full 5-tier border ramp for its elevation system. */
+  --border-med: #D1D5DC;       /* prominent section dividers */
+  --border-high: #9CA3AF;      /* strong visual boundaries */
+  --border-focus: #2b61f5;     /* focus ring color — brand blue */
+  --border-disabled: #E5E7EB;  /* dimmed border for disabled elements */
+
+  /* ─── Extended elevation ──────────────────────────────────────────
+   * Levels 02–06 from the ESG 6-tier shadow system.
+   * Schema only covers flat / ring / raised (01). */
+  --elev-button:  0px 0px 1px rgba(26,29,38,0.04), 0px 2px 4px rgba(26,29,38,0.08);
+  --elev-navbar:  0px 0px 2px rgba(26,29,38,0.04), 0px 4px 8px rgba(26,29,38,0.10);
+  --elev-card:    0px 2px 4px rgba(26,29,38,0.04), 0px 8px 16px rgba(26,29,38,0.10);
+  --elev-popover: 0px 2px 8px rgba(26,29,38,0.04), 0px 16px 24px rgba(26,29,38,0.12);
+  --elev-modal:   0px 2px 8px rgba(26,29,38,0.08), 0px 20px 32px rgba(26,29,38,0.16);
+
+  /* ─── ESG gradients ───────────────────────────────────────────────
+   * Climate and category gradients reserved for data visualisation
+   * and hero moments. Never on interactive chrome. */
+  --gradient-climate: linear-gradient(135deg, #06C270, #0EA5E9);
+  --gradient-climate-1: linear-gradient(135deg, #06C270, #10B981);
+  --gradient-climate-2: linear-gradient(135deg, #0EA5E9, #6366F1);
+  --gradient-special: linear-gradient(135deg, #2b61f5, #8B5CF6);
+  --gradient-special-bg: linear-gradient(135deg, rgba(43,97,245,0.4), rgba(139,92,246,0.4));
+  --gradient-dark-purple: #4C1D95;
+}
