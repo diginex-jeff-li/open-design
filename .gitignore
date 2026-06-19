@@ -87,3 +87,6 @@ growth/**
 
 # VPS-local patches and documentation (never push to fork)
 .local/
+
+# Daemon data backups (created during version migrations)
+.od.backup-*/
