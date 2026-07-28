@@ -1,11 +1,12 @@
-import { copilotAgentDef } from './defs/copilot.js';
+import { hermesAgentDef } from './defs/hermes.js';
 import { readLocalAgentProfileDefs as readLocalAgentProfileDefsFromFile } from './local-profiles.js';
 import type { RuntimeAgentDef } from './types.js';
 
-// Local deployment policy: only expose Copilot agent.
-// Other installed CLIs may exist on the VPS, but OD should not detect them.
+// Local deployment policy: only expose Hermes agent.
+// Hermes provides full agentic reasoning, MCP discovery, session resume,
+// and Ollama Cloud provider support via ~/.hermes/.env.
 const BASE_AGENT_DEFS: RuntimeAgentDef[] = [
-  copilotAgentDef,
+  hermesAgentDef,
 ];
 
 export function readLocalAgentProfileDefs(
