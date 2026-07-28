@@ -1,0 +1,227 @@
+/* ─────────────────────────────────────────────────────────────────────────
+ * design-systems/diginex/tokens.css
+ *
+ * Structured token bindings for "Diginex Library".
+ * Software-native, quiet aesthetic: white / slate-50 canvas, hairline borders,
+ * a single lilac-3 brand accent, semantic colour reserved for status.
+ *
+ * System: Nuxt UI v4 on Tailwind CSS v4.
+ * Source: Figma file "Diginex Library" (HH9sjkn5fnkdMy6FIkIXsI) — v4.0.0 extraction.
+ *
+ * Token layers (per Open Design token schema):
+ *   A1-identity  — brand-decided, required (--bg, --fg, --accent, fonts)
+ *   A1-structure — brand-decided, required (type scale, layout grid)
+ *   A2           — required, sensible fallback overridden by brand
+ *                  (--motion-fast, --success, --space-*, --font-mono)
+ *   B-slot       — optional semantic aliases
+ *   C-extension  — Nuxt UI ui-* family, info, secondary, and extended
+ *                  type scale. NOT in tokens.css (outside the canonical
+ *                  schema); see design-tokens.json for the full set.
+ *
+ * Key brand decisions encoded here (v4.0.0):
+ * - White page canvas with slate-50 elevated surfaces (cool, software-native)
+ * - Lilac-3 (#8171D7) as the primary brand accent — used sparingly
+ * - Orange-3 (#E66B1A) as a secondary brand anchor
+ * - Tailwind slate as the neutral ramp (no warm undertone)
+ * - Neutral solid button #314158 (slate-700)
+ * - Hairline 1px borders, almost no drop shadow on flat surfaces
+ * - Dominant component corner radius 3px (buttons); base ui-radius 4px
+ * - WCAG 2.1 AA fixes applied to semantic tokens
+ * - DM Sans for display, Open Sans for body (Public Sans as documented fallback)
+ * ─────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ─── Surface (3 levels) ─────────────────────────────────────────
+   * White canvas → slate-50 elevated → slate-100 accented. */
+  --bg: #ffffff;
+  --surface: #f8fafc; /* neutral-50 — elevated card surfaces */
+  --surface-warm: #f1f5f9; /* neutral-100 — accented / secondary surfaces */
+
+  /* ─── Foreground ramp (4 levels) ────────────────────────────────
+   * Tailwind slate. Cool, software-native neutrals. */
+  --fg: #314158; /* neutral-700 — primary text */
+  --fg-2: #45556c; /* neutral-600 — emphasised secondary text */
+  --muted: #64748e; /* neutral-500 — secondary body text */
+  --meta: #90a1b9; /* neutral-400 — tertiary text, metadata */
+
+  /* ─── Border (2 levels) ──────────────────────────────────────────
+   * Hairline 1px borders — the gentlest possible containment. */
+  --border: #e2e8f0; /* neutral-200 — standard border */
+  --border-soft: #cad5e2; /* neutral-300 — emphasised / section dividers */
+
+  /* ─── Accent ──────────────────────────────────────────────────────
+   * Lilac-3 — the only chromatic brand element on most screens.
+   * Used for primary actions and highest-signal brand moments only. */
+  --accent: #8171d7; /* primary-500 — lilac-3 */
+  --accent-on: #ffffff; /* fg when accent is the bg */
+  --accent-hover: color-mix(in oklab, var(--accent), black 8%);
+  --accent-active: color-mix(in oklab, var(--accent), black 14%);
+
+  /* ─── Secondary (orange-3) ───────────────────────────────────────
+   * Secondary brand anchor — used sparingly for secondary emphasis. */
+  --secondary: #e66b1a; /* secondary-500 — orange-3 */
+  --secondary-on: #ffffff; /* fg when secondary is the bg */
+
+  /* ─── Semantic (A2) ───────────────────────────────────────────────
+   * Status colour only — success/info/warning/error. Exact Tailwind
+   * 500 anchors (WCAG 2.1 AA fixed). Info blue #2b7fff is brand-specific
+   * (see design-tokens.json for the full ramp). */
+  --success: #00c16a; /* green-500 */
+  --info: #2b7fff; /* blue-500 */
+  --warn: #efb100; /* yellow-500 */
+  --danger: #fb2c36; /* red-500 */
+
+  /* ─── Typography ──────────────────────────────────────────────────
+   * DM Sans for display/headings, Open Sans for body/UI (the rendered
+   * face in the Figma file), Public Sans as the documented token
+   * fallback. Medium (500) is the UI default weight. */
+  --font-display: 'DM Sans', 'Open Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Open Sans', 'Public Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+
+  /* Type scale — canonical OD steps (12 → 36). Extended 48–128 steps
+   * are brand-specific — see design-tokens.json. */
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --text-4xl: 36px;
+
+  --leading-body: 1.5; /* comfortable software-default reading */
+  --leading-tight: 1.2; /* headings */
+  --tracking-display: -0.01em; /* slight tighten on large display type */
+
+  /* ─── Spacing ─────────────────────────────────────────────────────
+   * 4px base unit. Full Tailwind v4 scale in design-tokens.json;
+   * canonical OD steps declared here. Card internal padding ~16–24px. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  --section-y-desktop: 80px;
+  --section-y-tablet: 64px;
+  --section-y-phone: 48px;
+
+  /* ─── Radius ──────────────────────────────────────────────────────
+   * Base ui-radius = 4px. Dominant button radius is 3px; Nuxt UI
+   * derives component radii as calc(var(--ui-radius)*1.5) ≈ 6px and
+   * *2 ≈ 8px. Full Tailwind v4 radius scale in design-tokens.json. */
+  --radius-sm: 4px; /* base — small controls */
+  --radius-md: 6px; /* component radius (calc(ui-radius*1.5)) */
+  --radius-lg: 8px; /* featured containers (calc(ui-radius*2)) */
+  --radius-pill: 9999px; /* chips, avatars */
+
+  /* ─── Elevation ───────────────────────────────────────────────────
+   * Ring-based depth (0 0 0 1px) instead of drop shadows on flat
+   * surfaces. Whisper-soft lift only when truly needed. */
+  --elev-flat: none;
+  --elev-ring: 0 0 0 1px var(--border);
+  --elev-raised: rgba(15, 23, 43, 0.05) 0px 4px 24px;
+
+  /* ─── Focus ring ──────────────────────────────────────────────────
+   * Lilac-3 focus ring (Nuxt UI uses primary for focus). */
+  --focus-ring: 0 0 0 3px rgba(129, 113, 215, 0.3);
+
+  /* ─── Motion ──────────────────────────────────────────────────────
+   * Short, purposeful transitions. Quiet software feel. */
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ─── Layout ──────────────────────────────────────────────────────
+   * 1200px container, software-product layout. */
+  --container-max: 1200px;
+  --container-gutter-desktop: 24px;
+  --container-gutter-tablet: 16px;
+  --container-gutter-phone: 12px;
+
+  /* ─── Nuxt UI v4 --ui-* semantic family (C-extension) ─────────────
+   * Maps the colour ramps onto Nuxt UI component roles with light-mode
+   * assignments. Dark-mode assignments live in the .dark block below.
+   * Brand colour flips to the 400 step in dark; neutral roles invert.
+   * These tokens are outside the canonical schema — see design-tokens.json. */
+  --ui-primary: #8171d7;        /* primary-500 (light) */
+  --ui-secondary: #e66b1a;     /* secondary-500 (light) */
+  --ui-success: #00c16a;        /* success-500 (light) */
+  --ui-info: #2b7fff;           /* info-500 (light) */
+  --ui-warning: #efb100;        /* warning-500 (light) */
+  --ui-error: #fb2c36;          /* error-500 (light) */
+
+  --ui-text: #314158;           /* neutral-700 (light) */
+  --ui-text-dimmed: #90a1b9;    /* neutral-400 (light) */
+  --ui-text-muted: #64748e;     /* neutral-500 (light) */
+  --ui-text-toned: #45556c;     /* neutral-600 (light) */
+  --ui-text-highlighted: #0f172b; /* neutral-900 (light) */
+
+  --ui-bg: #ffffff;             /* white (light) */
+  --ui-bg-elevated: #f1f5f9;    /* neutral-100 (light) */
+  --ui-bg-accented: #e2e8f0;    /* neutral-200 (light) */
+  --ui-bg-inverted: #0f172b;    /* neutral-900 (light) */
+
+  --ui-border: #e2e8f0;         /* neutral-200 (light) */
+  --ui-border-accented: #cad5e2;/* neutral-300 (light) */
+  --ui-border-inverted: #0f172b;/* neutral-900 (light) */
+
+  --ui-radius: 4px;             /* Nuxt UI base radius */
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Dark mode — class strategy (.dark). Core A1/A2 tokens re-point so
+ * generic OD components resolve in dark mode. Brand colour anchors flip
+ * to the 400 step; neutral roles invert. The --ui-* family re-points
+ * here (Nuxt UI dark assignments).
+ * ─────────────────────────────────────────────────────────────────── */
+.dark {
+  --bg: #0f172b; /* neutral-900 */
+  --surface: #1d293d; /* neutral-800 */
+  --surface-warm: #314158; /* neutral-700 */
+
+  --fg: #e2e8f0; /* neutral-200 */
+  --fg-2: #cad5e2; /* neutral-300 */
+  --muted: #90a1b9; /* neutral-400 */
+  --meta: #64748e; /* neutral-500 */
+
+  --border: #1d293d; /* neutral-800 */
+  --border-soft: #314158; /* neutral-700 */
+
+  --accent: #8171d7; /* primary-400 — dark-mode brand (lilac-3 400) */
+  --accent-on: #0f172b;
+
+  --secondary: #e66a1a; /* secondary-400 — orange-3 (dark) */
+
+  --success: #00dc82; /* green-400 */
+  --info: #51a2ff; /* blue-400 */
+  --warn: #fcc800; /* yellow-400 */
+  --danger: #ff6467; /* red-400 */
+
+  /* --ui-* dark-mode assignments */
+  --ui-primary: #8171d7;        /* primary-400 */
+  --ui-secondary: #e66a1a;     /* secondary-400 */
+  --ui-success: #00dc82;        /* success-400 */
+  --ui-info: #51a2ff;           /* info-400 */
+  --ui-warning: #fcc800;        /* warning-400 */
+  --ui-error: #ff6467;          /* error-400 */
+
+  --ui-text: #e2e8f0;           /* neutral-200 */
+  --ui-text-dimmed: #64748e;    /* neutral-500 */
+  --ui-text-muted: #90a1b9;     /* neutral-400 */
+  --ui-text-toned: #cad5e2;     /* neutral-300 */
+  --ui-text-highlighted: #ffffff;/* white */
+
+  --ui-bg: #0f172b;             /* neutral-900 */
+  --ui-bg-elevated: #1d293d;    /* neutral-800 */
+  --ui-bg-accented: #314158;   /* neutral-700 */
+  --ui-bg-inverted: #ffffff;    /* white */
+
+  --ui-border: #1d293d;         /* neutral-800 */
+  --ui-border-accented: #314158;/* neutral-700 */
+  --ui-border-inverted: #ffffff;/* white */
+}

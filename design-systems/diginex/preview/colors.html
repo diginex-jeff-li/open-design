@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Diginex — Colors</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Open+Sans:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="tokens.css" />
+<style>
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); }
+  .wrap { max-width: var(--container-max); margin: 0 auto; padding: var(--space-12) var(--container-gutter-desktop); }
+  h1 { font-family: var(--font-display); font-weight: 600; font-size: var(--text-3xl); margin: 0 0 var(--space-8); }
+  h2 { font-family: var(--font-display); font-weight: 600; font-size: var(--text-lg); margin: var(--space-8) 0 var(--space-3); }
+  .ramp { display: grid; grid-template-columns: 90px repeat(11, 1fr); gap: 4px; margin-bottom: var(--space-4); }
+  .ramp .label { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--muted); display: flex; align-items: center; }
+  .chip { height: 40px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 10px; }
+  .core { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--space-2); }
+  .sw { height: 64px; border-radius: var(--radius-sm); display: flex; align-items: flex-end; padding: var(--space-2); font-family: var(--font-mono); font-size: var(--text-xs); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Colors</h1>
+
+    <h2>Core tokens</h2>
+    <div class="core">
+      <div class="sw" style="background: var(--bg); color: var(--fg); border: 1px solid var(--border);">--bg</div>
+      <div class="sw" style="background: var(--surface); color: var(--fg); border: 1px solid var(--border);">--surface</div>
+      <div class="sw" style="background: var(--surface-warm); color: var(--fg); border: 1px solid var(--border);">--surface-warm</div>
+      <div class="sw" style="background: var(--fg);">--fg</div>
+      <div class="sw" style="background: var(--muted);">--muted</div>
+      <div class="sw" style="background: var(--meta);">--meta</div>
+      <div class="sw" style="background: var(--border); color: var(--fg);">--border</div>
+      <div class="sw" style="background: var(--accent);">--accent</div>
+      <div class="sw" style="background: var(--secondary);">--secondary</div>
+      <div class="sw" style="background: var(--success);">--success</div>
+      <div class="sw" style="background: var(--info);">--info</div>
+      <div class="sw" style="background: var(--warn); color: var(--fg);">--warn</div>
+      <div class="sw" style="background: var(--danger);">--danger</div>
+    </div>
+
+    <h2>Ramps</h2>
+    <div id="ramps"></div>
+  </div>
+  <script type="module">
+    const ramps = {
+      primary: ["#f5f4ff","#eae8fc","#d8d4fa","#c0b9ed","#a098d4","#8171D7","#4e437c","#392f61","#2a214b","#1e1639","#120d25"],
+      secondary: ["#f7f7e6","#eceecc","#dddea1","#c6c76e","#a8a831","#E66B1A","#CB4B14","#A83214","#5e5c00","#4f4e00","#353400"],
+      success: ["#effdf5","#d9fbe8","#b3f5d1","#75edae","#00dc82","#00c16a","#00a155","#007f45","#016538","#0a5331","#052e16"],
+      info: ["#eff6ff","#dbeafe","#bedbff","#8ec5ff","#51a2ff","#2b7fff","#155dfc","#1447e6","#193cb8","#1c398e","#162456"],
+      warning: ["#fefce8","#fef9c2","#fff085","#ffdf20","#fcc800","#efb100","#d08700","#a65f00","#894b00","#733e0a","#432004"],
+      error: ["#fef2f2","#fee2e2","#ffc9c9","#ffa2a2","#ff6467","#fb2c36","#e7000b","#c10007","#9f0712","#82181a","#460809"],
+      neutral: ["#f8fafc","#f1f5f9","#e2e8f0","#cad5e2","#90a1b9","#64748e","#45556c","#314158","#1d293d","#0f172b","#020618"]
+    };
+    const steps = ["50","100","200","300","400","500","600","700","800","900","950"];
+    const root = document.getElementById("ramps");
+    for (const [name, cols] of Object.entries(ramps)) {
+      const row = document.createElement("div"); row.className = "ramp";
+      const label = document.createElement("div"); label.className = "label"; label.textContent = name;
+      row.appendChild(label);
+      cols.forEach((c, i) => {
+        const chip = document.createElement("div"); chip.className = "chip";
+        chip.style.background = c;
+        chip.style.color = i < 5 ? "var(--fg)" : "#fff";
+        chip.textContent = steps[i];
+        if (i < 3) chip.style.border = "1px solid var(--border)";
+        row.appendChild(chip);
+      });
+      root.appendChild(row);
+    }
+  </script>
+</body>
+</html>

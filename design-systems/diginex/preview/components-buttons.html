@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Diginex — Buttons</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Open+Sans:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="tokens.css" />
+<style>
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); }
+  .wrap { max-width: var(--container-max); margin: 0 auto; padding: var(--space-12) var(--container-gutter-desktop); }
+  h1 { font-family: var(--font-display); font-weight: 600; font-size: var(--text-3xl); margin: 0 0 var(--space-8); }
+  .group { margin-bottom: var(--space-8); }
+  .group h2 { font-family: var(--font-display); font-weight: 600; font-size: var(--text-lg); margin: 0 0 var(--space-3); }
+  .row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; font-family: var(--font-body); cursor: pointer; border: 1px solid transparent; transition: background var(--motion-fast) var(--ease-standard); }
+  .btn-primary { background: var(--accent); color: var(--accent-on); }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { background: var(--surface-warm); color: var(--fg); border-color: var(--border); }
+  .btn-outline { background: transparent; color: var(--fg); border-color: var(--border); }
+  .btn-ghost { background: transparent; color: var(--accent); }
+  .btn-ghost:hover { background: var(--surface); }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-sm { padding: var(--space-1) var(--space-3); font-size: var(--text-xs); }
+  .btn-lg { padding: var(--space-3) var(--space-6); font-size: var(--text-base); }
+  .pill { border-radius: var(--radius-pill); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Buttons</h1>
+
+    <div class="group">
+      <h2>Variants</h2>
+      <div class="row">
+        <button class="btn btn-primary">Primary</button>
+        <button class="btn btn-secondary">Secondary</button>
+        <button class="btn btn-outline">Outline</button>
+        <button class="btn btn-ghost">Ghost</button>
+        <button class="btn btn-danger">Destructive</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Sizes</h2>
+      <div class="row">
+        <button class="btn btn-primary btn-sm">Small</button>
+        <button class="btn btn-primary">Default</button>
+        <button class="btn btn-primary btn-lg">Large</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Pill</h2>
+      <div class="row">
+        <button class="btn btn-primary pill">Pill primary</button>
+        <button class="btn btn-outline pill">Pill outline</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

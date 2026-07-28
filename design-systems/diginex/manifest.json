@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "od-design-system-project/v1",
+  "id": "diginex",
+  "name": "Diginex Library",
+  "category": "Custom",
+  "description": "Diginex design system derived from the 'Diginex Library' Figma file. Nuxt UI v4 semantic tokens on Tailwind CSS v4, with custom lilac-3 primary (#8171D7) and orange-3 secondary (#E66B1A) brand anchors on a Tailwind slate neutral ramp. WCAG 2.1 AA semantic-token fixes applied.",
+  "source": {
+    "type": "bundled",
+    "origin": "Figma file 'Diginex Library' (HH9sjkn5fnkdMy6FIkIXsI) — Nuxt UI v4 / Tailwind CSS v4 token system (v4.0.0 extraction)"
+  },
+  "files": {
+    "design": "DESIGN.md",
+    "tokens": "tokens.css",
+    "components": "components.html"
+  },
+  "usage": "USAGE.md",
+  "importMode": "hybrid",
+  "craft": {
+    "applies": ["color"],
+    "suggested": [],
+    "exemptions": []
+  },
+  "preview": {
+    "dir": "preview",
+    "pages": [
+      { "path": "preview/colors.html", "role": "colors", "title": "Colors" },
+      { "path": "preview/typography.html", "role": "typography", "title": "Typography" },
+      { "path": "preview/spacing.html", "role": "spacing", "title": "Spacing" },
+      { "path": "preview/components-buttons.html", "role": "buttons", "title": "Buttons" },
+      { "path": "preview/components-inputs.html", "role": "inputs", "title": "Inputs" },
+      { "path": "preview/app.html", "role": "app", "title": "App Preview" }
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Diginex — Typography</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Open+Sans:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="tokens.css" />
+<style>
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); }
+  .wrap { max-width: var(--container-max); margin: 0 auto; padding: var(--space-12) var(--container-gutter-desktop); }
+  h1 { font-family: var(--font-display); font-weight: 600; font-size: var(--text-3xl); margin: 0 0 var(--space-8); }
+  .spec { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--meta); margin-bottom: var(--space-1); }
+  .row { border-bottom: 1px solid var(--border); padding: var(--space-4) 0; }
+  .d { font-family: var(--font-display); font-weight: 600; line-height: var(--leading-tight); }
+  .b { font-family: var(--font-body); line-height: var(--leading-body); }
+  .m { font-family: var(--font-mono); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Typography</h1>
+
+    <div class="row"><div class="spec">DM Sans · 600 · 48px</div><div class="d" style="font-size: var(--text-5xl);">Build focused product surfaces</div></div>
+    <div class="row"><div class="spec">DM Sans · 600 · 36px</div><div class="d" style="font-size: var(--text-4xl);">Section heading</div></div>
+    <div class="row"><div class="spec">DM Sans · 600 · 24px</div><div class="d" style="font-size: var(--text-2xl);">Sub-heading</div></div>
+    <div class="row"><div class="spec">DM Sans · 600 · 20px</div><div class="d" style="font-size: var(--text-xl);">Card title</div></div>
+    <div class="row"><div class="spec">Open Sans · 500 · 18px</div><div class="b" style="font-size: var(--text-lg); font-weight: 500;">Body large — intro paragraph with a calm, considered tone.</div></div>
+    <div class="row"><div class="spec">Open Sans · 400 · 16px</div><div class="b" style="font-size: var(--text-base);">Body standard — the default reading size at 1.5 line-height. Medium (500) is the UI default weight for buttons and labels.</div></div>
+    <div class="row"><div class="spec">Open Sans · 400 · 14px</div><div class="b" style="font-size: var(--text-sm); color: var(--muted);">Body small / caption — secondary text and metadata.</div></div>
+    <div class="row"><div class="spec">JetBrains Mono · 400 · 14px</div><div class="m" style="font-size: var(--text-sm); color: var(--meta);">--accent: #8171D7</div></div>
+
+    <div class="row" style="margin-top: var(--space-8);"><div class="spec">Display family</div><div class="d" style="font-size: var(--text-2xl);">DM Sans — headings</div></div>
+    <div class="row"><div class="spec">Body family</div><div class="b" style="font-size: var(--text-lg);">Open Sans — body & UI (rendered face)</div></div>
+    <div class="row"><div class="spec">Mono family</div><div class="m" style="font-size: var(--text-base);">JetBrains Mono — code & token IDs</div></div>
+  </div>
+</body>
+</html>

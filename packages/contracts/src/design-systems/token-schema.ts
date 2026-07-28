@@ -279,6 +279,45 @@ export const BRAND_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
     "--gradient-special-bg",// linear-gradient w/ 40% opacity over white
     "--gradient-dark-purple",// #4C1D95 — governance/social accent
   ],
+  diginex: [
+    // Secondary brand family (orange-3) and brand-specific info blue —
+    // these mirror Nuxt UI's primary/secondary/info semantic roles
+    // that the shared schema does not model separately.
+    "--secondary",          // orange-3 500 anchor — secondary brand colour
+    "--secondary-on",        // fg when secondary is the bg
+    "--info",                // #2b7fff blue-500 — brand-specific info semantic
+    // Interactive accent states beyond the shared --accent-hover/active
+    "--accent-hover",        // (mirrored here for diginex; also an A2 fallback)
+    "--accent-active",
+    // Surface tier beyond the shared --surface / --surface-warm
+    "--surface-warm",        // accented surface (slate-100 light / slate-700 dark)
+    // Additional text levels not in the shared schema
+    "--fg-2",                // emphasised secondary text
+    "--meta",                // tertiary text / metadata tier
+    // Emphasised border beyond the shared --border
+    "--border-soft",          // emphasised / section-divider border
+    // Elevation levels the shared schema models as A2 fallbacks;
+    // diginex declares them explicitly
+    "--elev-flat",
+    "--elev-ring",
+    "--elev-raised",
+    // Brand focus ring (shared schema has it as A2; diginex declares)
+    "--focus-ring",
+    // Typography tuning specific to diginex's DM Sans / Open Sans pairing
+    "--tracking-display",    // -0.01em letter spacing on large display
+    "--leading-tight",       // 1.2 line height for headings
+    // Additional radius steps (diginex uses a 4px base, 3px button radius,
+    // and a full Tailwind v4 radius scale beyond the shared sm/md/lg/pill)
+    "--radius-sm",           // 4px — base / small controls
+    "--radius-lg",           // 8px — featured containers
+    "--radius-pill",         // 9999px — chips, avatars
+    // Responsive gutters and section rhythm already in the shared A1-structure
+    // layer, mirrored here so diginex's explicit declarations pass the guard
+    "--container-gutter-tablet",
+    "--container-gutter-phone",
+    "--section-y-tablet",
+    "--section-y-phone",
+  ],
 };
 
 /**
@@ -292,6 +331,7 @@ export const BRAND_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
  */
 export const BRAND_EXTENSION_PREFIXES: readonly string[] = [
   "--tag-bg-",
+  "--ui-", // Nuxt UI semantic family (--ui-primary, --ui-text, ...) — diginex v4
 ];
 
 /**
