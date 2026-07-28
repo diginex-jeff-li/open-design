@@ -7,6 +7,7 @@
 import type { InstalledPluginRecord } from '@open-design/contracts';
 
 const CURATED_PROTOTYPE_PLUGIN_IDS = [
+  'sc-1.5',
   'example-open-design-landing',
   'example-kanban-board',
   'example-social-carousel',
