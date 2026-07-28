@@ -8,7 +8,7 @@
   <!-- ===== FONTS (do not modify) ===== -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Open+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <!-- ===== VUE + ROUTER CDN (do not modify) ===== -->
   <script type="importmap">
@@ -44,13 +44,101 @@
        ================================================================= */
 
     :root {
-      /* Skeleton-layout tokens (not from design system — keep these) */
+      /* ─── Diginex Library v4.0.0 tokens (Nuxt UI v4 / Tailwind v4) ──── */
+      /* Surface */
+      --bg: #ffffff;
+      --surface: #f8fafc;       /* neutral-50 — elevated card surfaces */
+      --surface-warm: #f1f5f9;  /* neutral-100 — accented / secondary surfaces */
+
+      /* Foreground ramp (Tailwind slate) */
+      --fg: #314158;       /* neutral-700 — primary text */
+      --fg-2: #45556c;     /* neutral-600 — emphasised secondary text */
+      --muted: #64748e;    /* neutral-500 — secondary body text */
+      --meta: #90a1b9;     /* neutral-400 — tertiary text, metadata */
+
+      /* Border */
+      --border: #e2e8f0;     /* neutral-200 — standard hairline border */
+      --border-soft: #cad5e2; /* neutral-300 — emphasised / section dividers */
+
+      /* Accent (lilac-3) */
+      --accent: #8171d7;     /* primary-500 — lilac-3 */
+      --accent-on: #ffffff;  /* fg when accent is the bg */
+      --accent-hover: color-mix(in oklab, var(--accent), black 8%);
+      --accent-active: color-mix(in oklab, var(--accent), black 14%);
+
+      /* Secondary (orange-3) */
+      --secondary: #e66b1a;     /* secondary-500 — orange-3 */
+      --secondary-on: #ffffff;
+
+      /* Semantic (A2) */
+      --success: #00c16a;  /* green-500 */
+      --info: #2b7fff;     /* blue-500 */
+      --warn: #efb100;     /* yellow-500 */
+      --danger: #fb2c36;   /* red-500 */
+
+      /* Typography */
+      --font-display: 'DM Sans', 'Open Sans', ui-sans-serif, system-ui, sans-serif;
+      --font-body: 'Open Sans', 'Public Sans', ui-sans-serif, system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+
+      --text-xs: 12px;
+      --text-sm: 14px;
+      --text-base: 16px;
+      --text-lg: 18px;
+      --text-xl: 20px;
+      --text-2xl: 24px;
+      --text-3xl: 30px;
+      --text-4xl: 36px;
+
+      --leading-body: 1.5;
+      --leading-tight: 1.2;
+      --tracking-display: -0.01em;
+
+      /* Spacing (Tailwind v4 scale) */
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-8: 32px;
+      --space-10: 40px;
+      --space-12: 48px;
+
+      --section-y-desktop: 80px;
+      --section-y-tablet: 64px;
+      --section-y-phone: 48px;
+
+      /* Radius — base ui-radius 4px, button radius 3px */
+      --radius-sm: 4px;
+      --radius-md: 6px;
+      --radius-lg: 8px;
+      --radius-pill: 9999px;
+      --radius-btn: 3px;     /* button-specific radius (v4.0.0) */
+
+      /* Elevation — ring-based depth */
+      --elev-flat: none;
+      --elev-ring: 0 0 0 1px var(--border);
+      --elev-raised: rgba(15, 23, 43, 0.05) 0px 4px 24px;
+
+      /* Focus ring — lilac-3 */
+      --focus-ring: 0 0 0 3px rgba(129, 113, 215, 0.3);
+
+      /* Motion */
+      --motion-fast: 150ms;
+      --motion-base: 200ms;
+      --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+      /* Layout */
+      --container-max: 1200px;
+      --container-gutter-desktop: 24px;
+      --container-gutter-tablet: 16px;
+      --container-gutter-phone: 12px;
+
+      /* ─── Skeleton-layout tokens (not from design system) ─────────── */
       --nav-height: 56px;
       --sidebar-width: 240px;
       --page-margin: var(--space-10, 40px);
-
-      /* Extensions for tokens not in the standard schema */
-      --info: var(--accent);          /* info state color — fallback to accent */
     }
 
     /* =================================================================
@@ -341,7 +429,7 @@
       background: var(--accent);
       color: var(--accent-on);
       padding: 10px 20px;
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-btn);
     }
     .btn-primary:hover { background: var(--accent-hover); }
     .btn-primary:active { background: var(--accent-active); }
@@ -350,7 +438,7 @@
       background: color-mix(in oklab, var(--accent), transparent 90%);
       color: var(--accent);
       padding: 10px 20px;
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-btn);
     }
     .btn-ghost:hover {
       background: color-mix(in oklab, var(--accent), transparent 84%);
@@ -360,7 +448,7 @@
       background: var(--accent);
       color: var(--accent-on);
       padding: 6px 16px;
-      border-radius: var(--radius-sm);
+      border-radius: var(--radius-btn);
     }
     .btn-default:hover { background: var(--accent-hover); }
 
@@ -368,7 +456,7 @@
       background: var(--accent);
       color: var(--accent-on);
       padding: 4px 12px;
-      border-radius: var(--radius-sm);
+      border-radius: var(--radius-btn);
       font-size: var(--text-xs);
     }
 
@@ -376,7 +464,7 @@
       background: var(--danger);
       color: var(--accent-on);
       padding: 6px 16px;
-      border-radius: var(--radius-sm);
+      border-radius: var(--radius-btn);
     }
     .btn-danger:hover {
       background: color-mix(in oklab, var(--danger), black 14%);

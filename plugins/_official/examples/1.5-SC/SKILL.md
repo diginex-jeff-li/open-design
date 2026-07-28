@@ -1,19 +1,18 @@
 ---
-name: diginex-prototype
+name: sc-1.5
 description: |
-  Polished, state-complete Vue 3 design spec for Figma handoff. Covers every flow,
-  state, and edge case (loading/empty/error/success) so the designer translates
-  directly without ambiguity. One HTML file via CDN ESM — no build step. NOT a
-  user-testing demo or engineering handoff; this is a designer specification artifact.
+  State-complete Vue 3 design spec for Diginex SC 1.5 — supply chain due diligence
+  platform (Party/Facility/PartyRole model, risk assessment, CAPs, audit trails).
+  Uses Diginex Library v4.0.0 design system tokens. One HTML file via CDN ESM —
+  no build step. Designer specification artifact for Figma handoff.
 triggers:
-  - "pm prototype"
+  - "sc 1.5"
+  - "supply chain"
+  - "diginex prototype"
   - "design spec"
   - "designer spec"
   - "interactive spec"
-  - "spec for designer"
-  - "detailed prototype"
   - "vue prototype"
-  - "clickable spec"
   - "handoff prototype"
 od:
   mode: prototype
@@ -25,7 +24,7 @@ od:
     entry: index.html
   craft:
     requires: [typography, color, anti-ai-slop]
-  example_prompt: "Build a detailed design spec for the compliance dashboard — 4 screens with every state covered (loading skeletons, empty states, error states, edge cases, confirmation flows). Designer will translate this into Figma."
+  example_prompt: "Build a detailed design spec for SC 1.5 — supplier profile, risk dashboard, audit list, CAP detail — with every state covered (loading skeletons, empty states, error states, edge cases, confirmation flows). Designer will translate this into Figma."
 ---
 
 # PM Prototype — Design Spec Skill

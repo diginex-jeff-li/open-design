@@ -1,12 +1,12 @@
 {
   "$schema": "https://open-design.ai/schemas/plugin.v1.json",
   "specVersion": "1.0.0",
-  "name": "diginex-prototype",
-  "title": "Diginex Prototype",
+  "name": "sc-1.5",
+  "title": "SC 1.5 — Supply Chain Due Diligence",
   "version": "0.1.0",
-  "description": "State-complete Vue 3 design spec with Diginex Library tokens. Lilac-3 primary, orange-3 secondary, Nuxt UI v4 semantics on Tailwind v4 slate neutrals.",
+  "description": "State-complete Vue 3 design spec for Diginex SC 1.5 — supply chain due diligence platform with Party/Facility/PartyRole model, risk assessment, CAPs, and audit trails. Diginex Library v4.0.0 tokens (lilac-3 primary, orange-3 secondary, Nuxt UI v4 on Tailwind v4 slate neutrals).",
   "license": "MIT",
-  "tags": ["prototype", "design-system", "first-party", "vue"],
+  "tags": ["prototype", "design-system", "first-party", "vue", "supply-chain"],
   "od": {
     "kind": "scenario",
     "taskKind": "new-generation",
@@ -17,7 +17,7 @@
     "fidelity": "polished",
     "useCase": {
       "query": {
-        "en": "Build a detailed design spec using the Diginex Library design system — {{screens}} with every state covered (loading, empty, error, success per screen). Designer will translate this into Figma."
+        "en": "Build a detailed design spec for SC 1.5 — {{screens}} with every state covered (loading, empty, error, success per screen). Uses Diginex Library v4.0.0 design system. Designer will translate this into Figma."
       }
     },
     "inputs": [
@@ -25,7 +25,7 @@
         "name": "screens",
         "label": "Which screens to spec?",
         "type": "text",
-        "placeholder": "e.g. overview, suppliers, audits, reports",
+        "placeholder": "e.g. supplier profile, risk dashboard, audit list, CAP detail",
         "required": true
       },
       {
