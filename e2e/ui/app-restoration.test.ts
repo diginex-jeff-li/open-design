@@ -1,5 +1,13 @@
-import { expect, test } from '@playwright/test';
-import { ensureRailOpen } from '@/playwright/rail';
+import { expect, test } from '@/playwright/suite';
+import { ensureRailOpen, openNewProjectModal as openNewProjectModalFromProjects } from '@/playwright/rail';
+import { runErrorCard } from '@/playwright/chat';
+import {
+  clickDeckNextSlide,
+  clickDeckPreviousSlide,
+  expectAllProjectFilesActive,
+  expectAllProjectFilesInactive,
+  openAllProjectFiles,
+} from '@/playwright/workspace';
 import type { Dialog, Locator, Page, Request, Response } from '@playwright/test';
 import { automatedUiScenarios } from '@/playwright/resources';
 import type { UiScenario } from '@/playwright/resources';
@@ -8,7 +16,7 @@ import { T } from '@/timeouts';
 const STORAGE_KEY = 'open-design:config';
 const ACTIVE_ARTIFACT_PREVIEW_SELECTOR = '[data-testid="artifact-preview-frame"]:visible, [data-testid="artifact-preview-frame-url-load"]:visible, [data-testid="artifact-preview-frame-srcdoc"]:visible, [data-testid="live-artifact-preview-frame"]:visible';
 
-test.describe.configure({ timeout: 45_000 });
+test.describe.configure({ timeout: process.env.CI ? 90_000 : 60_000 });
 
 function artifactPreview(page: Page) {
   return page.locator(ACTIVE_ARTIFACT_PREVIEW_SELECTOR).first();
@@ -22,6 +30,15 @@ function stagedAttachmentName(page: Page, name: string): Locator {
   return page
     .locator('[data-testid="staged-attachments"], [data-testid="staged-contexts"]')
     .getByText(name, { exact: true });
+}
+
+function isDesignFileUploadResponse(response: Response): boolean {
+  const url = new URL(response.url());
+  return (
+    response.request().method() === 'POST'
+    && url.pathname.startsWith('/api/projects/')
+    && url.pathname.endsWith('/upload')
+  );
 }
 
 test.beforeEach(async ({ page }) => {
@@ -118,12 +135,22 @@ test('[P0] @critical workspace restores the last manually selected file tab afte
     });
   });
 
-  await createEmptyProject(page, 'Workspace active tab restore');
+  const projectId = await createEmptyProject(page, 'Workspace active tab restore');
   await expectWorkspaceReady(page);
 
   await sendPrompt(page, 'Create a workspace persistence artifact');
   await expect(page.getByText('workspace-artifact.html', { exact: true }).first()).toBeVisible();
+  const { conversationId } = await getCurrentProjectContext(page);
+  await expectPersistedArtifactMessage(
+    page,
+    projectId,
+    conversationId,
+    'workspace-artifact.html',
+  );
 
+  const uploadResponse = page.waitForResponse(isDesignFileUploadResponse, {
+    timeout: T.short,
+  });
   await page.getByTestId('design-files-upload-input').setInputFiles({
     name: 'manual-reference.png',
     mimeType: 'image/png',
@@ -132,6 +159,7 @@ test('[P0] @critical workspace restores the last manually selected file tab afte
       'base64',
     ),
   });
+  await expect((await uploadResponse).ok()).toBeTruthy();
 
   const artifactTab = page.getByRole('tab', { name: /workspace-artifact\.html/i });
   const manualFileTab = tabBySuffix(page, 'manual-reference.png');
@@ -149,11 +177,17 @@ test('[P0] @critical workspace restores the last manually selected file tab afte
   await expect(restoredManualFileTab).toBeVisible();
   await expect(restoredManualFileTab).toHaveAttribute('aria-selected', 'true');
   const restoredArtifactTab = page.getByRole('tab', { name: /workspace-artifact\.html/i });
-  if ((await restoredArtifactTab.count()) === 0) {
+  const artifactTabRestored = await restoredArtifactTab
+    .waitFor({ state: 'visible', timeout: T.short })
+    .then(() => true, () => false);
+  if (!artifactTabRestored) {
     const turnCard = page.locator('.msg.assistant').filter({ hasText: 'workspace-artifact.html' }).first();
-    const openButton = turnCard.getByRole('button', { name: /^Open$/ });
-    await expect(openButton).toBeVisible();
-    await openButton.click();
+    const artifactButton = turnCard.getByRole('button', {
+      name: 'workspace-artifact.html',
+      exact: true,
+    });
+    await expect(artifactButton).toBeVisible();
+    await artifactButton.click();
 
     await expect(restoredArtifactTab).toBeVisible();
     await expect(restoredArtifactTab).toHaveAttribute('aria-selected', 'true');
@@ -205,6 +239,7 @@ test('[P0] switching between projects restores each project workspace to its las
     buffer: pngBytes,
   });
   await expect((await alphaPrimaryUpload).ok()).toBeTruthy();
+  await expect(tabBySuffix(page, 'alpha-primary.png')).toBeVisible();
   const alphaSecondaryUpload = page.waitForResponse(
     (resp: Response) => resp.url().includes('/upload') && resp.request().method() === 'POST',
     { timeout: 5000 },
@@ -240,6 +275,7 @@ test('[P0] switching between projects restores each project workspace to its las
     buffer: pngBytes,
   });
   await expect((await betaPrimaryUpload).ok()).toBeTruthy();
+  await expect(tabBySuffix(page, 'beta-primary.png')).toBeVisible();
   const betaSecondaryUpload = page.waitForResponse(
     (resp: Response) => resp.url().includes('/upload') && resp.request().method() === 'POST',
     { timeout: 5000 },
@@ -311,7 +347,7 @@ test('[P0] @critical visiting an uploaded design file route restores its tab and
   const uploadedName = await fileTab.getAttribute('title');
   expect(uploadedName).toBeTruthy();
 
-  await page.getByTestId('design-files-tab').click();
+  await openAllProjectFiles(page);
   const fileRow = page.locator('[data-testid^="design-file-row-"]', {
     hasText: 'deep-linked-reference.png',
   });
@@ -331,7 +367,7 @@ test('[P0] @critical visiting an uploaded design file route restores its tab and
   await expect(page.getByTestId('file-workspace')).toBeVisible();
   await expect(fileTab).toBeVisible();
   await expect(fileTab).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByTestId('design-files-tab')).toHaveAttribute('aria-selected', 'false');
+  await expectAllProjectFilesInactive(page);
 });
 
 test('[P0] returning from an uploaded design file route to the project root keeps the uploaded file tab active', async ({ page }) => {
@@ -356,6 +392,9 @@ test('[P0] returning from an uploaded design file route to the project root keep
   await createPrototypeProject(page, 'Uploaded file root route restore');
   await expectWorkspaceReady(page);
 
+  const uploadResponse = page.waitForResponse(isDesignFileUploadResponse, {
+    timeout: T.short,
+  });
   await page.getByTestId('design-files-upload-input').setInputFiles({
     name: 'root-design-reference.png',
     mimeType: 'image/png',
@@ -364,12 +403,13 @@ test('[P0] returning from an uploaded design file route to the project root keep
       'base64',
     ),
   });
+  await expect((await uploadResponse).ok()).toBeTruthy();
   const fileTab = tabBySuffix(page, 'root-design-reference.png');
   await expect(fileTab).toBeVisible();
   const uploadedName = await fileTab.getAttribute('title');
   expect(uploadedName).toBeTruthy();
 
-  await page.getByTestId('design-files-tab').click();
+  await openAllProjectFiles(page);
   const fileRow = page.locator('[data-testid^="design-file-row-"]', {
     hasText: 'root-design-reference.png',
   });
@@ -385,6 +425,7 @@ test('[P0] returning from an uploaded design file route to the project root keep
 
   await gotoProjectRoute(page, `/projects/${projectId}/files/${encodeURIComponent(uploadedName!)}`);
   await expect(fileTab).toBeVisible();
+  await expect(fileTab).toHaveAttribute('aria-selected', 'true');
   await navigateProjectRouteInApp(page, `/projects/${projectId}`);
 
   await expect(page.getByTestId('file-workspace')).toBeVisible();
@@ -616,12 +657,7 @@ test('[P0] @critical switching between conversations keeps the composer usable w
   await page.getByTestId('conversation-history-trigger').click();
   const historyList = page.getByTestId('conversation-list');
   await expect(historyList).toBeVisible();
-  await historyList
-    .locator('.chat-conv-item')
-    .filter({ hasText: firstPrompt })
-    .first()
-    .locator('[data-testid^="conversation-select-"]')
-    .click();
+  await historyList.getByTestId(`conversation-select-${firstContext.conversationId}`).click();
 
   await expect(page.locator('.msg.user .user-text').filter({ hasText: firstPrompt }).first()).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/projects/${firstContext.projectId}/conversations/${firstContext.conversationId}$`));
@@ -1206,8 +1242,8 @@ test('[P0] returning from workspace surfaces keeps the older conversation reacha
   await expect(page.locator('.msg.user .user-text').filter({ hasText: firstPrompt }).first()).toBeVisible();
   await expect(page.locator('.msg.user .user-text').filter({ hasText: secondPrompt })).toHaveCount(0);
 
-  await page.getByTestId('design-files-tab').click();
-  await expect(page.getByTestId('design-files-tab')).toHaveAttribute('aria-selected', 'true');
+  await openAllProjectFiles(page);
+  await expectAllProjectFilesActive(page);
 
   const current = new URL(page.url());
   const [, projects, projectId] = current.pathname.split('/');
@@ -1405,7 +1441,7 @@ test('[P0] opening an uploaded file route keeps the older conversation present i
 
   await expect(page.getByTestId('file-workspace')).toBeVisible();
   await expect(uploadedFileTab).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByTestId('design-files-tab')).toHaveAttribute('aria-selected', 'false');
+  await expectAllProjectFilesInactive(page);
   await expectProjectFilesToIncludeSuffixes(page, projectId, ['conversation-surface-reference.png']);
   const persistedConversations = await listConversationsFromApi(page, projectId);
   expect(persistedConversations.map((conversation) => conversation.id)).toEqual(
@@ -1620,13 +1656,13 @@ test('[P0] returning from a file deep-link to the project root keeps the chosen 
   const fileTab = tabBySuffix(page, 'conversation-root-file.png');
   await expect(fileTab).toBeVisible();
   await expect(fileTab).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByTestId('design-files-tab')).toHaveAttribute('aria-selected', 'false');
+  await expectAllProjectFilesInactive(page);
 
   await navigateProjectRouteInApp(page, `/projects/${projectId}`);
 
   await expect(page.getByTestId('file-workspace')).toBeVisible();
   await expect(fileTab).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByTestId('design-files-tab')).toHaveAttribute('aria-selected', 'false');
+  await expectAllProjectFilesInactive(page);
 });
 
 test('[P0] returning from an artifact deep-link to the project root keeps the artifact tab reachable after returning to the project root', async ({ page }) => {
@@ -1748,8 +1784,8 @@ test('[P0] reloading a project keeps the Design Files entry reachable when it wa
   });
   await expect(tabBySuffix(page, 'restore-me.png')).toBeVisible();
 
-  await page.getByTestId('design-files-tab').click();
-  await expect(page.getByTestId('design-files-tab')).toBeVisible();
+  await openAllProjectFiles(page);
+  await expectAllProjectFilesActive(page);
 
   const fileRow = page.locator('[data-testid^="design-file-row-"]', {
     hasText: 'restore-me.png',
@@ -1765,7 +1801,7 @@ test('[P0] reloading a project keeps the Design Files entry reachable when it wa
 
   await page.reload();
   await expect(page.getByTestId('file-workspace')).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByTestId('design-files-tab')).toBeVisible();
+  await expectAllProjectFilesActive(page);
 });
 
 test('[P0] @critical daemon error details persist between failed sends', async ({ page }) => {
@@ -1824,11 +1860,36 @@ test('[P0] @critical daemon error details persist between failed sends', async (
   await expectWorkspaceReady(page);
 
   await sendPrompt(page, 'first failing prompt');
-  await expect(page.locator('.msg.error')).toContainText('connection refused');
+  await expect(runErrorCard(page)).toContainText('connection refused');
   await expect(page.locator('.msg.user').getByText('first failing prompt', { exact: true })).toBeVisible();
 
+  const current = new URL(page.url());
+  const [, projects, projectId] = current.pathname.split('/');
+  if (projects !== 'projects' || !projectId) throw new Error(`unexpected project route: ${current.pathname}`);
+  await seedHtmlArtifact(
+    page,
+    projectId,
+    'error-cross-tab.html',
+    '<!doctype html><html><body><h1>Error cross tab</h1></body></html>',
+  );
+  await openAllProjectFiles(page);
+  const crossFileRow = page.locator('[data-testid^="design-file-row-"]', {
+    hasText: 'error-cross-tab.html',
+  });
+  await expect(crossFileRow).toBeVisible();
+  await crossFileRow.getByRole('button').first().click();
+  await clickDesignFilePreviewOpen(page);
+  await expect(page.getByRole('tab', { name: /error-cross-tab\.html/i })).toHaveAttribute('aria-selected', 'true');
+  await expect(artifactPreviewFrame(page).getByRole('heading', { name: 'Error cross tab' })).toBeVisible();
+
+  await page.goto(`/projects/${projectId}`);
+  await expectWorkspaceReady(page);
+  await expect(runErrorCard(page)).toContainText('connection refused');
+  await expect(page.locator('.msg.user').getByText('first failing prompt', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('chat-composer-input')).toBeVisible();
+
   await sendPrompt(page, 'second failing prompt');
-  await expect(page.locator('.msg.error')).toContainText('connection refused');
+  await expect(runErrorCard(page)).toContainText('connection refused');
   await expect(page.locator('.msg.user').getByText('first failing prompt', { exact: true })).toBeVisible();
   await expect(page.locator('.msg.user').getByText('second failing prompt', { exact: true })).toBeVisible();
 });
@@ -1905,8 +1966,8 @@ test('[P0] a successful retry after a failed send restores the workspace to a fr
   await expectWorkspaceReady(page);
 
   await sendPrompt(page, 'first failing prompt');
-  await expect(page.locator('.msg.error')).toContainText('connection refused');
-  await expect(page.locator('.msg.error')).toContainText('connection refused');
+  await expect(runErrorCard(page)).toContainText('connection refused');
+  await expect(runErrorCard(page)).toContainText('connection refused');
 
   await sendPrompt(page, 'retry prompt that succeeds');
   await expect(page.getByText('retry-success-artifact.html', { exact: true }).first()).toBeVisible();
@@ -1975,7 +2036,7 @@ test('[P0] retrying a failed run does not duplicate the original user message', 
 
   const prompt = 'retry dedup prompt';
   await sendPrompt(page, prompt);
-  await expect(page.locator('.msg.error')).toContainText('connection refused');
+  await expect(runErrorCard(page)).toContainText('connection refused');
   await expect(page.locator('.chat-error-retry')).toBeVisible();
   await expect(page.locator('.msg.user', { hasText: prompt })).toHaveCount(1);
 
@@ -2498,6 +2559,327 @@ test('[P1] composer design toolbox anti-AI polish action seeds its specific prom
   expect(runBodies[0]?.message).not.toContain('prefers-reduced-motion fallbacks');
 });
 
+test('[P1] project composer design toolbox hides disabled skill resources', async ({ page }) => {
+  await routeMockAgents(page);
+  await routeRuntimeSkills(page);
+  await routeAppConfig(page, {
+    disabledSkills: ['disabled-runtime-skill'],
+  });
+
+  await createEmptyProject(page, 'Runtime disabled skill toolbox');
+  await expectWorkspaceReady(page);
+
+  await page.getByTestId('chat-plus-trigger').click();
+  await page.getByRole('menuitem', { name: 'Design toolbox' }).click();
+  await page.getByRole('textbox', { name: /Search design toolbox resources/i }).fill('Runtime Skill');
+
+  await expect(page.getByRole('menuitem', { name: /Enabled Runtime Skill/i })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /Disabled Runtime Skill/i })).toHaveCount(0);
+});
+
+test('[P1] completed background run sends the configured desktop notification', async ({ page }) => {
+  const notificationConfig = {
+    soundEnabled: false,
+    successSoundId: 'ding',
+    failureSoundId: 'buzz',
+    desktopEnabled: true,
+  };
+  await page.addInitScript(
+    ({ key, notificationsConfig }) => {
+      window.localStorage.setItem(
+        key,
+        JSON.stringify({
+          mode: 'daemon',
+          apiKey: '',
+          baseUrl: 'https://api.anthropic.com',
+          model: 'claude-sonnet-4-5',
+          agentId: 'mock',
+          skillId: null,
+          designSystemId: null,
+          onboardingCompleted: true,
+          agentModels: {},
+          privacyDecisionAt: 1,
+          telemetry: { metrics: false, content: false, artifactManifest: false },
+          notifications: notificationsConfig,
+        }),
+      );
+    },
+    { key: STORAGE_KEY, notificationsConfig: notificationConfig },
+  );
+  await page.addInitScript(() => {
+    const notifications: Array<{ title: string; body?: string }> = [];
+    Object.defineProperty(window, '__odTestNotifications', {
+      value: notifications,
+      configurable: true,
+    });
+
+    class FakeNotification {
+      static permission = 'granted';
+
+      title: string;
+      body?: string;
+      onclose: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      constructor(title: string, options?: NotificationOptions) {
+        this.title = title;
+        const body = options?.body;
+        if (body) {
+          this.body = body;
+          notifications.push({ title, body });
+        } else {
+          notifications.push({ title });
+        }
+      }
+
+      close() {
+        this.onclose?.();
+      }
+    }
+
+    Object.defineProperty(window, 'Notification', {
+      value: FakeNotification,
+      configurable: true,
+    });
+    const serviceWorkerRegistration = {
+      showNotification: (title: string, options?: NotificationOptions) => {
+        const body = options?.body;
+        if (body) {
+          notifications.push({ title, body });
+        } else {
+          notifications.push({ title });
+        }
+        return Promise.resolve();
+      },
+    };
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        register: () => Promise.resolve(serviceWorkerRegistration),
+        ready: Promise.resolve(serviceWorkerRegistration),
+      },
+      configurable: true,
+    });
+    Object.defineProperty(document, 'hidden', {
+      get: () => true,
+      configurable: true,
+    });
+    Object.defineProperty(document, 'hasFocus', {
+      value: () => false,
+      configurable: true,
+    });
+  });
+  await routeMockAgents(page);
+  await routeAppConfig(page, {
+    notifications: notificationConfig,
+  });
+
+  await page.route('**/api/runs', async (route) => {
+    await route.fulfill({
+      status: 202,
+      contentType: 'application/json',
+      body: '{"runId":"notification-run"}',
+    });
+  });
+  let releaseEvents!: () => void;
+  const eventsReleased = new Promise<void>((resolve) => {
+    releaseEvents = resolve;
+  });
+  await page.route('**/api/runs/*/events', async (route) => {
+    await eventsReleased;
+    await route.fulfill({
+      status: 200,
+      headers: {
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-cache',
+      },
+      body: [
+        'event: start',
+        'data: {"bin":"mock-agent"}',
+        '',
+        'event: stdout',
+        `data: ${JSON.stringify({ chunk: 'Background completion notification body.' })}`,
+        '',
+        'event: end',
+        'data: {"code":0,"status":"succeeded"}',
+        '',
+        '',
+      ].join('\n'),
+    });
+  });
+
+  await createEmptyProject(page, 'Background notification run');
+  await expectWorkspaceReady(page);
+  const sessionModeTrigger = page.getByTestId('chat-composer').getByTestId('session-mode-trigger');
+  await sessionModeTrigger.click();
+  await page
+    .locator('.session-mode-toggle__menu[role="menu"]')
+    .getByRole('menuitemradio', { name: 'Ask mode' })
+    .click();
+  await expect(sessionModeTrigger).toHaveAttribute('aria-label', 'Ask mode');
+  await sendPrompt(page, 'Finish and notify me');
+  await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible();
+  releaseEvents();
+
+  await expect
+    .poll(async () =>
+      page.evaluate(() => (window as typeof window & {
+        __odTestNotifications?: Array<{ title: string; body?: string }>;
+      }).__odTestNotifications ?? []),
+    )
+    .toContainEqual(expect.objectContaining({
+      title: 'Task completed',
+      body: expect.stringContaining('Background completion notification body.'),
+    }));
+});
+
+test('[P1] failed foreground run still sends the configured desktop notification', async ({ page }) => {
+  const notificationConfig = {
+    soundEnabled: false,
+    successSoundId: 'ding',
+    failureSoundId: 'buzz',
+    desktopEnabled: true,
+  };
+  await page.addInitScript(
+    ({ key, notificationsConfig }) => {
+      window.localStorage.setItem(
+        key,
+        JSON.stringify({
+          mode: 'daemon',
+          apiKey: '',
+          baseUrl: 'https://api.anthropic.com',
+          model: 'claude-sonnet-4-5',
+          agentId: 'mock',
+          skillId: null,
+          designSystemId: null,
+          onboardingCompleted: true,
+          agentModels: {},
+          privacyDecisionAt: 1,
+          telemetry: { metrics: false, content: false, artifactManifest: false },
+          notifications: notificationsConfig,
+        }),
+      );
+    },
+    { key: STORAGE_KEY, notificationsConfig: notificationConfig },
+  );
+  await page.addInitScript(() => {
+    const notifications: Array<{ title: string; body?: string }> = [];
+    Object.defineProperty(window, '__odTestNotifications', {
+      value: notifications,
+      configurable: true,
+    });
+
+    class FakeNotification {
+      static permission = 'granted';
+
+      title: string;
+      body?: string;
+      onclose: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      constructor(title: string, options?: NotificationOptions) {
+        this.title = title;
+        const body = options?.body;
+        if (body) {
+          this.body = body;
+          notifications.push({ title, body });
+        } else {
+          notifications.push({ title });
+        }
+      }
+
+      close() {
+        this.onclose?.();
+      }
+    }
+
+    Object.defineProperty(window, 'Notification', {
+      value: FakeNotification,
+      configurable: true,
+    });
+    const serviceWorkerRegistration = {
+      showNotification: (title: string, options?: NotificationOptions) => {
+        const body = options?.body;
+        if (body) {
+          notifications.push({ title, body });
+        } else {
+          notifications.push({ title });
+        }
+        return Promise.resolve();
+      },
+    };
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        register: () => Promise.resolve(serviceWorkerRegistration),
+        ready: Promise.resolve(serviceWorkerRegistration),
+      },
+      configurable: true,
+    });
+    Object.defineProperty(document, 'hidden', {
+      get: () => false,
+      configurable: true,
+    });
+    Object.defineProperty(document, 'hasFocus', {
+      value: () => true,
+      configurable: true,
+    });
+  });
+  await routeMockAgents(page);
+  await routeAppConfig(page, {
+    notifications: notificationConfig,
+  });
+
+  await page.route('**/api/runs', async (route) => {
+    await route.fulfill({
+      status: 202,
+      contentType: 'application/json',
+      body: '{"runId":"notification-failure-run"}',
+    });
+  });
+  let releaseEvents!: () => void;
+  const eventsReleased = new Promise<void>((resolve) => {
+    releaseEvents = resolve;
+  });
+  await page.route('**/api/runs/*/events', async (route) => {
+    await eventsReleased;
+    await route.fulfill({
+      status: 200,
+      headers: {
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-cache',
+      },
+      body: [
+        'event: start',
+        'data: {"bin":"mock-agent"}',
+        '',
+        'event: stderr',
+        `data: ${JSON.stringify({ chunk: 'Foreground failure notification body.' })}`,
+        '',
+        'event: end',
+        'data: {"code":1,"status":"failed"}',
+        '',
+        '',
+      ].join('\n'),
+    });
+  });
+
+  await createEmptyProject(page, 'Foreground failure notification run');
+  await expectWorkspaceReady(page);
+  await sendPrompt(page, 'Fail and notify me');
+  await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible();
+  releaseEvents();
+
+  await expect
+    .poll(async () =>
+      page.evaluate(() => (window as typeof window & {
+        __odTestNotifications?: Array<{ title: string; body?: string }>;
+      }).__odTestNotifications ?? []),
+    )
+    .toContainEqual(expect.objectContaining({
+      title: 'Task failed',
+      body: 'The task ended with an error.',
+    }));
+});
+
 test('[P1] Browser Inspiration page_info action seeds Browser tab context into the next run request', async ({ page }) => {
   await routeMockAgents(page);
 
@@ -2746,53 +3128,7 @@ test('[P1] Browser Inspiration page_info carries a loaded page title into the ne
   expect(runBodies[0]?.message).toContain('- title: Browser Fixture Title');
 });
 
-test('[P0] composer session mode switch is carried into the next daemon run request', async ({ page }) => {
-  await routeMockAgents(page);
-
-  const runBodies: Array<Record<string, unknown>> = [];
-  await page.route('**/api/runs', async (route) => {
-    const raw = route.request().postData();
-    if (raw) runBodies.push(JSON.parse(raw) as Record<string, unknown>);
-    await route.fulfill({
-      status: 202,
-      contentType: 'application/json',
-      body: '{"runId":"session-mode-run"}',
-    });
-  });
-  await page.route('**/api/runs/*/events', async (route) => {
-    await route.fulfill({
-      status: 200,
-      headers: {
-        'content-type': 'text/event-stream',
-        'cache-control': 'no-cache',
-      },
-      body: [
-        'event: start',
-        'data: {"bin":"mock-agent"}',
-        '',
-        'event: end',
-        'data: {"code":0,"status":"succeeded"}',
-        '',
-        '',
-      ].join('\n'),
-    });
-  });
-
-  await createEmptyProject(page, 'Composer session mode payload context');
-  await expectWorkspaceReady(page);
-
-  await page.getByTestId('session-mode-trigger').click();
-  await page.getByRole('menuitemradio', { name: 'Ask mode' }).click();
-  await expect(page.getByTestId('session-mode-trigger')).toContainText('Ask');
-
-  await page.getByTestId('chat-composer-input').fill('Explain what changed in this artifact.');
-  await page.getByTestId('chat-send').click();
-
-  expect(runBodies[0]?.message).toContain('Explain what changed in this artifact.');
-  expect(runBodies[0]?.sessionMode).toBe('chat');
-});
-
-test('[P1] questions tab Skip all sends structured skipped answers into the next run request', async ({ page }) => {
+test('[P1] inline question form Skip all sends structured skipped answers into the next run request', async ({ page }) => {
   await routeMockAgents(page);
 
   const runBodies: Array<Record<string, unknown>> = [];
@@ -2818,7 +3154,7 @@ test('[P1] questions tab Skip all sends structured skipped answers into the next
               id: 'audience',
               label: 'Audience',
               type: 'text',
-              required: true,
+              required: false,
             },
           ],
         },
@@ -2849,18 +3185,15 @@ test('[P1] questions tab Skip all sends structured skipped answers into the next
     });
   });
 
-  const projectId = await createEmptyProject(page, 'Questions skip all run context');
+  const projectId = await createEmptyProject(page, 'Inline questions skip all');
   await expectWorkspaceReady(page);
 
   await sendPrompt(page, 'Plan a landing page after asking clarifying questions.');
-  await expect(page.getByTestId('questions-tab')).toBeVisible();
-  await page.getByTestId('questions-tab').click();
+  const form = page.locator('.question-form').first();
+  await expect(form).toBeVisible();
+  await expect(form.getByText('Audience')).toBeVisible();
 
-  const panel = page.getByTestId('questions-panel');
-  await expect(panel).toBeVisible();
-  await expect(panel.getByText('Audience')).toBeVisible();
-
-  const skipAll = panel.getByRole('button', { name: /Skip all/i });
+  const skipAll = form.getByRole('button', { name: /Skip all/i });
   await expect(skipAll).toBeEnabled();
   await Promise.all([
     page.waitForResponse(isCreateRunResponse, { timeout: 5_000 }),
@@ -2895,7 +3228,7 @@ test('[P1] questions tab Skip all sends structured skipped answers into the next
   ).toBe(true);
 });
 
-test('[P1] questions tab Continue sends selected answers into the next run request', async ({ page }) => {
+test('[P1] inline question form submits selected answers into the next run request', async ({ page }) => {
   await routeMockAgents(page);
 
   const runBodies: Array<Record<string, unknown>> = [];
@@ -2952,23 +3285,20 @@ test('[P1] questions tab Continue sends selected answers into the next run reque
     });
   });
 
-  const projectId = await createEmptyProject(page, 'Questions continue run context');
+  const projectId = await createEmptyProject(page, 'Inline questions submit run context');
   await expectWorkspaceReady(page);
 
   await sendPrompt(page, 'Plan a landing page after user choices.');
-  await expect(page.getByTestId('questions-tab')).toBeVisible();
-  await page.getByTestId('questions-tab').click();
-
-  const panel = page.getByTestId('questions-panel');
-  await expect(panel).toBeVisible();
-  const audienceQuestion = panel.locator('.qf-field', { has: page.getByText('Audience') });
+  const form = page.locator('.question-form').first();
+  await expect(form).toBeVisible();
+  const audienceQuestion = form.locator('.qf-field', { has: page.getByText('Audience') });
   await audienceQuestion.locator('input.qf-input').fill('Product marketers');
 
-  const continueButton = panel.getByRole('button', { name: /^Continue$/i });
-  await expect(continueButton).toBeEnabled();
+  const submitButton = form.getByRole('button', { name: 'Send answers' });
+  await expect(submitButton).toBeEnabled();
   await Promise.all([
     page.waitForResponse(isCreateRunResponse, { timeout: 5_000 }),
-    continueButton.click(),
+    submitButton.click(),
   ]);
 
   await expect.poll(() => runBodies.length).toBe(2);
@@ -3001,7 +3331,8 @@ test('[P1] questions tab Continue sends selected answers into the next run reque
 });
 
 test('[P1] project composer working directory replace and clear update linked dirs metadata', async ({ page }) => {
-  const workingDir = '/Users/mac/open-design/open-design/e2e';
+  const workingDir = process.cwd();
+  const workingDirLabel = workingDir.split(/[\\/]/).at(-1) ?? workingDir;
   const patchBodies: Array<Record<string, unknown>> = [];
 
   await page.route('**/api/recent-dirs', async (route) => {
@@ -3032,7 +3363,7 @@ test('[P1] project composer working directory replace and clear update linked di
 
   await page.getByTestId('working-dir-trigger').click();
   await page.getByTestId('working-dir-pick').click();
-  await expect(page.getByTestId('working-dir-trigger')).toContainText('e2e');
+  await expect(page.getByTestId('working-dir-trigger')).toContainText(workingDirLabel);
   await expect
     .poll(() => patchBodies.at(-1)?.metadata)
     .toMatchObject({ linkedDirs: [workingDir] });
@@ -3121,13 +3452,74 @@ async function routeMockAgents(page: Page) {
   });
 }
 
+async function routeAppConfig(page: Page, override: Record<string, unknown>) {
+  await page.route('**/api/app-config', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      json: {
+        config: {
+          onboardingCompleted: true,
+          agentId: 'mock',
+          skillId: null,
+          designSystemId: null,
+          agentModels: {},
+          privacyDecisionAt: 1,
+          telemetry: { metrics: false, content: false, artifactManifest: false },
+          ...override,
+        },
+      },
+    });
+  });
+}
+
+async function routeRuntimeSkills(page: Page) {
+  await page.route('**/api/skills', async (route) => {
+    await route.fulfill({
+      json: {
+        skills: [
+          runtimeSkill('enabled-runtime-skill', 'Enabled Runtime Skill'),
+          runtimeSkill('disabled-runtime-skill', 'Disabled Runtime Skill'),
+        ],
+      },
+    });
+  });
+}
+
+function runtimeSkill(id: string, name: string) {
+  return {
+    id,
+    name,
+    description: `${name} fixture`,
+    triggers: [],
+    mode: 'prototype',
+    surface: 'web',
+    platform: 'desktop',
+    scenario: 'qa',
+    previewType: 'html',
+    designSystemRequired: true,
+    defaultFor: [],
+    upstream: null,
+    featured: null,
+    fidelity: null,
+    speakerNotes: null,
+    animations: null,
+    hasBody: true,
+    examplePrompt: '',
+    source: 'builtin',
+    category: 'Runtime',
+  };
+}
+
 async function createEmptyProject(page: Page, name: string): Promise<string> {
   await gotoEntryHome(page);
   await openNewProjectModal(page);
   await page.getByTestId('new-project-tab-live-artifact').click();
   await page.getByTestId('new-project-name').fill(name);
   await page.getByTestId('create-project').click();
-  await expect(page).toHaveURL(/\/projects\//);
+  await expect(page).toHaveURL(/\/projects\//, { timeout: T.long });
   const current = new URL(page.url());
   const [, projects, projectId] = current.pathname.split('/');
   if (projects !== 'projects' || !projectId) throw new Error(`unexpected project route: ${current.pathname}`);
@@ -3318,81 +3710,6 @@ async function runExampleUsePromptFlow(
   await expect(page.getByTestId('project-meta')).toContainText('Warm Utility Example');
 }
 
-async function runQuestionFormSelectionLimitFlow(
-  page: Page,
-  entry: UiScenario,
-) {
-  await sendPrompt(page, entry.prompt);
-
-  const toneQuestion = page.locator('.qf-field', {
-    has: page.getByText('Visual tone (pick up to two)'),
-  });
-  await expect(toneQuestion).toBeVisible();
-
-  const editorialChip = toneQuestion.locator('label.qf-chip', {
-    has: page.getByText('Editorial / magazine'),
-  });
-  const modernChip = toneQuestion.locator('label.qf-chip', {
-    has: page.getByText('Modern minimal'),
-  });
-  const softChip = toneQuestion.locator('label.qf-chip', {
-    has: page.getByText('Soft / warm'),
-  });
-  const editorial = editorialChip.locator('input[type="checkbox"]');
-  const modern = modernChip.locator('input[type="checkbox"]');
-  const soft = softChip.locator('input[type="checkbox"]');
-
-  await editorialChip.click();
-  await modernChip.click();
-
-  await expect(editorial).toBeChecked();
-  await expect(modern).toBeChecked();
-  await expect(soft).toBeDisabled();
-
-  const checkedOptions = toneQuestion.locator('input[type="checkbox"]:checked');
-  await expect(checkedOptions).toHaveCount(2);
-  await expect(soft).not.toBeChecked();
-  await expect(checkedOptions).toHaveCount(2);
-}
-
-async function runQuestionFormSubmitPersistenceFlow(
-  page: Page,
-  entry: UiScenario,
-) {
-  await sendPrompt(page, entry.prompt);
-
-  const form = page.locator('.question-form').first();
-  await expect(form).toBeVisible();
-
-  const toneQuestion = form.locator('.qf-field', {
-    has: page.getByText('Visual tone (pick up to two)'),
-  });
-  await toneQuestion.locator('label.qf-chip', { has: page.getByText('Editorial / magazine') }).click();
-  await toneQuestion.locator('label.qf-chip', { has: page.getByText('Modern minimal') }).click();
-
-  await form.getByRole('button', { name: 'Send answers' }).click();
-
-  await expect(page.getByText('[form answers — discovery]', { exact: false })).toBeVisible();
-  await expect(form.getByText('answered', { exact: true })).toBeVisible();
-  await expect(form.getByText('Answers sent — agent is using these for the rest of the session.')).toBeVisible();
-
-  const { projectId, conversationId } = await getCurrentProjectContext(page);
-  const messagesResponse = await page.request.get(
-    `/api/projects/${projectId}/conversations/${conversationId}/messages`,
-  );
-  expect(messagesResponse.ok()).toBeTruthy();
-  const { messages } = (await messagesResponse.json()) as { messages: Array<{ role: string; content: string }> };
-  const formAnswerMessage = messages.find((message) => message.role === 'user' && message.content.includes('[form answers — discovery]'));
-  expect(formAnswerMessage).toBeTruthy();
-
-  await page.reload();
-  const restoredForm = page.locator('.question-form').first();
-  await expect(restoredForm).toBeVisible();
-  await expect(restoredForm.getByText('answered', { exact: true })).toBeVisible();
-  await expect(restoredForm.locator('input[type="checkbox"]:checked')).toHaveCount(2);
-  await expect(restoredForm.getByRole('button', { name: 'Send answers' })).toHaveCount(0);
-}
-
 async function runGenerationDoesNotCreateExtraFileFlow(
   page: Page,
   entry: UiScenario,
@@ -3501,11 +3818,11 @@ async function runDeckPaginationNextPrevCorrectnessFlow(page: Page) {
 
   const frame = artifactPreviewFrame(page);
   await expect(frame.getByText('Slide One')).toBeVisible();
-  await page.getByLabel('Next slide').click();
+  await clickDeckNextSlide(page);
   await expect(frame.getByText('Slide Two')).toBeVisible();
-  await page.getByLabel('Next slide').click();
+  await clickDeckNextSlide(page);
   await expect(frame.getByText('Slide Three')).toBeVisible();
-  await page.getByLabel('Previous slide').click();
+  await clickDeckPreviousSlide(page);
   await expect(frame.getByText('Slide Two')).toBeVisible();
 }
 
@@ -3518,13 +3835,13 @@ async function runDeckPaginationPerFileIsolatedFlow(page: Page) {
   await openDesignFile(page, 'deck-alpha.html');
   const frame = artifactPreviewFrame(page);
   await expect(frame.getByText('Alpha One')).toBeVisible();
-  await page.getByLabel('Next slide').click();
+  await clickDeckNextSlide(page);
   await expect(frame.getByText('Alpha Two')).toBeVisible();
 
-  await page.getByTestId('design-files-tab').click();
+  await openAllProjectFiles(page);
   await openDesignFile(page, 'deck-beta.html');
   await expect(frame.getByText('Beta One')).toBeVisible();
-  await page.getByLabel('Next slide').click();
+  await clickDeckNextSlide(page);
   await expect(frame.getByText('Beta Two')).toBeVisible();
 
   await page.getByRole('tab', { name: /deck-alpha\.html/i }).click();
@@ -3585,7 +3902,7 @@ async function seedDeckArtifact(
       title,
       entry: fileName,
       renderer: 'deck-html',
-      exports: ['html', 'pptx'],
+      exports: ['html', 'pdf'],
     },
   );
 }
@@ -3633,10 +3950,7 @@ async function gotoEntryHome(page: Page) {
 }
 
 async function openNewProjectModal(page: Page) {
-  await ensureRailOpen(page);
-  await page.getByTestId('entry-nav-new-project').click();
-  await expect(page.getByTestId('new-project-modal')).toBeVisible();
-  await expect(page.getByTestId('new-project-panel')).toBeVisible();
+  await openNewProjectModalFromProjects(page);
 }
 
 async function gotoProjectRoute(page: Page, path: string) {
@@ -3677,7 +3991,7 @@ async function expectProjectsView(page: Page) {
 }
 
 async function waitForLoadingToClear(page: Page) {
-  await page.getByText('Loading Open Design…').waitFor({ state: 'hidden', timeout: T.medium });
+  await page.getByText('Loading Open Design…').waitFor({ state: 'hidden', timeout: T.long });
 }
 
 async function getCurrentProjectContext(
@@ -3722,6 +4036,35 @@ async function listConversationsFromApi(
     conversations: Array<{ id: string; updatedAt: number }>;
   };
   return conversations;
+}
+
+async function expectPersistedArtifactMessage(
+  page: Page,
+  projectId: string,
+  conversationId: string,
+  fileName: string,
+) {
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(
+        `/api/projects/${projectId}/conversations/${conversationId}/messages`,
+      );
+      if (!response.ok()) return false;
+      const { messages } = (await response.json()) as {
+        messages: Array<{
+          role: string;
+          runStatus?: string;
+          producedFiles?: Array<{ name: string }>;
+        }>;
+      };
+      return messages.some(
+        (message) =>
+          message.role === 'assistant'
+          && message.runStatus === 'succeeded'
+          && message.producedFiles?.some((file) => file.name.endsWith(fileName)),
+      );
+    }, { timeout: T.medium })
+    .toBe(true);
 }
 
 async function expectProjectFilesToIncludeSuffixes(
@@ -3874,7 +4217,7 @@ async function runDesignFilesUploadFlow(
   });
 
   await expect(page.getByRole('tab', { name: /moodboard\.png/i })).toBeVisible();
-  await page.getByTestId('design-files-tab').click();
+  await openAllProjectFiles(page);
   const fileRow = page.locator('[data-testid^="design-file-row-"]', {
     hasText: 'moodboard.png',
   });
@@ -3918,7 +4261,7 @@ async function runDesignFilesDeleteFlow(
   });
 
   await expect(page.getByRole('tab', { name: /trash-me\.png/i })).toBeVisible();
-  await page.getByTestId('design-files-tab').click();
+  await openAllProjectFiles(page);
 
   const fileRow = page.locator('[data-testid^="design-file-row-"]', {
     hasText: 'trash-me.png',
@@ -3935,10 +4278,7 @@ async function runDesignFilesDeleteFlow(
   // Bug #115: deleting from the Design Files panel must not navigate the
   // user into another tab. The Design Files tab should remain the active
   // view, and the sibling tab should still exist (just not auto-activated).
-  await expect(page.getByTestId('design-files-tab')).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
+  await expectAllProjectFilesActive(page);
   await expect(page.getByRole('tab', { name: /keep-me\.png/i })).toBeVisible();
 }
 

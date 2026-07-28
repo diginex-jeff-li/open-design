@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from 'express';
 import dns from 'node:dns';
+import http from 'node:http';
 import https from 'node:https';
 
 import {
@@ -18,18 +19,35 @@ import {
   mirrorAmrOnboardingProfileAnalytics,
   parseAmrEntryAnalyticsPayload,
   parseAmrOnboardingProfileAnalyticsPayload,
+  applyVelaLiveAccount,
+  clearAllVelaLiveAccounts,
   parseVelaLoginAttribution,
+  peekVelaLiveAccount,
+  readVelaApiContext,
   readVelaCredentialRevision,
+  readVelaControlApiContext,
   readVelaLoginStatus,
+  setVelaLiveAccount,
+  shouldRefreshVelaLiveAccount,
+  velaLiveAccountCacheKey,
   spawnVelaLogin,
+  type VelaLiveAccount,
 } from '../integrations/vela.js';
-import { amrModelLoadingCache } from '../runtimes/amr-model-cache.js';
 import {
+  clearVelaWalletSnapshotCache,
+  velaWalletSnapshotReader,
+} from '../integrations/vela-wallet.js';
+import { amrModelLoadingCache } from '../runtimes/amr-model-cache.js';
+import { buildAmrModelCacheKey } from '../runtimes/amr-model-probe.js';
+import {
+  fetchVelaBillingSummary,
   fetchVelaPresetModels,
   fetchVelaRemoteModelsWithRetry,
 } from '../runtimes/defs/amr.js';
 
 const AMR_API_PROXY_PREFIX = '/api/integrations/vela/api-proxy';
+const VELA_MESSAGE_CENTER_PREFIX = '/api/integrations/vela/message-center';
+const VELA_PUBLIC_MESSAGE_CENTER_PREFIX = '/api/integrations/vela/message-center-public';
 const AMR_API_UPSTREAM_ORIGIN = 'https://amr-api.open-design.ai';
 
 type ReadAppConfig = (dataDir: string) => Promise<AppConfigPrefs>;
@@ -71,6 +89,27 @@ function shouldStreamVelaProxyRequest(req: Request, body: Buffer | null): boolea
   return req.method !== 'GET' && req.method !== 'HEAD' && body == null;
 }
 
+/**
+ * Pipe one leg of the AMR proxy with an explicit source-error guard.
+ *
+ * `.pipe()` does NOT forward a source `'error'` to the destination, and a
+ * stream that emits `'error'` with no listener throws — crashing the privileged
+ * daemon. Both legs of this proxy have real-world error paths: the upstream
+ * response body can `ECONNRESET` mid-stream (a network drop, routine), and the
+ * inbound request body errors when a client aborts an upload. Routing the
+ * source error to `onSourceError` (which tears the proxy down) instead of
+ * leaving it unhandled is the invariant that keeps the daemon alive. Exported
+ * for test.
+ */
+export function pipeProxyStreamWithGuard(
+  source: NodeJS.ReadableStream,
+  dest: NodeJS.WritableStream,
+  onSourceError: (err: Error) => void,
+): void {
+  source.on('error', onSourceError);
+  source.pipe(dest);
+}
+
 function proxyAmrApiRequest(req: Request, res: Response): void {
   const suffix = req.originalUrl.slice(AMR_API_PROXY_PREFIX.length);
   if (!suffix.startsWith('/api/v1/')) {
@@ -109,7 +148,13 @@ function proxyAmrApiRequest(req: Request, res: Response): void {
       for (const [key, value] of Object.entries(upstreamRes.headers)) {
         if (value !== undefined) res.setHeader(key, value);
       }
-      upstreamRes.pipe(res);
+      pipeProxyStreamWithGuard(upstreamRes, res, (err) => {
+        if (!res.headersSent) {
+          res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+        } else {
+          res.destroy();
+        }
+      });
     },
   );
   upstream.setTimeout(30_000, () => upstream.destroy(new Error('AMR API proxy timed out')));
@@ -122,10 +167,75 @@ function proxyAmrApiRequest(req: Request, res: Response): void {
   });
   if (body) upstream.write(body);
   if (streamBody) {
-    req.pipe(upstream);
+    pipeProxyStreamWithGuard(req, upstream, () => upstream.destroy());
   } else {
     upstream.end();
   }
+}
+
+function isAllowedMessageCenterRequest(method: string, pathname: string): boolean {
+  if (method === 'GET' && pathname === '/messages') return true;
+  if (method !== 'POST') return false;
+  return pathname === '/read-all' || /^\/messages\/[^/]+\/read$/.test(pathname);
+}
+
+function proxyVelaMessageCenterRequest(
+  req: Request,
+  res: Response,
+  context: { apiUrl: string; controlKey?: string },
+  proxyPrefix = VELA_MESSAGE_CENTER_PREFIX,
+): void {
+  const suffix = req.originalUrl.slice(proxyPrefix.length);
+  const parsedSuffix = new URL(suffix, 'http://message-center.local');
+  if (!isAllowedMessageCenterRequest(req.method, parsedSuffix.pathname)) {
+    res.status(404).json({ error: 'unknown_message_center_path' });
+    return;
+  }
+  const target = new URL(
+    `/api/v1/message-center${parsedSuffix.pathname}${parsedSuffix.search}`,
+    context.apiUrl,
+  );
+  if (target.protocol !== 'http:' && target.protocol !== 'https:') {
+    res.status(500).json({ error: 'invalid_vela_api_url' });
+    return;
+  }
+  const body = velaProxyRequestBody(req);
+  const headers: Record<string, string> = {
+    accept: typeof req.headers.accept === 'string' ? req.headers.accept : 'application/json',
+  };
+  if (context.controlKey) headers.authorization = `Bearer ${context.controlKey}`;
+  if (typeof req.headers['content-type'] === 'string') {
+    headers['content-type'] = req.headers['content-type'];
+  }
+  if (body) headers['content-length'] = String(body.length);
+  const transport = target.protocol === 'https:' ? https : http;
+  const upstream = transport.request(
+    target,
+    { method: req.method, headers },
+    (upstreamRes) => {
+      res.status(upstreamRes.statusCode ?? 502);
+      for (const [key, value] of Object.entries(upstreamRes.headers)) {
+        if (value !== undefined) res.setHeader(key, value);
+      }
+      pipeProxyStreamWithGuard(upstreamRes, res, (err) => {
+        if (!res.headersSent) {
+          res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+        } else {
+          res.end();
+        }
+      });
+    },
+  );
+  upstream.setTimeout(30_000, () => upstream.destroy(new Error('Vela Message Center timed out')));
+  upstream.on('error', (err) => {
+    if (!res.headersSent) {
+      res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+    } else {
+      res.end();
+    }
+  });
+  if (body) upstream.write(body);
+  upstream.end();
 }
 
 export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): void {
@@ -138,9 +248,7 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
     return host ? `${proto}://${host}` : 'http://localhost:7456';
   });
 
-  async function resolveAmrModelProbe(): Promise<AmrModelProbe> {
-    const appConfig = await readAppConfig(RUNTIME_DATA_DIR);
-    const configuredEnv = agentCliEnvForAgent(appConfig.agentCliEnv, 'amr');
+  function resolveAmrModelProbeForEnv(configuredEnv: Record<string, string>): AmrModelProbe {
     const def = getAgentDef('amr');
     if (!def) throw new Error('AMR runtime definition is missing');
     const agentLaunch = resolveAgentLaunch(def, configuredEnv);
@@ -159,17 +267,68 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
       agentLaunch,
     );
     const credentialRevision = readVelaCredentialRevision(env, configuredEnv);
-    const cacheKey = JSON.stringify({
+    const cacheKey = buildAmrModelCacheKey({
       launchPath,
-      home: spawnEnv.HOME ?? spawnEnv.USERPROFILE ?? '',
-      openDesignAmrProfile: spawnEnv.OPEN_DESIGN_AMR_PROFILE ?? '',
-      velaProfile: spawnEnv.VELA_PROFILE ?? '',
-      velaLinkUrl: spawnEnv.VELA_LINK_URL ?? '',
-      velaRuntimeKey: spawnEnv.VELA_RUNTIME_KEY ?? '',
-      velaOpencodeBin: spawnEnv.VELA_OPENCODE_BIN ?? '',
+      env: spawnEnv,
       credentialRevision,
     });
     return { launchPath, env: spawnEnv, configuredEnv, cacheKey };
+  }
+
+  async function resolveAmrModelProbe(): Promise<AmrModelProbe> {
+    const appConfig = await readAppConfig(RUNTIME_DATA_DIR);
+    const configuredEnv = agentCliEnvForAgent(appConfig.agentCliEnv, 'amr');
+    return resolveAmrModelProbeForEnv(configuredEnv);
+  }
+
+  // Single-flight the live billing fetch per credential revision. Treating
+  // `peekVelaLiveAccount(key) === null` as the cold signal (rather than the
+  // refresh throttle) means a concurrent second /status that arrives during the
+  // first fetch awaits the SAME promise instead of slipping past the throttle
+  // and returning config-only — which the read-once surfaces can't recover from.
+  const inFlightVelaAccountFetches = new Map<
+    string,
+    Promise<VelaLiveAccount | null>
+  >();
+  const inFlightVelaAccountInvalidations = new Set<string>();
+  function fetchVelaLiveAccountSingleFlight(
+    accountCacheKey: string,
+    probe: AmrModelProbe,
+    options: { invalidateModelsOnPlanChange?: boolean } = {},
+  ): Promise<VelaLiveAccount | null> {
+    if (options.invalidateModelsOnPlanChange === true) {
+      inFlightVelaAccountInvalidations.add(accountCacheKey);
+    }
+    const existing = inFlightVelaAccountFetches.get(accountCacheKey);
+    if (existing) return existing;
+    const pending = (async () => {
+      const previousAccount = peekVelaLiveAccount(accountCacheKey);
+      amrModelLoadingCache.warm(probe.cacheKey, () =>
+        fetchVelaRemoteModelsWithRetry(probe.launchPath, probe.env),
+      );
+      const account = await fetchVelaBillingSummary(probe.launchPath, probe.env);
+      if (
+        inFlightVelaAccountInvalidations.has(accountCacheKey) &&
+        (!previousAccount || previousAccount.plan !== account.plan)
+      ) {
+        amrModelLoadingCache.invalidate(probe.cacheKey);
+      }
+      setVelaLiveAccount(accountCacheKey, account);
+      return account;
+    })()
+      .catch((err) => {
+        // Keep the refresh throttle as a short negative cache/backoff. /status
+        // is read by focus/menu/login surfaces, so a persistent optional
+        // billing failure must not make every poll await the same slow probe.
+        console.warn('[amr] live account fetch failed', err);
+        return null;
+      })
+      .finally(() => {
+        inFlightVelaAccountFetches.delete(accountCacheKey);
+        inFlightVelaAccountInvalidations.delete(accountCacheKey);
+      });
+    inFlightVelaAccountFetches.set(accountCacheKey, pending);
+    return pending;
   }
 
   app.get('/api/amr/models', async (_req, res) => {
@@ -189,15 +348,49 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
     try {
       const appConfig = await readAppConfig(RUNTIME_DATA_DIR);
       const configuredEnv = agentCliEnvForAgent(appConfig.agentCliEnv, 'amr');
+      const refresh = _req.query.refresh === '1' || _req.query.refresh === 'true';
       const status = readVelaLoginStatus(mergeVelaEnv(env, configuredEnv));
       if (status.loggedIn) {
-        void resolveAmrModelProbe()
-          .then((probe) => {
-            amrModelLoadingCache.warm(probe.cacheKey, () =>
-              fetchVelaRemoteModelsWithRetry(probe.launchPath, probe.env),
-            );
-          })
-          .catch((err) => console.warn('[amr] model cache warm failed', err));
+        // Key the live-account cache by the full credential revision (not just
+        // profile) so a logout / account switch can never surface the previous
+        // account's plan or balance. Merge the cached projection synchronously
+        // (works for env-backed sessions where status.user is null too); the
+        // background refresh below updates the cache for the next poll.
+        const accountCacheKey = velaLiveAccountCacheKey(
+          readVelaCredentialRevision(env, configuredEnv),
+        );
+        const probe = resolveAmrModelProbeForEnv(configuredEnv);
+        const cachedAccount = peekVelaLiveAccount(accountCacheKey);
+        if (refresh) {
+          const liveAccount = await fetchVelaLiveAccountSingleFlight(accountCacheKey, probe, {
+            invalidateModelsOnPlanChange: true,
+          });
+          applyVelaLiveAccount(status, liveAccount);
+        } else if (!cachedAccount) {
+          // Cold cache (or a fetch already in flight): BLOCK on the single-flight
+          // billing fetch so the first open already carries plan/balance. The
+          // consumers (settings card, inline switcher, avatar) read /status once
+          // and do not re-poll, so returning config-only here would hide the
+          // fields until the user refocuses. On failure the helper resolves null
+          // and the refresh throttle becomes a short negative cache/backoff, so
+          // repeated menu/focus polls degrade to config-only instead of each
+          // awaiting the same optional billing probe.
+          const liveAccount =
+            inFlightVelaAccountFetches.has(accountCacheKey) ||
+            shouldRefreshVelaLiveAccount(accountCacheKey)
+              ? await fetchVelaLiveAccountSingleFlight(accountCacheKey, probe)
+              : null;
+          applyVelaLiveAccount(status, liveAccount);
+        } else {
+          // Warm cache: serve it immediately; refresh in the background for the
+          // next poll once the TTL has lapsed.
+          applyVelaLiveAccount(status, cachedAccount);
+          if (shouldRefreshVelaLiveAccount(accountCacheKey)) {
+            void fetchVelaLiveAccountSingleFlight(accountCacheKey, probe, {
+              invalidateModelsOnPlanChange: true,
+            }).catch(() => {});
+          }
+        }
       }
       res.json(status);
     } catch (err) {
@@ -205,7 +398,57 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
     }
   });
 
+  app.get('/api/integrations/vela/wallet', async (req, res) => {
+    try {
+      const appConfig = await readAppConfig(RUNTIME_DATA_DIR);
+      const configuredEnv = agentCliEnvForAgent(appConfig.agentCliEnv, 'amr');
+      const refresh = req.query.refresh === '1' || req.query.refresh === 'true';
+      const snapshot = await velaWalletSnapshotReader.read({
+        env,
+        configuredEnv,
+        refresh,
+      });
+      if (refresh) {
+        try {
+          const modelProbe = resolveAmrModelProbeForEnv(configuredEnv);
+          amrModelLoadingCache.invalidate(modelProbe.cacheKey);
+        } catch (err) {
+          console.warn('[amr] model cache invalidation after wallet refresh failed', err);
+        }
+      }
+      res.json(snapshot);
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
   app.all('/api/integrations/vela/api-proxy/*splat', proxyAmrApiRequest);
+
+  app.get('/api/integrations/vela/message-center-public/messages', async (req, res) => {
+    try {
+      const appConfig = await readAppConfig(RUNTIME_DATA_DIR);
+      const configuredEnv = agentCliEnvForAgent(appConfig.agentCliEnv, 'amr');
+      const context = readVelaApiContext(env, configuredEnv);
+      proxyVelaMessageCenterRequest(req, res, context, VELA_PUBLIC_MESSAGE_CENTER_PREFIX);
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  app.all('/api/integrations/vela/message-center/*splat', async (req, res) => {
+    try {
+      const appConfig = await readAppConfig(RUNTIME_DATA_DIR);
+      const configuredEnv = agentCliEnvForAgent(appConfig.agentCliEnv, 'amr');
+      const context = readVelaControlApiContext(env, configuredEnv);
+      if (!context) {
+        res.status(401).json({ error: 'vela_control_key_required' });
+        return;
+      }
+      proxyVelaMessageCenterRequest(req, res, context);
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
 
   app.post('/api/integrations/vela/login', async (req, res) => {
     try {
@@ -235,7 +478,15 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
       // fails to start — never when a login is already in flight.
       let spawned;
       try {
-        spawned = await spawnVelaLogin({ configuredEnv, attribution: loginAttribution });
+        spawned = await spawnVelaLogin({
+          configuredEnv,
+          attribution: loginAttribution,
+          // Block until the direct attempt reaches device-auth steady state or
+          // exits/errors before it, so a direct failure that arrives AFTER the
+          // 250ms startup grace (the common shape on a broken edge path) still
+          // falls through to the proxy retry below instead of returning 202.
+          waitForActivation: true,
+        });
       } catch (directErr) {
         const directMessage =
           directErr instanceof Error ? directErr.message : String(directErr);
@@ -244,6 +495,7 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
           configuredEnv,
           attribution: loginAttribution,
           defaultApiUrl: velaApiProxyBaseUrl(req, getPublicBaseUrl),
+          waitForActivation: true,
         });
       }
       res.status(202).json(spawned);
@@ -314,6 +566,10 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
       const appConfig = await readAppConfig(RUNTIME_DATA_DIR);
       const configuredEnv = agentCliEnvForAgent(appConfig.agentCliEnv, 'amr');
       forgetVelaLogin(mergeVelaEnv(env, configuredEnv));
+      // Drop any cached plan/balance so the next login can't surface this
+      // (now signed-out) account's billing data.
+      clearAllVelaLiveAccounts();
+      clearVelaWalletSnapshotCache();
       delete env.VELA_RUNTIME_KEY;
       delete env.VELA_LINK_URL;
       const agentCliEnv = { ...(appConfig.agentCliEnv ?? {}) };
