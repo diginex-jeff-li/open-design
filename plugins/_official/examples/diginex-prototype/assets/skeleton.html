@@ -1,0 +1,793 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><!-- AGENT: set title --></title>
+
+  <!-- ===== FONTS (do not modify) ===== -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- ===== VUE + ROUTER CDN (do not modify) ===== -->
+  <script type="importmap">
+  {
+    "imports": {
+      "vue": "https://unpkg.com/vue@3.5.13/dist/vue.esm-browser.prod.js",
+      "vue-router": "https://unpkg.com/vue-router@4.5.0/dist/vue-router.esm-browser.js",
+      "@vue/devtools-api": "https://unpkg.com/@vue/devtools-api@6.6.4/lib/esm/index.js"
+    }
+  }
+  </script>
+
+  <!-- SRI integrity for CDN modules (modulepreload verifies before caching) -->
+  <link rel="modulepreload" href="https://unpkg.com/vue@3.5.13/dist/vue.esm-browser.prod.js"
+        integrity="sha384-UD4WWwnzOnT68QK9Dgf/jMrAGH2xuXyfIF9zzlFbWOL8MSrADyQ5BTgs9Kct5Izy">
+  <link rel="modulepreload" href="https://unpkg.com/vue-router@4.5.0/dist/vue-router.esm-browser.js"
+        integrity="sha384-ja/DjcrX1QCfzi+fXA7a3oEJOHh5lp2nrgKn70ht8WbX74V6jKSPAySG5ZD3HJG2">
+  <link rel="modulepreload" href="https://unpkg.com/@vue/devtools-api@6.6.4/lib/esm/index.js"
+        integrity="sha384-denYcxnQOyGiT5hMmNa2UEytHj9G7JcCu6z7rawaiD7In6xzHe6UsJ8fYAn+m2hK">
+
+  <style>
+    /* =================================================================
+       DESIGN TOKENS — :root block
+       ----------------------------------------------------------------
+       AGENT: PASTE THE ACTIVE DESIGN SYSTEM'S tokens.css :root BLOCK
+       HERE before generating the prototype. The skeleton's own :root
+       below contains only skeleton-layout tokens (nav height, sidebar
+       width, page margin) + a fallback for --info which is not in the
+       standard schema.
+
+       DO NOT hard-code hex values or px values outside of :root.
+       Every component class below references var(--*) exclusively.
+       ================================================================= */
+
+    :root {
+      /* Skeleton-layout tokens (not from design system — keep these) */
+      --nav-height: 56px;
+      --sidebar-width: 240px;
+      --page-margin: var(--space-10, 40px);
+
+      /* Extensions for tokens not in the standard schema */
+      --info: var(--accent);          /* info state color — fallback to accent */
+    }
+
+    /* =================================================================
+       RESET (do not modify)
+       ================================================================= */
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-body);
+      font-size: var(--text-base);
+      line-height: var(--leading-body);
+      color: var(--fg);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    #app {
+      min-height: 100vh;
+    }
+
+    /* =================================================================
+       ROUTE TRANSITIONS
+       ================================================================= */
+
+    .fade-enter-active,
+    .fade-leave-active {
+      transition: opacity 200ms ease;
+    }
+    .fade-enter-from,
+    .fade-leave-to {
+      opacity: 0;
+    }
+
+    /* =================================================================
+       NAVIGATION — TOP BAR
+       ================================================================= */
+
+    .app-nav-top {
+      display: flex;
+      align-items: center;
+      height: var(--nav-height);
+      padding: 0 var(--page-margin);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border-soft);
+      gap: var(--space-8);
+    }
+
+    .app-nav-top .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      margin-right: auto;
+    }
+
+    .app-nav-top .nav-logo {
+      height: 28px;
+      width: auto;
+    }
+
+    .app-nav-top .nav-title {
+      font-family: var(--font-display);
+      font-size: var(--text-base);
+      font-weight: 600;
+      color: var(--fg);
+    }
+
+    .app-nav-top .nav-links {
+      display: flex;
+      gap: var(--space-1);
+    }
+
+    .app-nav-top .nav-link {
+      display: inline-flex;
+      align-items: center;
+      padding: var(--space-2) var(--space-4);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--fg-2);
+      text-decoration: none;
+      transition: background 120ms ease, color 120ms ease;
+      cursor: pointer;
+      border: none;
+      background: none;
+    }
+
+    .app-nav-top .nav-link:hover {
+      background: color-mix(in oklab, var(--fg), transparent 94%);
+      color: var(--fg);
+    }
+
+    .app-nav-top .nav-link.router-link-active,
+    .app-nav-top .nav-link.router-link-exact-active {
+      background: color-mix(in oklab, var(--accent), transparent 90%);
+      color: var(--accent);
+    }
+
+    /* =================================================================
+       NAVIGATION — SIDEBAR
+       ================================================================= */
+
+    .app-layout-sidebar {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    .app-nav-sidebar {
+      width: var(--sidebar-width);
+      background: var(--surface);
+      border-right: 1px solid var(--border-soft);
+      display: flex;
+      flex-direction: column;
+      padding: var(--space-6) 0;
+      flex-shrink: 0;
+    }
+
+    .app-nav-sidebar .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: 0 var(--space-6) var(--space-6);
+      border-bottom: 1px solid var(--border-soft);
+      margin-bottom: var(--space-4);
+    }
+
+    .app-nav-sidebar .nav-logo {
+      height: 28px;
+      width: auto;
+    }
+
+    .app-nav-sidebar .nav-title {
+      font-family: var(--font-display);
+      font-size: var(--text-base);
+      font-weight: 600;
+      color: var(--fg);
+    }
+
+    .app-nav-sidebar .nav-links {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+      padding: 0 var(--space-3);
+    }
+
+    .app-nav-sidebar .nav-link {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--fg-2);
+      text-decoration: none;
+      transition: background 120ms ease, color 120ms ease;
+      cursor: pointer;
+      border: none;
+      background: none;
+      text-align: left;
+    }
+
+    .app-nav-sidebar .nav-link:hover {
+      background: color-mix(in oklab, var(--fg), transparent 94%);
+      color: var(--fg);
+    }
+
+    .app-nav-sidebar .nav-link.router-link-active,
+    .app-nav-sidebar .nav-link.router-link-exact-active {
+      background: color-mix(in oklab, var(--accent), transparent 90%);
+      color: var(--accent);
+    }
+
+    .app-content-sidebar {
+      flex: 1;
+      padding: var(--space-8);
+      max-width: var(--container-max);
+    }
+
+    /* =================================================================
+       SHARED COMPONENT STYLES
+       Use these classes in your route components.
+       Every value references var(--*) — never raw hex or px.
+       ================================================================= */
+
+    /* Screen header */
+    .screen-header {
+      margin-bottom: var(--space-8);
+    }
+    .screen-header h1 {
+      font-family: var(--font-display);
+      font-size: var(--text-4xl);
+      font-weight: 700;
+      line-height: var(--leading-tight);
+      letter-spacing: var(--tracking-display);
+      color: var(--fg);
+      margin-bottom: var(--space-2);
+    }
+    .screen-header .subtitle {
+      font-family: var(--font-body);
+      font-size: var(--text-base);
+      font-weight: 400;
+      color: var(--fg-2);
+    }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-5);
+      box-shadow: var(--elev-raised);
+    }
+
+    /* KPI grid */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: var(--space-4);
+      margin-bottom: var(--space-8);
+    }
+
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-5);
+      box-shadow: var(--elev-raised);
+    }
+
+    .kpi-value {
+      display: block;
+      font-family: var(--font-display);
+      font-size: var(--text-3xl);
+      font-weight: 600;
+      line-height: var(--leading-tight);
+      letter-spacing: var(--tracking-display);
+      color: var(--fg);
+      margin-bottom: var(--space-1);
+    }
+
+    .kpi-label {
+      display: block;
+      font-family: var(--font-body);
+      font-size: var(--text-xs);
+      font-weight: 400;
+      color: var(--fg-2);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .kpi-change {
+      display: inline-block;
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+      font-weight: 600;
+      margin-top: var(--space-2);
+    }
+    .kpi-change.up { color: var(--success); }
+    .kpi-change.down { color: var(--danger); }
+    .kpi-change.neutral { color: var(--fg-2); }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 120ms ease, transform 80ms ease;
+      text-decoration: none;
+    }
+    .btn:active { transform: scale(0.98); }
+
+    .btn-primary {
+      background: var(--accent);
+      color: var(--accent-on);
+      padding: 10px 20px;
+      border-radius: var(--radius-md);
+    }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:active { background: var(--accent-active); }
+
+    .btn-ghost {
+      background: color-mix(in oklab, var(--accent), transparent 90%);
+      color: var(--accent);
+      padding: 10px 20px;
+      border-radius: var(--radius-md);
+    }
+    .btn-ghost:hover {
+      background: color-mix(in oklab, var(--accent), transparent 84%);
+    }
+
+    .btn-default {
+      background: var(--accent);
+      color: var(--accent-on);
+      padding: 6px 16px;
+      border-radius: var(--radius-sm);
+    }
+    .btn-default:hover { background: var(--accent-hover); }
+
+    .btn-small {
+      background: var(--accent);
+      color: var(--accent-on);
+      padding: 4px 12px;
+      border-radius: var(--radius-sm);
+      font-size: var(--text-xs);
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      color: var(--accent-on);
+      padding: 6px 16px;
+      border-radius: var(--radius-sm);
+    }
+    .btn-danger:hover {
+      background: color-mix(in oklab, var(--danger), black 14%);
+    }
+
+    .btn:disabled,
+    .btn[disabled] {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Forms */
+    .form-group {
+      margin-bottom: var(--space-4);
+    }
+    .form-label {
+      display: block;
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--fg);
+      margin-bottom: var(--space-2);
+    }
+    .form-input {
+      width: 100%;
+      height: 36px;
+      padding: var(--space-2) var(--space-3);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-body);
+      font-size: var(--text-base);
+      color: var(--fg);
+      transition: border-color 120ms ease;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: var(--focus-ring);
+    }
+    .form-input::placeholder {
+      color: var(--meta);
+    }
+    .form-input.error {
+      border-color: var(--danger);
+    }
+
+    /* Tags / Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: var(--space-1) var(--space-3);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-body);
+      font-size: var(--text-xs);
+      font-weight: 400;
+    }
+    .badge-success {
+      background: color-mix(in oklab, var(--success), transparent 88%);
+      color: var(--success);
+    }
+    .badge-warning {
+      background: color-mix(in oklab, var(--warn), transparent 88%);
+      color: var(--warn);
+    }
+    .badge-error {
+      background: color-mix(in oklab, var(--danger), transparent 88%);
+      color: var(--danger);
+    }
+    .badge-info {
+      background: color-mix(in oklab, var(--info), transparent 88%);
+      color: var(--info);
+    }
+    .badge-neutral {
+      background: color-mix(in oklab, var(--fg), transparent 94%);
+      color: var(--fg-2);
+    }
+
+    /* Tables */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--font-body);
+      font-size: var(--text-base);
+    }
+    .data-table th {
+      text-align: left;
+      padding: var(--space-3) var(--space-4);
+      font-size: var(--text-xs);
+      font-weight: 400;
+      color: var(--fg-2);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+    }
+    .data-table th:hover { color: var(--fg); }
+    .data-table th.sorted { color: var(--accent); }
+    .data-table td {
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--border-soft);
+      color: var(--fg);
+    }
+    .data-table tr:hover td {
+      background: color-mix(in oklab, var(--surface), var(--bg) 50%);
+    }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal {
+      background: var(--surface);
+      border-radius: var(--radius-md);
+      padding: var(--space-8);
+      box-shadow: var(--elev-raised);
+      max-width: 520px;
+      width: 90vw;
+    }
+    .modal-header {
+      font-family: var(--font-display);
+      font-size: var(--text-xl);
+      font-weight: 600;
+      margin-bottom: var(--space-4);
+    }
+    .modal-body {
+      font-family: var(--font-body);
+      font-size: var(--text-base);
+      color: var(--fg-2);
+      margin-bottom: var(--space-6);
+    }
+    .modal-actions {
+      display: flex;
+      gap: var(--space-3);
+      justify-content: flex-end;
+    }
+
+    /* Tabs (within a screen) */
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: var(--space-6);
+    }
+    .tab {
+      padding: var(--space-3) var(--space-4);
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--fg-2);
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      transition: color 120ms ease, border-color 120ms ease;
+    }
+    .tab:hover { color: var(--fg); }
+    .tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    /* Status indicators */
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: var(--space-2);
+    }
+    .status-dot.success { background: var(--success); }
+    .status-dot.warning { background: var(--warn); }
+    .status-dot.error { background: var(--danger); }
+    .status-dot.neutral { background: var(--meta); }
+
+    /* State toggle bar (design spec controls — AGENT: include on every screen) */
+    .state-toggles {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-4);
+      background: color-mix(in oklab, var(--fg), transparent 94%);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: var(--space-6);
+      border-radius: var(--radius-sm);
+    }
+    .state-toggles .toggle-label {
+      font-family: var(--font-body);
+      font-size: var(--text-xs);
+      font-weight: 400;
+      color: var(--fg-2);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-right: var(--space-3);
+    }
+    .state-toggles button {
+      padding: var(--space-1) var(--space-3);
+      font-family: var(--font-body);
+      font-size: var(--text-xs);
+      font-weight: 400;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--fg-2);
+      cursor: pointer;
+      transition: all 120ms ease;
+    }
+    .state-toggles button:hover {
+      border-color: var(--border);
+      color: var(--fg);
+    }
+    .state-toggles button.active {
+      background: var(--accent);
+      color: var(--accent-on);
+      border-color: var(--accent);
+    }
+
+    /* Skeleton loading placeholder */
+    .skeleton-block {
+      background: linear-gradient(
+        90deg,
+        color-mix(in oklab, var(--fg), transparent 94%) 25%,
+        var(--border-soft) 50%,
+        color-mix(in oklab, var(--fg), transparent 94%) 75%
+      );
+      background-size: 200% 100%;
+      animation: skeleton-pulse 1.5s ease-in-out infinite;
+      border-radius: var(--radius-sm);
+    }
+    @keyframes skeleton-pulse {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: var(--space-6);
+      right: var(--space-6);
+      padding: var(--space-3) var(--space-5);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--accent-on);
+      z-index: 200;
+      animation: toast-in 200ms ease;
+    }
+    .toast-success { background: var(--success); }
+    .toast-error { background: var(--danger); }
+    .toast-info { background: var(--info); }
+
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* =================================================================
+       SCREEN-SPECIFIC CSS — AGENT: add screen styles below
+       ================================================================= */
+
+    /* AGENT: add .screen-<name> styles here */
+
+    /* =================================================================
+       RESPONSIVE
+       ================================================================= */
+
+    @media (max-width: 768px) {
+      :root {
+        --page-margin: var(--space-6);
+        --sidebar-width: 0;
+      }
+      .app-nav-top {
+        padding: 0 var(--space-4);
+        gap: var(--space-4);
+      }
+      .app-nav-sidebar {
+        display: none;
+      }
+      .app-content-sidebar {
+        padding: var(--space-4);
+      }
+      .kpi-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- ⚠️ CRITICAL: #app must be EMPTY. Vue 3 replaces #app innerHTML with the root component's render output. Do NOT put HTML, nav, or router-view here — put them in the root component's template (see "ROUTER + APP" section below). A root component without template renders <!---->, causing a blank page with no console error. -->
+  <div id="app" data-od-id="app-root"></div>
+
+  <script type="module">
+    import { createApp, reactive, ref, computed, watch, nextTick } from 'vue';
+    import { createRouter, createWebHashHistory } from 'vue-router';
+
+    // =================================================================
+    // AGENT: Define route components below.
+    // Each component = { template: `...`, setup() { ... } }
+    //
+    // Template must use the CSS classes from the <style> block above
+    // (card, kpi-grid, btn, badge, data-table, form-input, tabs, etc).
+    // Do NOT redefine these classes. Do NOT write raw hex or px values.
+    // Use var(--token) for any custom inline styles.
+    //
+    // Every interactive element must do something visible:
+    // buttons → show toast or navigate, forms → v-model + submit handler,
+    // tables → sortable columns, tabs → toggle content, modals → open/close.
+    //
+    // Add data-od-id to: state toggle bar ("state-toggles"), each screen-header,
+    // and each card/section — required for critique mode compatibility.
+    // =================================================================
+
+    // AGENT: const ScreenName = { template: `...`, setup() { ... } };
+
+    // =================================================================
+    // AGENT: Define routes below.
+    // Paths must be kebab-case. Minimum 2, maximum 6.
+    // Default redirect from '/' to the first screen.
+    // =================================================================
+
+    // AGENT: const routes = [ ... ];
+
+    // =================================================================
+    // ROUTER + APP (do not modify below this line)
+    // =================================================================
+
+    // AGENT: define routes BEFORE this line — see marker above
+    const __routes = typeof routes !== 'undefined' ? routes : [{ path: '/', redirect: '/placeholder' }];
+
+    const router = createRouter({
+      history: createWebHashHistory(),
+      routes: __routes,
+    });
+
+    // ⚠️ CRITICAL: The root component MUST have a template property.
+    // Vue 3 replaces #app innerHTML with the root component's render output.
+    // Without template, Vue renders <!----> → blank page, no console error.
+    // ALL UI (nav, router-view, layout) goes in this template, NOT in the HTML #app div.
+    const App = {
+      // AGENT: Replace this template with your nav + router-view.
+      // Choose one pattern:
+      //   Top nav:    <nav class="app-nav-top">...</nav> + <router-view ...>
+      //   Sidebar:   <div class="app-layout-sidebar"><nav class="app-nav-sidebar">...</nav><main class="app-content-sidebar"><router-view ...></main></div>
+      template: `
+        <!-- AGENT: choose navigation pattern (top or sidebar) and uncomment -->
+
+        <!-- TOP NAV pattern: -->
+        <!--
+        <nav class="app-nav-top">
+          <div class="nav-brand">
+            <svg class="nav-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            <span class="nav-title"><!-- AGENT: app name --></span>
+          </div>
+          <div class="nav-links">
+            <router-link to="/overview" class="nav-link">Overview</router-link>
+            <!-- AGENT: add more links -->
+          </div>
+        </nav>
+        <router-view v-slot="{ Component }">
+          <transition name="fade" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
+        -->
+
+        <!-- SIDEBAR pattern: -->
+        <!--
+        <div class="app-layout-sidebar">
+          <nav class="app-nav-sidebar">
+            <div class="nav-brand">
+              <svg class="nav-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              <span class="nav-title"><!-- AGENT: app name --></span>
+            </div>
+            <div class="nav-links">
+              <router-link to="/overview" class="nav-link">Overview</router-link>
+              <!-- AGENT: add more links -->
+            </div>
+          </nav>
+          <main class="app-content-sidebar">
+            <router-view v-slot="{ Component }">
+              <transition name="fade" mode="out-in">
+                <component :is="Component" />
+              </transition>
+            </router-view>
+          </main>
+        </div>
+        -->
+
+        <!-- PLACEHOLDER: remove this div when you uncomment a pattern above -->
+        <div style="padding: 2rem; color: var(--fg-2, #666); font-family: var(--font-body, sans-serif);">
+          Choose a navigation pattern in the App template (top nav or sidebar) and uncomment it.
+        </div>
+      `,
+      setup() {
+        // AGENT: add global reactive state here if needed
+        return {};
+      }
+    };
+
+    const app = createApp(App);
+    app.use(router);
+    app.mount('#app');
+  </script>
+</body>
+</html>

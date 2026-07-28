@@ -1,0 +1,65 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "diginex-prototype",
+  "title": "Diginex Prototype",
+  "version": "0.1.0",
+  "description": "State-complete Vue 3 design spec with Diginex Library tokens. Lilac-3 primary, orange-3 secondary, Nuxt UI v4 semantics on Tailwind v4 slate neutrals.",
+  "license": "MIT",
+  "tags": ["prototype", "design-system", "first-party", "vue"],
+  "od": {
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "prototype",
+    "platform": "desktop",
+    "scenario": "product",
+    "surface": "web",
+    "fidelity": "polished",
+    "useCase": {
+      "query": {
+        "en": "Build a detailed design spec using the Diginex Library design system — {{screens}} with every state covered (loading, empty, error, success per screen). Designer will translate this into Figma."
+      }
+    },
+    "inputs": [
+      {
+        "name": "screens",
+        "label": "Which screens to spec?",
+        "type": "text",
+        "placeholder": "e.g. overview, suppliers, audits, reports",
+        "required": true
+      },
+      {
+        "name": "stateCoverage",
+        "label": "State coverage level",
+        "type": "select",
+        "options": ["Full (loading/empty/error/success per screen)", "Minimal (default + error only)"],
+        "default": "Full (loading/empty/error/success per screen)"
+      },
+      {
+        "name": "constraints",
+        "label": "Constraints (optional)",
+        "type": "text",
+        "placeholder": "Specific interactions, edge cases, designer preferences"
+      }
+    ],
+    "context": {
+      "skills": [
+        { "path": "./SKILL.md" }
+      ],
+      "designSystem": {
+        "ref": "diginex",
+        "primary": true
+      },
+      "craft": ["typography", "color", "anti-ai-slop"],
+      "assets": [
+        "./example.html",
+        "./assets/skeleton.html"
+      ]
+    },
+    "preview": {
+      "type": "html",
+      "entry": "example.html"
+    },
+    "capabilities": ["prompt:inject", "fs:write"]
+  }
+}
