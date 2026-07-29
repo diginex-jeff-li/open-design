@@ -3,8 +3,8 @@ name: sc-1.5
 description: |
   State-complete Vue 3 design spec for Diginex SC 1.5 — supply chain due diligence
   platform (Party/Facility/PartyRole model, risk assessment, CAPs, audit trails).
-  Uses Diginex Library v4.0.0 design system tokens. One HTML file via CDN ESM —
-  no build step. Designer specification artifact for Figma handoff.
+  Uses Diginex Library v4.0.0 design system tokens. One HTML file via Vue 3
+  global CDN build — no build step. Designer specification artifact for Figma handoff.
 triggers:
   - "sc 1.5"
   - "supply chain"
@@ -88,7 +88,7 @@ diginex-prototype/
 └── references/
     ├── state-coverage.md       ← state toggle bar implementation + interactivity table
     ├── checklist.md            ← P0/P1/P2 self-review (state coverage, Vue patterns)
-    ├── vue-esm.md              ← CRITICAL. Vue 3 CDN ESM patterns. Read FIRST.
+    ├── vue-esm.md              ← Vue 3 global build patterns. P0 rules + pitfalls.
     ├── vue-best-practices.md   ← Vue 3 Composition API rules. Read before component logic.
     ├── vue-router.md           ← Vue Router 4 patterns for hash-history SPAs.
     └── web-design-guidelines.md ← Web interface guidelines. Read during self-check (Step 9).
@@ -96,14 +96,35 @@ diginex-prototype/
 
 ## Pre-flight reading
 
-Before writing any code, read these references:
-- `references/vue-esm.md` — CRITICAL. Vue 3 CDN ESM patterns. Read FIRST.
-- `references/vue-best-practices.md` — Vue 3 Composition API rules. Read before writing component logic.
-- `references/vue-router.md` — Vue Router 4 patterns for hash-history SPAs. Read when setting up routes.
+Reference files are staged in `.od-skills/` and available when needed:
+- `references/vue-best-practices.md` — Vue 3 Composition API rules. Read if you need reactivity or component patterns.
+- `references/vue-router.md` — Vue Router 4 patterns. Read when setting up routes.
 - `references/web-design-guidelines.md` — Web interface guidelines. Read during self-check (Step 9).
 
-Load lazily: read `vue-router.md` only when implementing routes. Read
-`web-design-guidelines.md` during the self-check pass.
+The critical Vue patterns are inlined below — you do NOT need to read a separate file for them.
+
+## Vue global build patterns
+
+The skeleton uses Vue 3 global builds (not ESM import maps) for sandboxed iframe compatibility:
+
+```html
+<script src="https://unpkg.com/vue@3.5.13/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/vue-router@4.5.0/dist/vue-router.global.prod.js"></script>
+```
+
+Destructure APIs from the global objects — no `import` statements:
+```javascript
+const { createApp, reactive, ref, computed, watch, nextTick } = Vue;
+const { createRouter, createWebHashHistory } = VueRouter;
+```
+
+**P0 rules (violating these breaks the page):**
+1. `<div id="app"></div>` must be EMPTY — Vue replaces its innerHTML entirely.
+2. Root component MUST have a `template` property — otherwise renders `<!---->` (blank page, no error).
+3. Use `createWebHashHistory()` — not `createWebHistory()`. Hash history works in sandboxed iframes; HTML5 history needs server-side routing.
+4. Use `const { ... } = Vue` / `const { ... } = VueRouter` — never `import` statements. The global build has no ESM module system.
+
+See `references/vue-esm.md` for the full pattern reference.
 
 ## When to use vs. when NOT to use
 
@@ -125,7 +146,7 @@ Load lazily: read `vue-router.md` only when implementing routes. Read
 Every pm-prototype output starts from `assets/skeleton.html`. The skeleton contains:
 - A minimal `:root` block with skeleton-layout tokens (`--nav-height`, `--sidebar-width`,
   `--page-margin`, `--info`). The full design-system token block is pasted in step 1.
-- Pinned Vue 3.5.13 + Vue Router 4.5.0 CDN import map (DO NOT modify)
+- Pinned Vue 3.5.13 + Vue Router 4.5.0 global CDN builds (DO NOT modify)
 - Google Fonts link for Inter at 400/500/600 (DO NOT modify)
 - CSS reset + shared component classes (card, btn, badge, table, modal, tabs, toast)
 - Router + app mount boilerplate (DO NOT modify)
@@ -141,7 +162,7 @@ same names, so the `:root` paste works without mapping.
 ```
 assets/skeleton.html
 ├── <head>
-│   ├── import map (Vue + Vue Router, pinned versions)
+│   ├── Vue + Router global CDN scripts (pinned versions)
 │   ├── Google Fonts (Inter 400/500/600)
 │   └── <style>
 │       ├── :root { --nav-height, --sidebar-width, --page-margin }   ← LOCKED (skeleton layout)
@@ -155,8 +176,8 @@ assets/skeleton.html
 ├── <body>
 │   └── <div id="app">
 │       └── /* AGENT: replace placeholder with nav + router-view */  ← YOU INJECT HERE
-└── <script type="module">
-    ├── Vue + Router imports                                         ← LOCKED
+└── <script>
+    ├── Vue + Router destructuring (const { ... } = Vue)             ← LOCKED
     ├── /* AGENT: define route components */                         ← YOU INJECT HERE
     ├── /* AGENT: define routes array */                             ← YOU INJECT HERE
     └── Router + app mount                                           ← LOCKED
@@ -465,7 +486,7 @@ After `</artifact>`, output exactly:
 ## Hard rules
 
 - **Start from skeleton** — open `assets/skeleton.html`, inject ONLY into `/* AGENT: */` markers
-- **Do NOT modify locked sections** — `:root`, import map, font link, reset, shared classes, router boilerplate
+- **Do NOT modify locked sections** — `:root`, CDN script tags, font link, reset, shared classes, router boilerplate
 - **Hash history only** — skeleton already uses `createWebHashHistory`
 - **Pinned CDN versions** — skeleton already has correct pinned URLs
 - **One HTML file** — no external CSS/JS/fonts beyond what's in the skeleton
@@ -479,11 +500,11 @@ After `</artifact>`, output exactly:
 - **No "wireframe" or "demo" language** — this artifact calls itself a "design spec." The words "wireframe", "prototype", and "demo" are banned from the output.
 - **Embed logo as inline SVG** — copy the SVG markup into `.nav-brand`, do not use `<img src>`
 
-## Vue ESM dependency
+## Vue global build dependency
 
-This skill uses Vue 3 via CDN ESM imports. Read `references/vue-esm.md` FIRST —
-it covers critical mount rules, import maps, and pitfalls. Key P0: `<div id='app'>`
-must be EMPTY. Root component MUST have a template property.
+This skill uses Vue 3 via global CDN builds. The critical mount rules and
+patterns are inlined in the "Vue global build patterns" section above. Key P0:
+`<div id="app">` must be EMPTY. Root component MUST have a `template` property.
 
 ## Troubleshooting
 

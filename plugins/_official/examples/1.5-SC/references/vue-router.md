@@ -1,12 +1,12 @@
-# Vue Router 4 — Hash-History Patterns for CDN ESM Prototypes
+# Vue Router 4 — Hash-History Patterns for Global Build Prototypes
 
-Condensed from vue-router-best-practices skill. Adapted for single-HTML CDN ESM
-prototypes using `createWebHashHistory` (the skeleton's default).
+Condensed from vue-router-best-practices skill. Adapted for single-HTML
+prototypes using Vue 3 global builds (not ESM). Uses `createWebHashHistory`.
 
 ## Setup
 
 ```javascript
-import { createRouter, createWebHashHistory } from 'vue-router';
+const { createRouter, createWebHashHistory } = VueRouter;
 
 const routes = [
   { path: '/', redirect: '/overview' },
@@ -118,7 +118,7 @@ const OrderDetail = {
 };
 ```
 
-In Composition API with CDN ESM, use `onMounted` + `watch` instead:
+In Composition API with global builds, use `onMounted` + `watch` instead:
 
 ```javascript
 const OrderDetail = {
@@ -172,8 +172,8 @@ setup() {
 ### Solution 1: Watch route params (recommended)
 
 ```javascript
-import { ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+const { ref, watch } = Vue;
+// const { useRoute } = VueRouter; // not available in global build — use this.$route
 
 setup() {
   const route = useRoute();
@@ -197,7 +197,7 @@ setup() {
 ### Solution 2: onBeforeRouteUpdate guard
 
 ```javascript
-import { onBeforeRouteUpdate } from 'vue-router';
+const { onBeforeRouteUpdate } = VueRouter;
 
 setup() {
   const route = useRoute();
@@ -282,7 +282,7 @@ When adding event listeners (e.g., for manual hash routing outside Vue Router),
 always clean up in `onUnmounted`:
 
 ```javascript
-import { ref, onMounted, onUnmounted } from 'vue';
+const { ref, onMounted, onUnmounted } = Vue;
 
 function useHashListener() {
   const currentHash = ref(window.location.hash);
@@ -307,11 +307,11 @@ For any app beyond a tiny prototype, use the Vue Router library — not manual
 hash routing. Vue Router provides:
 - Navigation guards (beforeEach, beforeEnter, in-component)
 - Nested routes and route params
-- Lazy loading (though in CDN ESM, components are already defined inline)
+- Lazy loading (in global builds, components are already defined inline)
 - Active link styling (`router-link-active` class)
 - Programmatic navigation (`router.push()`, `router.replace()`)
 - Route meta fields
 - Integrated transitions with `<Transition>`
 
-**For single-HTML CDN ESM prototypes:** Vue Router with `createWebHashHistory`
+**For single-HTML global build prototypes:** Vue Router with `createWebHashHistory`
 is the correct choice. The skeleton already imports and configures it.

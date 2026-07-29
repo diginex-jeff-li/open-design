@@ -1,8 +1,8 @@
-# Vue 3 Best Practices — CDN ESM Adapted
+# Vue 3 Best Practices — Global Build Adapted
 
-Condensed from vue-best-practices skill. Adapted for single-HTML CDN ESM prototypes:
-no Vite, no `.vue` SFC files, no build step. Components are JS objects with
-`template:` string literals. Uses Composition API `setup()`.
+Condensed from vue-best-practices skill. Adapted for single-HTML prototypes using
+Vue 3 global builds: no Vite, no `.vue` SFC files, no build step. Components are
+JS objects with `template:` string literals. Uses Composition API `setup()`.
 
 ## Core Principles
 
@@ -27,7 +27,7 @@ Create a brief component map before implementation for non-trivial features:
 ### Choose the right primitive
 
 ```javascript
-import { ref, shallowRef, reactive, computed, watch } from 'vue';
+const { ref, shallowRef, reactive, computed, watch } = Vue;
 
 // ref() for primitives (or use shallowRef for better perf)
 const count = ref(0);
@@ -124,7 +124,7 @@ const Child = {
 
 ### v-model: two-way bindings
 
-In CDN ESM (no `defineModel` macro), use `modelValue` + `update:modelValue`:
+In global builds (no `defineModel` macro), use `modelValue` + `update:modelValue`:
 
 ```javascript
 const SearchInput = {
@@ -141,7 +141,7 @@ const SearchInput = {
 Use for cross-tree state (over ~3 layers). Keep mutations centralized.
 
 ```javascript
-import { provide, inject, reactive, readonly } from 'vue';
+const { provide, inject, reactive, readonly } = Vue;
 
 // Provider
 const theme = reactive({ dark: false });
@@ -196,7 +196,7 @@ const SubmitButton = {
 Access hyphenated attrs with bracket notation; listeners use camelCase `onX`.
 
 ```javascript
-import { useAttrs } from 'vue';
+const { useAttrs } = Vue;
 
 const attrs = useAttrs();
 // attrs['data-testid']     ← hyphenated → bracket notation
@@ -213,7 +213,7 @@ const attrs = useAttrs();
 ### Extract reusable logic into functions
 
 ```javascript
-import { ref, onMounted, onUnmounted } from 'vue';
+const { ref, onMounted, onUnmounted } = Vue;
 
 // Small, focused composable
 function useEventListener(target, event, callback) {
@@ -245,7 +245,7 @@ function useFetch(url, options = {}) {
 ### Return readonly state with explicit actions
 
 ```javascript
-import { ref, computed, readonly } from 'vue';
+const { ref, computed, readonly } = Vue;
 
 function useCart() {
   const _items = ref([]);
@@ -259,9 +259,9 @@ function useCart() {
 
 Don't wrap pure functions in composable form. Use them directly.
 
-## SFC Patterns Adapted for CDN ESM
+## SFC Patterns Adapted for Global Builds
 
-In CDN ESM prototypes, there are no `.vue` files. Instead of SFCs, define
+In global build prototypes, there are no `.vue` files. Instead of SFCs, define
 components as JS objects with `template:` string literals.
 
 ### Structure: template string → setup function
@@ -293,7 +293,7 @@ const UserCard = {
 - Never use `v-html` with untrusted content.
 - Choose `v-if` vs `v-show`: `v-if` for rare conditions, `v-show` for frequent toggles.
 
-### Styling in CDN ESM
+### Styling in global builds
 
 No `<style scoped>` — all CSS goes in the single `<style>` block in `<head>`.
 Use class selectors, not element selectors. Reference `var(--token)` for values.
@@ -302,11 +302,11 @@ Use class selectors, not element selectors. Reference `var(--token)` for values.
 
 ### Lightest store approach for prototypes
 
-For single-HTML CDN ESM prototypes, use a **module-level `reactive()` object**
+For single-HTML global build prototypes, use a **module-level `reactive()` object**
 shared across components. No Pinia/Vuex needed.
 
 ```javascript
-import { reactive, readonly } from 'vue';
+const { reactive, readonly } = Vue;
 
 const _store = reactive({
   screenState: 'default',
@@ -334,7 +334,7 @@ export function useStore() {
 
 ### Virtualize large lists
 
-If a list could exceed 50-100 items, consider virtualization. In CDN ESM
+If a list could exceed 50-100 items, consider virtualization. In global builds
 prototypes without build tools, keep lists small or paginate. For prototypes,
 50 items rendered as DOM nodes is fine.
 
@@ -418,7 +418,7 @@ Prevents both old and new elements from being visible simultaneously.
 .slide-enter-active { transition: height 0.3s ease; }
 ```
 
-## Anti-Patterns (CDN ESM specific)
+## Anti-Patterns (global build specific)
 
 - ❌ **`defineProps` / `defineEmits` / `defineModel`** — SFC macros, not available in ESM. Use `props: {}`, `emits: []`.
 - ❌ **`<script setup>`** — not available without compiler. Use `setup() { ... }`.
