@@ -17,31 +17,9 @@
     "fidelity": "polished",
     "useCase": {
       "query": {
-        "en": "Build a detailed design spec for SC 1.5 — {{screens}} with every state covered (loading, empty, error, success per screen). Uses Diginex Library v4.0.0 design system. Designer will translate this into Figma."
+        "en": "Build a detailed design spec for SC 1.5 — supply chain due diligence platform. Cover every state (loading, empty, error, success per screen). Uses Diginex Library v4.0.0 design system. Designer will translate this into Figma."
       }
     },
-    "inputs": [
-      {
-        "name": "screens",
-        "label": "Which screens to spec?",
-        "type": "text",
-        "placeholder": "e.g. supplier profile, risk dashboard, audit list, CAP detail",
-        "required": true
-      },
-      {
-        "name": "stateCoverage",
-        "label": "State coverage level",
-        "type": "select",
-        "options": ["Full (loading/empty/error/success per screen)", "Minimal (default + error only)"],
-        "default": "Full (loading/empty/error/success per screen)"
-      },
-      {
-        "name": "constraints",
-        "label": "Constraints (optional)",
-        "type": "text",
-        "placeholder": "Specific interactions, edge cases, designer preferences"
-      }
-    ],
     "context": {
       "skills": [
         { "path": "./SKILL.md" }
@@ -61,5 +39,10 @@
       "entry": "example.html"
     },
     "capabilities": ["prompt:inject", "fs:write"]
+  },
+  "compat": {
+    "agentSkills": [
+      { "path": "./SKILL.md" }
+    ]
   }
 }
