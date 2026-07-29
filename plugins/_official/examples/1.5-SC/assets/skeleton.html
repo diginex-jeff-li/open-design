@@ -11,23 +11,10 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Open+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <!-- ===== VUE + ROUTER CDN (do not modify) ===== -->
-  <script type="importmap">
-  {
-    "imports": {
-      "vue": "https://unpkg.com/vue@3.5.13/dist/vue.esm-browser.prod.js",
-      "vue-router": "https://unpkg.com/vue-router@4.5.0/dist/vue-router.esm-browser.js",
-      "@vue/devtools-api": "https://unpkg.com/@vue/devtools-api@6.6.4/lib/esm/index.js"
-    }
-  }
-  </script>
-
-  <!-- SRI integrity for CDN modules (modulepreload verifies before caching) -->
-  <link rel="modulepreload" href="https://unpkg.com/vue@3.5.13/dist/vue.esm-browser.prod.js"
-        integrity="sha384-UD4WWwnzOnT68QK9Dgf/jMrAGH2xuXyfIF9zzlFbWOL8MSrADyQ5BTgs9Kct5Izy">
-  <link rel="modulepreload" href="https://unpkg.com/vue-router@4.5.0/dist/vue-router.esm-browser.js"
-        integrity="sha384-ja/DjcrX1QCfzi+fXA7a3oEJOHh5lp2nrgKn70ht8WbX74V6jKSPAySG5ZD3HJG2">
-  <link rel="modulepreload" href="https://unpkg.com/@vue/devtools-api@6.6.4/lib/esm/index.js"
-        integrity="sha384-denYcxnQOyGiT5hMmNa2UEytHj9G7JcCu6z7rawaiD7In6xzHe6UsJ8fYAn+m2hK">
+  <!-- Local copies of Vue/Vue Router global builds (required for sandboxed iframe preview) -->
+  <!-- Note: skeleton.html is in assets/ dir, so paths are relative to that -->
+  <script src="vue.global.prod.js"></script>
+  <script src="vue-router.global.prod.js"></script>
 
   <style>
     /* =================================================================
@@ -765,9 +752,9 @@
   <!-- ⚠️ CRITICAL: #app must be EMPTY. Vue 3 replaces #app innerHTML with the root component's render output. Do NOT put HTML, nav, or router-view here — put them in the root component's template (see "ROUTER + APP" section below). A root component without template renders <!---->, causing a blank page with no console error. -->
   <div id="app" data-od-id="app-root"></div>
 
-  <script type="module">
-    import { createApp, reactive, ref, computed, watch, nextTick } from 'vue';
-    import { createRouter, createWebHashHistory } from 'vue-router';
+  <script>
+    const { createApp, reactive, ref, computed, watch, nextTick } = Vue;
+    const { createRouter, createWebHashHistory } = VueRouter;
 
     // =================================================================
     // AGENT: Define route components below.

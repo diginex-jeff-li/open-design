@@ -10,22 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Open+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-  <!-- ===== VUE + ROUTER CDN (do not modify) ===== -->
-  <script type="importmap">
-  {
-    "imports": {
-      "vue": "https://unpkg.com/vue@3.5.13/dist/vue.esm-browser.prod.js",
-      "vue-router": "https://unpkg.com/vue-router@4.5.0/dist/vue-router.esm-browser.js",
-      "@vue/devtools-api": "https://unpkg.com/@vue/devtools-api@6.6.4/lib/esm/index.js"
-    }
-  }
-  </script>
-
-  <link rel="modulepreload" href="https://unpkg.com/vue@3.5.13/dist/vue.esm-browser.prod.js">
-  <link rel="modulepreload" href="https://unpkg.com/vue-router@4.5.0/dist/vue-router.esm-browser.js">
-  <link rel="modulepreload" href="https://unpkg.com/@vue/devtools-api@6.6.4/lib/esm/index.js">
-
-  <style>
+<style>
     /* =================================================================
        DESIGN TOKENS — :root block
        Diginex Library v4.0.0 (Nuxt UI v4 / Tailwind v4)
@@ -973,867 +958,158 @@
   </style>
 </head>
 <body>
-  <div id="app" data-od-id="app-root"></div>
-
-  <script type="module">
-    import { createApp, reactive, ref, computed, watch, nextTick } from 'vue';
-    import { createRouter, createWebHashHistory } from 'vue-router';
-
-    // =================================================================
-    // Shared state + helpers
-    // =================================================================
-
-    const STATE_LIST = ['default', 'loading', 'empty', 'error', 'success'];
-
-    // Badge tone maps (use diginex tokens via skeleton badge classes)
-    const CAP_STATUS_TONE = {
-      'Open': 'badge-warning',
-      'In Progress': 'badge-info',
-      'Closed': 'badge-success',
-      'Overdue': 'badge-error',
-    };
-    const SEVERITY_TONE = {
-      'Critical': 'badge-error',
-      'High': 'badge-warning',
-      'Medium': 'badge-neutral',
-      'Low': 'badge-success',
-    };
-    const BAND_TONE = {
-      'Low': 'badge-success',
-      'Medium': 'badge-info',
-      'High': 'badge-warning',
-      'Critical': 'badge-error',
-    };
-
-    // =================================================================
-    // Supplier Profile screen
-    // =================================================================
-
-    const SupplierProfile = {
-      template: `
+  <div id="app" data-od-id="app-root">
+    <div class="app-layout-sidebar">
+      <nav class="app-nav-sidebar">
+        <div class="nav-brand">
+          <svg class="nav-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent)">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+            <path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
+          </svg>
+          <span class="nav-title">Diginex SC</span>
+        </div>
+        <div class="nav-section-label">Supply chain</div>
+        <div class="nav-links">
+          <a href="#/supply-chain" class="nav-link router-link-active router-link-exact-active">Supply Chain</a>
+          <a href="#/risk-assessment" class="nav-link">Risk Assessment</a>
+          <a href="#/caps" class="nav-link">CAPs</a>
+          <a href="#/audits" class="nav-link">Audits</a>
+          <a href="#/reports" class="nav-link">Reports</a>
+        </div>
+        <div class="nav-footer">SC 1.5 · v0.9 spec</div>
+      </nav>
+      <main class="app-content-sidebar">
         <div class="screen-supplier" data-od-id="screen-supplier-profile">
 
-          <div class="state-toggles" data-od-id="state-toggles">
-            <span class="toggle-label">SPEC STATES:</span>
-            <button
-              v-for="s in states" :key="s"
-              @click="setState(s)"
-              :class="{ active: screenState === s }">{{ cap(s) }}</button>
-          </div>
-
-          <!-- LOADING -->
-          <template v-if="screenState === 'loading'">
-            <div class="sk-header-row">
+          <!-- Supplier header -->
+          <header class="screen-header supplier-header" data-od-id="supplier-header">
+            <div class="supplier-header-top">
               <div>
-                <div class="skeleton-block sk-line title" style="width:280px"></div>
-                <div class="skeleton-block sk-line sub" style="margin-top:10px;width:200px"></div>
+                <h1>Acme Textiles Ltd</h1>
+                <p class="subtitle">
+                  <span>Textile Manufacturing</span>
+                  <span class="badge badge-neutral">Bangladesh</span>
+                  <span class="badge badge-error">High risk</span>
+                </p>
               </div>
-              <div style="display:flex;gap:12px">
-                <div class="skeleton-block sk-line" style="width:72px;height:38px"></div>
-                <div class="skeleton-block sk-line" style="width:130px;height:38px"></div>
-              </div>
-            </div>
-            <div class="sk-meta-grid">
-              <div v-for="i in 4" :key="i">
-                <div class="skeleton-block sk-line" style="width:60px;margin-bottom:8px"></div>
-                <div class="skeleton-block sk-line" style="width:120px"></div>
+              <div class="supplier-header-actions">
+                <button class="btn btn-ghost">Edit</button>
+                <button class="btn btn-primary">New assessment</button>
               </div>
             </div>
-            <div class="kpi-grid">
-              <div v-for="i in 4" :key="i" class="sk-block-card"></div>
+            <div class="supplier-meta">
+              <div class="meta-item"><span class="meta-label">Legal name</span><span class="meta-value">Acme Textiles Ltd</span></div>
+              <div class="meta-item"><span class="meta-label">Registered ID (LEI)</span><span class="meta-value mono">529900T8BM49AURSDO22</span></div>
+              <div class="meta-item"><span class="meta-label">Country</span><span class="meta-value">Bangladesh</span></div>
+              <div class="meta-item"><span class="meta-label">Business type</span><span class="meta-value">Textile Manufacturing</span></div>
+              <div class="meta-item"><span class="meta-label">Website</span><span class="meta-value">acme-textiles.com</span></div>
+              <div class="meta-item"><span class="meta-label">Founded</span><span class="meta-value">2009</span></div>
+              <div class="meta-item"><span class="meta-label">Employees</span><span class="meta-value">1,240</span></div>
+              <div class="meta-item"><span class="meta-label">Last audit</span><span class="meta-value">Mar 2026</span></div>
             </div>
-            <div class="card">
-              <div class="sk-tabs">
-                <div v-for="i in 5" :key="i" class="skeleton-block sk-tab"></div>
-              </div>
-              <div v-for="i in 5" :key="i" class="skeleton-block sk-row" :style="{ width: (70 + i*5) + '%' }"></div>
+          </header>
+
+          <!-- KPI cards -->
+          <div class="kpi-grid" data-od-id="kpi-grid">
+            <div class="kpi-card">
+              <span class="kpi-value">72<span class="kpi-suffix">/100</span></span>
+              <span class="kpi-label">Risk score</span>
+              <span class="kpi-sub"><span class="badge badge-warning">High</span></span>
+              <span class="kpi-change down">+7 vs last assessment</span>
             </div>
-          </template>
-
-          <!-- ERROR -->
-          <template v-else-if="screenState === 'error'">
-            <div class="state-banner error" data-od-id="error-banner">
-              <span class="state-banner-icon">!</span>
-              <div class="state-banner-body">
-                <div class="state-banner-title">Failed to load supplier profile</div>
-                <div class="state-banner-desc">We couldn't fetch the profile for Acme Textiles Ltd. Check your connection and try again. If the problem persists, contact your workspace admin.</div>
-              </div>
-              <div class="state-banner-actions">
-                <button class="btn btn-default" @click="retry">Retry</button>
-              </div>
+            <div class="kpi-card">
+              <span class="kpi-value">3</span>
+              <span class="kpi-label">Open CAPs</span>
+              <span class="kpi-change down">+1 this month</span>
             </div>
-          </template>
-
-          <!-- EMPTY -->
-          <template v-else-if="screenState === 'empty'">
-            <header class="screen-header supplier-header" data-od-id="supplier-header">
-              <h1>{{ supplier.legalName }}</h1>
-              <p class="subtitle">{{ supplier.businessType }} · {{ supplier.country }}</p>
-            </header>
-            <div class="card" data-od-id="empty-state">
-              <div class="empty-illustration">
-                <div class="empty-icon">0</div>
-                <div class="empty-title">No assessment data yet</div>
-                <div class="empty-desc">This supplier has been added to the supply chain but no risk assessment has been performed. Start the first assessment to generate a risk score, identify facilities, and open CAPs.</div>
-                <div style="display:flex;gap:12px;margin-top:8px">
-                  <button class="btn btn-primary" @click="startFirstAssessment">Start first assessment</button>
-                  <button class="btn btn-ghost" @click="screenState = 'default'">View sample data</button>
-                </div>
-              </div>
+            <div class="kpi-card">
+              <span class="kpi-value">4</span>
+              <span class="kpi-label">Facilities</span>
+              <span class="kpi-change neutral">across 4 sites</span>
             </div>
-          </template>
-
-          <!-- DEFAULT + SUCCESS -->
-          <template v-else>
-            <div v-if="screenState === 'success'" class="state-banner success" data-od-id="success-banner">
-              <span class="state-banner-icon">✓</span>
-              <div class="state-banner-body">
-                <div class="state-banner-title">Risk assessment completed</div>
-                <div class="state-banner-desc">Annual review submitted for Acme Textiles Ltd. Risk score updated to 72/100 (High). 3 CAPs generated and assigned to the supplier.</div>
-              </div>
-              <div class="state-banner-actions">
-                <button class="btn btn-ghost" @click="screenState = 'default'">Dismiss</button>
-              </div>
+            <div class="kpi-card">
+              <span class="kpi-value">Mar 2026</span>
+              <span class="kpi-label">Last audit</span>
+              <span class="kpi-change neutral">Annual cycle</span>
             </div>
-
-            <!-- Supplier header -->
-            <header class="screen-header supplier-header" data-od-id="supplier-header">
-              <div class="supplier-header-top">
-                <div>
-                  <h1>{{ supplier.legalName }}</h1>
-                  <p class="subtitle">
-                    <span>{{ supplier.businessType }}</span>
-                    <span class="badge badge-neutral">{{ supplier.country }}</span>
-                    <span class="badge badge-error">High risk</span>
-                  </p>
-                </div>
-                <div class="supplier-header-actions">
-                  <button class="btn btn-ghost" @click="showInfoToast('Editing supplier details is available in the full application.')">Edit</button>
-                  <button class="btn btn-primary" @click="runAssessment" :disabled="assessing">{{ assessing ? 'Assessing…' : 'New assessment' }}</button>
-                </div>
-              </div>
-              <div class="supplier-meta">
-                <div class="meta-item"><span class="meta-label">Legal name</span><span class="meta-value">{{ supplier.legalName }}</span></div>
-                <div class="meta-item"><span class="meta-label">Registered ID (LEI)</span><span class="meta-value mono">{{ supplier.lei }}</span></div>
-                <div class="meta-item"><span class="meta-label">Country</span><span class="meta-value">{{ supplier.country }}</span></div>
-                <div class="meta-item"><span class="meta-label">Business type</span><span class="meta-value">{{ supplier.businessType }}</span></div>
-                <div class="meta-item"><span class="meta-label">Website</span><span class="meta-value">{{ supplier.website }}</span></div>
-                <div class="meta-item"><span class="meta-label">Founded</span><span class="meta-value">{{ supplier.founded }}</span></div>
-                <div class="meta-item"><span class="meta-label">Employees</span><span class="meta-value">{{ supplier.employees }}</span></div>
-                <div class="meta-item"><span class="meta-label">Last audit</span><span class="meta-value">{{ supplier.lastAudit }}</span></div>
-              </div>
-            </header>
-
-            <!-- KPI cards -->
-            <div class="kpi-grid" data-od-id="kpi-grid">
-              <div class="kpi-card">
-                <span class="kpi-value">{{ kpis.risk.value }}<span class="kpi-suffix">{{ kpis.risk.suffix }}</span></span>
-                <span class="kpi-label">Risk score</span>
-                <span class="kpi-sub"><span class="badge" :class="BAND_TONE['High']">High</span></span>
-                <span class="kpi-change down">+7 vs last assessment</span>
-              </div>
-              <div class="kpi-card">
-                <span class="kpi-value">{{ kpis.openCaps }}</span>
-                <span class="kpi-label">Open CAPs</span>
-                <span class="kpi-change down">+1 this month</span>
-              </div>
-              <div class="kpi-card">
-                <span class="kpi-value">{{ kpis.facilities }}</span>
-                <span class="kpi-label">Facilities</span>
-                <span class="kpi-change neutral">across {{ kpis.facilities }} sites</span>
-              </div>
-              <div class="kpi-card">
-                <span class="kpi-value">{{ kpis.lastAudit }}</span>
-                <span class="kpi-label">Last audit</span>
-                <span class="kpi-change neutral">Annual cycle</span>
-              </div>
-            </div>
-
-            <!-- Tabs -->
-            <div class="tabs" data-od-id="profile-tabs">
-              <button
-                v-for="t in tabs" :key="t.key"
-                class="tab" :class="{ active: activeTab === t.key }"
-                @click="activeTab = t.key">{{ t.label }}</button>
-            </div>
-
-            <!-- OVERVIEW -->
-            <div v-if="activeTab === 'overview'" class="tab-pane" data-od-id="tab-overview">
-              <div class="card" style="margin-bottom: var(--space-8)">
-                <div class="section-title">Supplier details</div>
-                <div class="details-grid">
-                  <div class="meta-item"><span class="meta-label">Legal name</span><span class="meta-value">{{ supplier.legalName }}</span></div>
-                  <div class="meta-item"><span class="meta-label">LEI</span><span class="meta-value mono">{{ supplier.lei }}</span></div>
-                  <div class="meta-item"><span class="meta-label">Country</span><span class="meta-value">{{ supplier.country }}</span></div>
-                  <div class="meta-item"><span class="meta-label">Business type</span><span class="meta-value">{{ supplier.businessType }}</span></div>
-                  <div class="meta-item"><span class="meta-label">Website</span><span class="meta-value">{{ supplier.website }}</span></div>
-                  <div class="meta-item"><span class="meta-label">Founded</span><span class="meta-value">{{ supplier.founded }}</span></div>
-                  <div class="meta-item"><span class="meta-label">Employees</span><span class="meta-value">{{ supplier.employees }}</span></div>
-                  <div class="meta-item"><span class="meta-label">Onboarded</span><span class="meta-value">{{ supplier.onboarded }}</span></div>
-                </div>
-              </div>
-              <div class="card" data-od-id="card-relationships">
-                <div class="section-title">Supply chain relationships</div>
-                <div class="table-wrap">
-                  <table class="data-table">
-                    <thead>
-                      <tr>
-                        <th>Party</th>
-                        <th>Role</th>
-                        <th>Country</th>
-                        <th>ISIC Rev 5 activity</th>
-                        <th>Tier</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="(r, i) in relationships" :key="i">
-                        <td>{{ r.party }}</td>
-                        <td>{{ r.role }}</td>
-                        <td>{{ r.country }}</td>
-                        <td><span class="mono">{{ r.isic }}</span></td>
-                        <td><span class="badge badge-neutral">{{ r.tier }}</span></td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            <!-- FACILITIES -->
-            <div v-else-if="activeTab === 'facilities'" class="tab-pane" data-od-id="tab-facilities">
-              <div class="card" data-od-id="card-facilities">
-                <div class="section-title">Facilities ({{ facilities.length }})</div>
-                <div class="table-wrap">
-                  <table class="data-table">
-                    <thead>
-                      <tr>
-                        <th v-for="col in facilityCols" :key="col.key"
-                            :class="{ sorted: sortKey === col.key }"
-                            @click="sortBy(col.key)">
-                          {{ col.label }}<span v-if="sortKey === col.key">{{ sortDir === 'asc' ? ' ▲' : ' ▼' }}</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="(f, i) in sortedFacilities" :key="i">
-                        <td>{{ f.facility }}</td>
-                        <td>{{ f.location }}</td>
-                        <td><span class="badge badge-info">{{ f.role }}</span></td>
-                        <td><span class="mono">{{ f.isic }}</span></td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            <!-- RISK ASSESSMENT -->
-            <div v-else-if="activeTab === 'risk'" class="tab-pane" data-od-id="tab-risk">
-              <div style="display:grid;grid-template-columns:1fr;gap:var(--space-8)">
-                <div class="card" data-od-id="card-risk-band">
-                  <div class="section-title">Risk band</div>
-                  <div class="risk-band-wrap">
-                    <div class="risk-score-row">
-                      <span class="risk-score-number">{{ riskScore }}</span>
-                      <span class="risk-score-max">/ 100</span>
-                    </div>
-                    <div class="risk-band">
-                      <div v-for="b in riskBands" :key="b.key"
-                           class="risk-band-segment" :class="[b.key, { active: b.key === riskBand }]">
-                        {{ b.label }}<span class="seg-range">{{ b.range }}</span>
-                      </div>
-                    </div>
-                    <div class="risk-band-marker" :style="{ '--p': riskScore + '%' }"></div>
-                    <p class="risk-band-caption">Current band: <strong>High</strong> · last assessed {{ lastAssessed }} by {{ lastReviewer }}.</p>
-                  </div>
-                </div>
-
-                <div class="card" data-od-id="card-risk-factors">
-                  <div class="section-title">Contributing risk factors</div>
-                  <div class="factor-list">
-                    <div class="factor-row" v-for="(fac, i) in riskFactors" :key="i">
-                      <div style="display:flex;align-items:center;gap:10px">
-                        <span class="status-dot" :class="fac.severity === 'High' ? 'error' : fac.severity === 'Medium' ? 'warning' : 'neutral'"></span>
-                        <span class="factor-name">{{ fac.name }}</span>
-                      </div>
-                      <span class="badge" :class="SEVERITY_TONE[fac.severity]">{{ fac.severity }}</span>
-                      <span class="factor-weight">{{ fac.weight }}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="card" data-od-id="card-assessment-history">
-                  <div class="section-title">Assessment history</div>
-                  <div class="table-wrap">
-                    <table class="data-table">
-                      <thead>
-                        <tr>
-                          <th>Date</th>
-                          <th>Type</th>
-                          <th>Score</th>
-                          <th>Band</th>
-                          <th>Reviewed by</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="(a, i) in assessments" :key="i">
-                          <td><span class="mono">{{ a.date }}</span></td>
-                          <td>{{ a.type }}</td>
-                          <td><strong>{{ a.score }}</strong></td>
-                          <td><span class="badge" :class="BAND_TONE[a.band]">{{ a.band }}</span></td>
-                          <td>{{ a.reviewer }}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- CAPs -->
-            <div v-else-if="activeTab === 'caps'" class="tab-pane" data-od-id="tab-caps">
-              <div class="card" data-od-id="card-caps">
-                <div class="section-title">Corrective action plans ({{ caps.length }})</div>
-                <div class="table-wrap">
-                  <table class="data-table">
-                    <thead>
-                      <tr>
-                        <th v-for="col in capCols" :key="col.key"
-                            :class="{ sorted: sortKey === col.key }"
-                            @click="sortBy(col.key)">
-                          {{ col.label }}<span v-if="sortKey === col.key">{{ sortDir === 'asc' ? ' ▲' : ' ▼' }}</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="(c, i) in sortedCaps" :key="i">
-                        <td><span class="mono">{{ c.id }}</span></td>
-                        <td>{{ c.title }}</td>
-                        <td><span class="badge" :class="CAP_STATUS_TONE[c.status]">{{ c.status }}</span></td>
-                        <td><span class="badge" :class="SEVERITY_TONE[c.severity]">{{ c.severity }}</span></td>
-                        <td><span class="mono">{{ c.due }}</span></td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            <!-- AUDIT TRAIL -->
-            <div v-else-if="activeTab === 'audit'" class="tab-pane" data-od-id="tab-audit">
-              <div class="card" data-od-id="card-audit-trail">
-                <div class="section-title">Audit trail</div>
-                <div class="timeline">
-                  <div class="timeline-item" v-for="(e, i) in auditTrail" :key="i">
-                    <div class="timeline-dot" :class="e.tone"></div>
-                    <div class="timeline-date">{{ e.date }}</div>
-                    <div class="timeline-title">{{ e.title }}</div>
-                    <div class="timeline-desc">{{ e.desc }}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </template>
-
-          <!-- Toast -->
-          <transition name="fade">
-            <div v-if="toast.show" class="toast" :class="'toast-' + toast.type">{{ toast.msg }}</div>
-          </transition>
-        </div>
-      `,
-      setup() {
-        const screenState = ref('default');
-        const states = STATE_LIST;
-        const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-
-        const assessing = ref(false);
-
-        const supplier = reactive({
-          legalName: 'Acme Textiles Ltd',
-          lei: '529900T8BM49AURSDO22',
-          country: 'Bangladesh',
-          businessType: 'Textile Manufacturing',
-          website: 'acme-textiles.com',
-          founded: '2009',
-          employees: '1,240',
-          onboarded: '2023-06-01',
-          lastAudit: 'Mar 2026',
-        });
-
-        const kpis = reactive({
-          risk: { value: '72', suffix: '/100' },
-          openCaps: 3,
-          facilities: 4,
-          lastAudit: 'Mar 2026',
-        });
-
-        const tabs = [
-          { key: 'overview', label: 'Overview' },
-          { key: 'facilities', label: 'Facilities' },
-          { key: 'risk', label: 'Risk Assessment' },
-          { key: 'caps', label: 'CAPs' },
-          { key: 'audit', label: 'Audit Trail' },
-        ];
-        const activeTab = ref('overview');
-
-        const relationships = reactive([
-          { party: 'Global Retail Group Ltd', role: 'Buyer', country: 'United Kingdom', isic: '4791 — Retail sale via mail order', tier: 'Tier 1' },
-          { party: 'Acme Textiles Ltd', role: 'Supplier (this party)', country: 'Bangladesh', isic: '1313 — Finishing of textiles', tier: '—' },
-          { party: 'Bengal Cotton Growers Coop', role: 'Raw material supplier', country: 'Bangladesh', isic: '0111 — Growing of cotton', tier: 'Tier 2' },
-          { party: 'FastShip Maritime Ltd', role: 'Logistics partner', country: 'Singapore', isic: '5010 — Sea freight transport', tier: 'Logistics' },
-        ]);
-
-        const facilityCols = [
-          { key: 'facility', label: 'Facility' },
-          { key: 'location', label: 'Location' },
-          { key: 'role', label: 'Role' },
-          { key: 'isic', label: 'ISIC Rev 5 activity' },
-        ];
-        const facilities = reactive([
-          { facility: 'Dhaka Cutting Facility', location: 'Dhaka, BD (23.81°N, 90.41°E)', role: 'Cutting', isic: '1311 — Spinning & preparation' },
-          { facility: 'Chittagong Dyeing Plant', location: 'Chittagong, BD (UN/LOCODE: BDCGP)', role: 'Dyeing & Finishing', isic: '1313 — Finishing of textiles' },
-          { facility: 'Gazipur Sewing Unit', location: 'Gazipur, BD', role: 'Sewing / Assembly', isic: '1410 — Wearing apparel' },
-          { facility: 'Narayanganj Warehouse', location: 'Narayanganj, BD', role: 'Storage & Distribution', isic: '5210 — Warehousing & storage' },
-        ]);
-
-        const riskScore = 72;
-        const riskBand = 'high';
-        const lastAssessed = '2026-01-15';
-        const lastReviewer = 'L. Rahman (Internal)';
-        const riskBands = [
-          { key: 'low', label: 'Low', range: '0–39' },
-          { key: 'medium', label: 'Medium', range: '40–59' },
-          { key: 'high', label: 'High', range: '60–79' },
-          { key: 'critical', label: 'Critical', range: '80–100' },
-        ];
-        const riskFactors = reactive([
-          { name: 'Working hours & overtime', severity: 'High', weight: '22%' },
-          { name: 'Fire & building safety', severity: 'Critical', weight: '18%' },
-          { name: 'Wages & benefits', severity: 'Medium', weight: '12%' },
-          { name: 'Freedom of association', severity: 'Low', weight: '8%' },
-          { name: 'Environmental discharge', severity: 'Medium', weight: '12%' },
-        ]);
-
-        const assessments = reactive([
-          { date: '2026-01-15', type: 'Annual review', score: 72, band: 'High', reviewer: 'L. Rahman (Internal)' },
-          { date: '2025-09-20', type: 'Mid-year check', score: 65, band: 'High', reviewer: 'L. Rahman (Internal)' },
-          { date: '2025-01-12', type: 'Annual review', score: 58, band: 'Medium', reviewer: 'M. Chen (Internal)' },
-          { date: '2024-07-04', type: 'Triggered reassessment', score: 61, band: 'High', reviewer: 'SGS Bangladesh' },
-          { date: '2024-01-10', type: 'Annual review', score: 49, band: 'Medium', reviewer: 'M. Chen (Internal)' },
-        ]);
-
-        const capCols = [
-          { key: 'id', label: 'CAP ID' },
-          { key: 'title', label: 'Title' },
-          { key: 'status', label: 'Status' },
-          { key: 'severity', label: 'Severity' },
-          { key: 'due', label: 'Due date' },
-        ];
-        const caps = reactive([
-          { id: 'CAP-2026-001', title: 'Inadequate fire safety exits', status: 'Open', severity: 'Critical', due: '2026-03-15' },
-          { id: 'CAP-2026-002', title: 'Missing overtime records', status: 'In Progress', severity: 'High', due: '2026-04-01' },
-          { id: 'CAP-2026-003', title: 'Worker training gaps', status: 'Open', severity: 'Medium', due: '2026-05-20' },
-          { id: 'CAP-2025-009', title: 'Emergency evacuation drill', status: 'Overdue', severity: 'High', due: '2026-01-10' },
-          { id: 'CAP-2025-014', title: 'Chemical storage labelling', status: 'Closed', severity: 'Medium', due: '2025-11-02' },
-        ]);
-
-        const auditTrail = reactive([
-          { date: '2026-03-12', title: 'Annual audit completed', desc: 'Auditor: SGS Bangladesh · 3 findings raised', tone: 'success' },
-          { date: '2026-01-15', title: 'Risk reassessment', desc: 'Score updated 58 → 72 (Medium to High)', tone: 'warning' },
-          { date: '2025-11-02', title: 'CAP-2025-014 closed', desc: 'Chemical storage labelling remediated', tone: 'success' },
-          { date: '2025-09-20', title: 'Mid-year assessment', desc: 'Score 65 (High) · reviewed by L. Rahman', tone: 'info' },
-          { date: '2025-07-04', title: 'Incident report filed', desc: 'Overtime violation at Gazipur facility', tone: 'warning' },
-          { date: '2025-03-10', title: 'Annual audit completed', desc: 'Auditor: Bureau Veritas · 5 findings raised', tone: 'success' },
-        ]);
-
-        // Toast
-        const toast = reactive({ show: false, type: 'info', msg: '' });
-        let toastTimer = null;
-        const showToast = (type, msg) => {
-          toast.type = type; toast.msg = msg; toast.show = true;
-          if (toastTimer) clearTimeout(toastTimer);
-          toastTimer = setTimeout(() => (toast.show = false), 3500);
-        };
-        const showInfoToast = (m) => showToast('info', m);
-
-        // Sorting
-        const sortKey = ref('due');
-        const sortDir = ref('asc');
-        const sortBy = (key) => {
-          if (sortKey.value === key) {
-            sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
-          } else {
-            sortKey.value = key;
-            sortDir.value = 'asc';
-          }
-        };
-        const sortRows = (rows) => {
-          const key = sortKey.value;
-          const dir = sortDir.value === 'asc' ? 1 : -1;
-          return [...rows].sort((a, b) => {
-            const va = (a[key] + '').toLowerCase();
-            const vb = (b[key] + '').toLowerCase();
-            if (va < vb) return -1 * dir;
-            if (va > vb) return 1 * dir;
-            return 0;
-          });
-        };
-        const sortedFacilities = computed(() => sortRows(facilities));
-        const sortedCaps = computed(() => sortRows(caps));
-
-        // State actions
-        const setState = (s) => { screenState.value = s; };
-        const retry = () => {
-          screenState.value = 'loading';
-          setTimeout(() => (screenState.value = 'default'), 800);
-        };
-        const startFirstAssessment = () => {
-          screenState.value = 'loading';
-          setTimeout(() => {
-            screenState.value = 'success';
-            showToast('success', 'First assessment started for Acme Textiles Ltd.');
-          }, 800);
-        };
-        const runAssessment = () => {
-          assessing.value = true;
-          screenState.value = 'loading';
-          setTimeout(() => {
-            assessing.value = false;
-            screenState.value = 'success';
-            showToast('success', 'Risk assessment completed — score 72/100 (High). 3 CAPs generated.');
-          }, 900);
-        };
-
-        return {
-          screenState, states, cap,
-          supplier, kpis, tabs, activeTab,
-          relationships, facilityCols, facilities, sortedFacilities,
-          riskScore, riskBand, lastAssessed, lastReviewer, riskBands, riskFactors,
-          assessments, capCols, caps, sortedCaps, auditTrail,
-          CAP_STATUS_TONE, SEVERITY_TONE, BAND_TONE,
-          sortKey, sortDir, sortBy,
-          toast, showInfoToast, assessing, runAssessment,
-          setState, retry, startFirstAssessment,
-        };
-      },
-    };
-
-    // =================================================================
-    // Reusable list-screen factory (Risk / CAPs / Audits / Reports)
-    // =================================================================
-
-    function makeListScreen(cfg) {
-      return {
-        template: `
-          <div class="screen-supplier" :data-od-id="'screen-' + cfg.id">
-            <div class="state-toggles" data-od-id="state-toggles">
-              <span class="toggle-label">SPEC STATES:</span>
-              <button v-for="s in states" :key="s"
-                @click="setState(s)" :class="{ active: screenState === s }">{{ cap(s) }}</button>
-            </div>
-
-            <template v-if="screenState === 'loading'">
-              <div class="skeleton-block sk-line title" style="width:260px;margin-bottom:10px"></div>
-              <div class="skeleton-block sk-line sub" style="width:320px;margin-bottom:24px"></div>
-              <div class="kpi-grid">
-                <div v-for="i in (cfg.kpis.length)" :key="i" class="sk-block-card"></div>
-              </div>
-              <div class="card">
-                <div v-for="i in 5" :key="i" class="skeleton-block sk-row" :style="{ width: (60 + i*6) + '%' }"></div>
-              </div>
-            </template>
-
-            <template v-else-if="screenState === 'error'">
-              <div class="state-banner error" data-od-id="error-banner">
-                <span class="state-banner-icon">!</span>
-                <div class="state-banner-body">
-                  <div class="state-banner-title">Failed to load {{ cfg.title.toLowerCase() }}</div>
-                  <div class="state-banner-desc">{{ cfg.errorMsg }}</div>
-                </div>
-                <div class="state-banner-actions">
-                  <button class="btn btn-default" @click="retry">Retry</button>
-                </div>
-              </div>
-            </template>
-
-            <template v-else-if="screenState === 'empty'">
-              <header class="screen-header" :data-od-id="cfg.id + '-header'">
-                <h1>{{ cfg.title }}</h1>
-                <p class="subtitle">{{ cfg.subtitle }}</p>
-              </header>
-              <div class="card" data-od-id="empty-state">
-                <div class="empty-illustration">
-                  <div class="empty-icon">0</div>
-                  <div class="empty-title">{{ cfg.emptyTitle }}</div>
-                  <div class="empty-desc">{{ cfg.emptyDesc }}</div>
-                  <div style="display:flex;gap:12px;margin-top:8px">
-                    <button class="btn btn-primary" @click="retry">{{ cfg.emptyCta }}</button>
-                    <button class="btn btn-ghost" @click="screenState = 'default'">View sample data</button>
-                  </div>
-                </div>
-              </div>
-            </template>
-
-            <template v-else>
-              <div v-if="screenState === 'success'" class="state-banner success" data-od-id="success-banner">
-                <span class="state-banner-icon">✓</span>
-                <div class="state-banner-body">
-                  <div class="state-banner-title">{{ cfg.successTitle }}</div>
-                  <div class="state-banner-desc">{{ cfg.successDesc }}</div>
-                </div>
-                <div class="state-banner-actions">
-                  <button class="btn btn-ghost" @click="screenState = 'default'">Dismiss</button>
-                </div>
-              </div>
-
-              <header class="screen-header" :data-od-id="cfg.id + '-header'">
-                <h1>{{ cfg.title }}</h1>
-                <p class="subtitle">{{ cfg.subtitle }}</p>
-              </header>
-
-              <div class="kpi-grid" data-od-id="kpi-grid">
-                <div class="kpi-card" v-for="k in cfg.kpis" :key="k.label" :data-od-id="'kpi-' + k.label">
-                  <span class="kpi-value">{{ k.value }}</span>
-                  <span class="kpi-label">{{ k.label }}</span>
-                  <span class="kpi-change" :class="k.trend || 'neutral'">{{ k.change }}</span>
-                </div>
-              </div>
-
-              <div class="card" :data-od-id="cfg.id + '-table'">
-                <div class="section-title">{{ cfg.tableTitle }}</div>
-                <div class="table-wrap">
-                  <table class="data-table">
-                    <thead>
-                      <tr>
-                        <th v-for="col in cfg.columns" :key="col.key">{{ col.label }}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="(row, i) in cfg.rows" :key="i">
-                        <td v-for="(cell, j) in row" :key="j">
-                          <span v-if="cell.badge" class="badge" :class="'badge-' + cell.badge">{{ cell.text }}</span>
-                          <span v-else-if="cell.mono" class="mono">{{ cell.text }}</span>
-                          <span v-else>{{ cell.text }}</span>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </template>
           </div>
-        `,
-        setup() {
-          const screenState = ref('default');
-          const states = STATE_LIST;
-          const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-          const setState = (s) => { screenState.value = s; };
-          const retry = () => {
-            screenState.value = 'loading';
-            setTimeout(() => (screenState.value = 'default'), 700);
-          };
-          return { cfg, screenState, states, cap, setState, retry };
-        },
-      };
-    }
 
-    // ---- Risk Assessment list ----
-    const RiskList = makeListScreen({
-      id: 'risk-assessment',
-      title: 'Risk Assessment',
-      subtitle: 'Supplier risk scores across the supply chain',
-      tableTitle: 'All assessments',
-      kpis: [
-        { label: 'Avg risk score', value: '64', change: '+3 vs last quarter', trend: 'down' },
-        { label: 'Critical suppliers', value: '1', change: 'requires action', trend: 'down' },
-        { label: 'Assessed this quarter', value: '12', change: 'of 14 suppliers', trend: 'neutral' },
-      ],
-      columns: [
-        { key: 'supplier', label: 'Supplier' },
-        { key: 'country', label: 'Country' },
-        { key: 'score', label: 'Score' },
-        { key: 'band', label: 'Band' },
-        { key: 'assessed', label: 'Last assessment' },
-        { key: 'status', label: 'Status' },
-      ],
-      rows: [
-        [{text:'Acme Textiles Ltd'},{text:'Bangladesh'},{text:'72'},{text:'High',badge:'warning'},{text:'2026-01-15',mono:true},{text:'Reviewed',badge:'success'}],
-        [{text:'BlueOcean Apparel'},{text:'Vietnam'},{text:'45'},{text:'Medium',badge:'info'},{text:'2026-02-02',mono:true},{text:'Reviewed',badge:'success'}],
-        [{text:'Mountain Wool Co'},{text:'New Zealand'},{text:'38'},{text:'Low',badge:'success'},{text:'2026-01-20',mono:true},{text:'Reviewed',badge:'success'}],
-        [{text:'Sahara Cotton Mills'},{text:'Egypt'},{text:'88'},{text:'Critical',badge:'error'},{text:'2026-01-30',mono:true},{text:'Action needed',badge:'error'}],
-        [{text:'Pacific Linens Ltd'},{text:'China'},{text:'62'},{text:'High',badge:'warning'},{text:'2026-02-10',mono:true},{text:'Reviewed',badge:'success'}],
-      ],
-      errorMsg: 'We couldn\'t fetch the latest risk assessments. Check your connection and try again.',
-      emptyTitle: 'No risk assessments yet',
-      emptyDesc: 'No suppliers have been assessed. Add suppliers to your supply chain and run the first risk assessment to populate this list.',
-      emptyCta: 'Add a supplier',
-      successTitle: 'Assessment refreshed',
-      successDesc: 'Risk assessments have been refreshed. 5 suppliers are up to date, 1 requires immediate action.',
-    });
+          <!-- Tabs -->
+          <div class="tabs" data-od-id="profile-tabs">
+            <button class="tab active">Overview</button>
+            <button class="tab">Facilities</button>
+            <button class="tab">Risk Assessment</button>
+            <button class="tab">CAPs</button>
+            <button class="tab">Audit Trail</button>
+          </div>
 
-    // ---- CAPs list ----
-    const CapsList = makeListScreen({
-      id: 'caps',
-      title: 'Corrective Action Plans',
-      subtitle: 'Open and closed CAPs across suppliers',
-      tableTitle: 'All CAPs',
-      kpis: [
-        { label: 'Open CAPs', value: '7', change: '+2 this month', trend: 'down' },
-        { label: 'Overdue', value: '2', change: 'past due date', trend: 'down' },
-        { label: 'Avg days to close', value: '34', change: '-6 vs target', trend: 'up' },
-      ],
-      columns: [
-        { key: 'id', label: 'CAP ID' },
-        { key: 'supplier', label: 'Supplier' },
-        { key: 'title', label: 'Title' },
-        { key: 'status', label: 'Status' },
-        { key: 'severity', label: 'Severity' },
-        { key: 'due', label: 'Due date' },
-      ],
-      rows: [
-        [{text:'CAP-2026-001',mono:true},{text:'Acme Textiles Ltd'},{text:'Inadequate fire safety exits'},{text:'Open',badge:'warning'},{text:'Critical',badge:'error'},{text:'2026-03-15',mono:true}],
-        [{text:'CAP-2026-002',mono:true},{text:'Acme Textiles Ltd'},{text:'Missing overtime records'},{text:'In Progress',badge:'info'},{text:'High',badge:'warning'},{text:'2026-04-01',mono:true}],
-        [{text:'CAP-2026-003',mono:true},{text:'Acme Textiles Ltd'},{text:'Worker training gaps'},{text:'Open',badge:'warning'},{text:'Medium',badge:'neutral'},{text:'2026-05-20',mono:true}],
-        [{text:'CAP-2025-009',mono:true},{text:'Acme Textiles Ltd'},{text:'Emergency evacuation drill'},{text:'Overdue',badge:'error'},{text:'High',badge:'warning'},{text:'2026-01-10',mono:true}],
-        [{text:'CAP-2026-010',mono:true},{text:'BlueOcean Apparel'},{text:'Wastewater discharge limits'},{text:'Open',badge:'warning'},{text:'High',badge:'warning'},{text:'2026-04-15',mono:true}],
-        [{text:'CAP-2026-011',mono:true},{text:'Sahara Cotton Mills'},{text:'Child labour remediation'},{text:'In Progress',badge:'info'},{text:'Critical',badge:'error'},{text:'2026-02-28',mono:true}],
-      ],
-      errorMsg: 'We couldn\'t fetch the CAPs list. Check your connection and try again.',
-      emptyTitle: 'No corrective action plans',
-      emptyDesc: 'No CAPs have been raised yet. CAPs are generated automatically from audit findings and risk assessments, or can be created manually.',
-      emptyCta: 'Create a CAP',
-      successTitle: 'CAP updated',
-      successDesc: 'The selected CAP has been updated. The supplier has been notified of the change.',
-    });
-
-    // ---- Audits list ----
-    const AuditsList = makeListScreen({
-      id: 'audits',
-      title: 'Audits',
-      subtitle: 'Audit cycles and findings across suppliers',
-      tableTitle: 'Recent audits',
-      kpis: [
-        { label: 'Audits this year', value: '18', change: 'on schedule', trend: 'neutral' },
-        { label: 'Open findings', value: '9', change: 'awaiting closure', trend: 'down' },
-        { label: 'Avg findings', value: '3.2', change: 'per audit', trend: 'neutral' },
-      ],
-      columns: [
-        { key: 'id', label: 'Audit ID' },
-        { key: 'supplier', label: 'Supplier' },
-        { key: 'auditor', label: 'Auditor' },
-        { key: 'date', label: 'Date' },
-        { key: 'findings', label: 'Findings' },
-        { key: 'status', label: 'Status' },
-      ],
-      rows: [
-        [{text:'AUD-2026-014',mono:true},{text:'Acme Textiles Ltd'},{text:'SGS Bangladesh'},{text:'2026-03-12',mono:true},{text:'3'},{text:'Closed',badge:'success'}],
-        [{text:'AUD-2025-031',mono:true},{text:'Acme Textiles Ltd'},{text:'Bureau Veritas'},{text:'2025-03-10',mono:true},{text:'5'},{text:'Closed',badge:'success'}],
-        [{text:'AUD-2026-007',mono:true},{text:'BlueOcean Apparel'},{text:'Intertek'},{text:'2026-02-18',mono:true},{text:'2'},{text:'Closed',badge:'success'}],
-        [{text:'AUD-2026-003',mono:true},{text:'Sahara Cotton Mills'},{text:'SGS Egypt'},{text:'2026-01-22',mono:true},{text:'8'},{text:'Open',badge:'warning'}],
-        [{text:'AUD-2026-012',mono:true},{text:'Pacific Linens Ltd'},{text:'TÜV Rheinland'},{text:'2026-03-01',mono:true},{text:'4'},{text:'In Progress',badge:'info'}],
-      ],
-      errorMsg: 'We couldn\'t fetch the audit log. Check your connection and try again.',
-      emptyTitle: 'No audits recorded',
-      emptyDesc: 'No audits have been scheduled or completed. Schedule an audit for a supplier to begin tracking findings and remediation.',
-      emptyCta: 'Schedule an audit',
-      successTitle: 'Audit scheduled',
-      successDesc: 'A new audit has been scheduled. The supplier and selected auditor have been notified.',
-    });
-
-    // ---- Reports list ----
-    const ReportsList = makeListScreen({
-      id: 'reports',
-      title: 'Reports',
-      subtitle: 'Generated due diligence reports',
-      tableTitle: 'Report library',
-      kpis: [
-        { label: 'Reports generated', value: '42', change: 'all time', trend: 'neutral' },
-        { label: 'Scheduled', value: '6', change: 'next 30 days', trend: 'neutral' },
-        { label: 'Shared externally', value: '15', change: 'with buyers', trend: 'up' },
-      ],
-      columns: [
-        { key: 'report', label: 'Report' },
-        { key: 'period', label: 'Period' },
-        { key: 'type', label: 'Type' },
-        { key: 'generated', label: 'Generated' },
-        { key: 'status', label: 'Status' },
-      ],
-      rows: [
-        [{text:'SC-DDR-2026-Q1',mono:true},{text:'Q1 2026'},{text:'Due Diligence'},{text:'2026-04-05',mono:true},{text:'Generated',badge:'success'}],
-        [{text:'Risk-Heatmap-2026',mono:true},{text:'FY 2026'},{text:'Risk Summary'},{text:'2026-03-20',mono:true},{text:'Generated',badge:'success'}],
-        [{text:'CAP-Summary-Mar',mono:true},{text:'March 2026'},{text:'CAP Report'},{text:'—'},{text:'Scheduled',badge:'info'}],
-        [{text:'Audit-Log-2025',mono:true},{text:'FY 2025'},{text:'Audit Log'},{text:'2026-01-08',mono:true},{text:'Generated',badge:'success'}],
-        [{text:'ESG-Baseline-2026',mono:true},{text:'FY 2026'},{text:'ESG Metrics'},{text:'—'},{text:'Draft',badge:'neutral'}],
-      ],
-      errorMsg: 'We couldn\'t fetch the report library. Check your connection and try again.',
-      emptyTitle: 'No reports yet',
-      emptyDesc: 'No reports have been generated. Reports are produced from your assessments, audits, and CAPs, or can be scheduled to run automatically.',
-      emptyCta: 'Generate a report',
-      successTitle: 'Report generated',
-      successDesc: 'Your due diligence report has been generated and is ready to download or share with buyers.',
-    });
-
-    // =================================================================
-    // Routes
-    // =================================================================
-
-    const routes = [
-      { path: '/', redirect: '/supply-chain' },
-      { path: '/supply-chain', component: SupplierProfile },
-      { path: '/risk-assessment', component: RiskList },
-      { path: '/caps', component: CapsList },
-      { path: '/audits', component: AuditsList },
-      { path: '/reports', component: ReportsList },
-    ];
-
-    // =================================================================
-    // ROUTER + APP
-    // =================================================================
-
-    const router = createRouter({
-      history: createWebHashHistory(),
-      routes,
-    });
-
-    const App = {
-      template: `
-        <div class="app-layout-sidebar">
-          <nav class="app-nav-sidebar">
-            <div class="nav-brand">
-              <svg class="nav-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent)">
-                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                <path d="M2 17l10 5 10-5"/>
-                <path d="M2 12l10 5 10-5"/>
-              </svg>
-              <span class="nav-title">Diginex SC</span>
+          <!-- OVERVIEW tab content -->
+          <div class="tab-pane" data-od-id="tab-overview">
+            <div class="card" style="margin-bottom: var(--space-8)">
+              <div class="section-title">Supplier details</div>
+              <div class="details-grid">
+                <div class="meta-item"><span class="meta-label">Legal name</span><span class="meta-value">Acme Textiles Ltd</span></div>
+                <div class="meta-item"><span class="meta-label">LEI</span><span class="meta-value mono">529900T8BM49AURSDO22</span></div>
+                <div class="meta-item"><span class="meta-label">Country</span><span class="meta-value">Bangladesh</span></div>
+                <div class="meta-item"><span class="meta-label">Business type</span><span class="meta-value">Textile Manufacturing</span></div>
+                <div class="meta-item"><span class="meta-label">Website</span><span class="meta-value">acme-textiles.com</span></div>
+                <div class="meta-item"><span class="meta-label">Founded</span><span class="meta-value">2009</span></div>
+                <div class="meta-item"><span class="meta-label">Employees</span><span class="meta-value">1,240</span></div>
+                <div class="meta-item"><span class="meta-label">Onboarded</span><span class="meta-value">2023-06-01</span></div>
+              </div>
             </div>
-            <div class="nav-section-label">Supply chain</div>
-            <div class="nav-links">
-              <router-link to="/supply-chain" class="nav-link">Supply Chain</router-link>
-              <router-link to="/risk-assessment" class="nav-link">Risk Assessment</router-link>
-              <router-link to="/caps" class="nav-link">CAPs</router-link>
-              <router-link to="/audits" class="nav-link">Audits</router-link>
-              <router-link to="/reports" class="nav-link">Reports</router-link>
+            <div class="card" data-od-id="card-relationships">
+              <div class="section-title">Supply chain relationships</div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Party</th>
+                      <th>Role</th>
+                      <th>Country</th>
+                      <th>ISIC Rev 5 activity</th>
+                      <th>Tier</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Global Retail Group Ltd</td>
+                      <td>Buyer</td>
+                      <td>United Kingdom</td>
+                      <td><span class="mono">4791 — Retail sale via mail order</span></td>
+                      <td><span class="badge badge-neutral">Tier 1</span></td>
+                    </tr>
+                    <tr>
+                      <td>Acme Textiles Ltd</td>
+                      <td>Supplier (this party)</td>
+                      <td>Bangladesh</td>
+                      <td><span class="mono">1313 — Finishing of textiles</span></td>
+                      <td><span class="badge badge-neutral">—</span></td>
+                    </tr>
+                    <tr>
+                      <td>Bengal Cotton Growers Coop</td>
+                      <td>Raw material supplier</td>
+                      <td>Bangladesh</td>
+                      <td><span class="mono">0111 — Growing of cotton</span></td>
+                      <td><span class="badge badge-neutral">Tier 2</span></td>
+                    </tr>
+                    <tr>
+                      <td>FastShip Maritime Ltd</td>
+                      <td>Logistics partner</td>
+                      <td>Singapore</td>
+                      <td><span class="mono">5010 — Sea freight transport</span></td>
+                      <td><span class="badge badge-neutral">Logistics</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div class="nav-footer">SC 1.5 · v0.9 spec</div>
-          </nav>
-          <main class="app-content-sidebar">
-            <router-view v-slot="{ Component }">
-              <transition name="fade" mode="out-in">
-                <component :is="Component" />
-              </transition>
-            </router-view>
-          </main>
+          </div>
+
         </div>
-      `,
-      setup() {
-        return {};
-      },
-    };
-
-    const app = createApp(App);
-    app.use(router);
-    app.mount('#app');
-  </script>
+      </main>
+    </div>
+  </div>
 </body>
 </html>
