@@ -95,14 +95,11 @@ import {
   resolveChatExtraAllowedDirs,
   describeStablePromptCache,
   designSystemIdFromPluginSnapshot,
-  resolveCodexGeneratedImagesDir,
   resolveEffectiveDesignSystemSelection,
-  resolveGrantedCodexImagegenOverride,
   resolveResearchCommandContract,
   resolveSafeProjectAttachments,
   resolveSafePromptImagePaths,
   selectPromptImagePaths,
-  validateCodexGeneratedImagesDir,
 } from './runtimes/chat-prompt-inputs.js';
 import {
   writePromptAndEndStdin,
@@ -151,14 +148,11 @@ export {
   resolveChatExtraAllowedDirs,
   describeStablePromptCache,
   designSystemIdFromPluginSnapshot,
-  resolveCodexGeneratedImagesDir,
   resolveEffectiveDesignSystemSelection,
-  resolveGrantedCodexImagegenOverride,
   resolveResearchCommandContract,
   resolveSafeProjectAttachments,
   resolveSafePromptImagePaths,
   selectPromptImagePaths,
-  validateCodexGeneratedImagesDir,
 } from './runtimes/chat-prompt-inputs.js';
 export {
   applyClaudeStreamJsonRunBookkeeping,
@@ -793,6 +787,13 @@ import {
   createProactiveContentPull,
   type ProactiveContentPullTarget,
 } from './collab/proactive-content-pull.js';
+import {
+  backgroundPullMaxEntriesFromEnv,
+  createBackgroundPullSizeGuard,
+} from './collab/background-pull-size-guard.js';
+import {
+  inspectAuthorizedTeamProjectPull,
+} from './collab/authorized-team-project-pull.js';
 import { createProjectContentTransferStateStore } from './collab/project-content-transfer-state.js';
 import {
   emitSharedProjectPullTiming,
@@ -895,7 +896,12 @@ import { assertServerContextSatisfiesRoutes } from './route-context-contract.js'
 import { configureConnectorCredentialStore, connectorService, FileConnectorCredentialStore } from './connectors/service.js';
 import { composioConnectorProvider } from './connectors/composio.js';
 import { configureComposioConfigStore } from './connectors/composio-config.js';
-import { CHAT_TOOL_ENDPOINTS, CHAT_TOOL_OPERATIONS, toolTokenRegistry } from './tool-tokens.js';
+import {
+  CHAT_TOOL_ENDPOINTS,
+  CHAT_TOOL_OPERATIONS,
+  PROJECT_EXPORT_TOOL_ENDPOINT,
+  toolTokenRegistry,
+} from './tool-tokens.js';
 import {
   buildDeployFileSet,
   checkDeploymentUrl,
@@ -933,7 +939,7 @@ import {
   seedLibraryExtensionOrigins,
 } from './library-tokens.js';
 import { listLibraryTokenOrigins } from './library-store.js';
-import { apiTokenFromEnv, isApiAuthDisabled, isApiTokenMiddlewareEnabled } from './api-token-auth.js';
+import { apiTokenFromEnv, isApiAuthDisabled } from './api-token-auth.js';
 import { createOpenDesignPublicMetadataService } from './services/open-design-public-metadata.js';
 import { createWhatsNewService } from './services/whats-new.js';
 import { execCommandViaLoginShell } from './services/login-shell.js';
@@ -962,7 +968,7 @@ import {
   requireLocalDaemonRequest,
 } from './http/local-daemon-request.js';
 import { renderOAuthResultPage } from './http/oauth-result-page.js';
-import { createToolRequestAuth } from './http/tool-request-auth.js';
+import { bearerTokenFromRequest, createToolRequestAuth } from './http/tool-request-auth.js';
 
 /** @typedef {import('@open-design/contracts').ApiErrorCode} ApiErrorCode */
 /** @typedef {import('@open-design/contracts').ApiError} ApiError */
@@ -1448,6 +1454,12 @@ export function createAgentRuntimeEnv(
     },
     SANDBOX_RUNTIME,
   );
+  // The daemon API token authorizes the whole non-loopback API surface. Agent
+  // children receive only their run-scoped tool capability, never that broad
+  // credential inherited from the daemon process (including Windows casing).
+  for (const key of Object.keys(env)) {
+    if (key.toUpperCase() === 'OD_API_TOKEN') delete env[key];
+  }
   const sidecarIpcPath = baseEnv[SIDECAR_ENV.IPC_PATH];
   if (typeof sidecarIpcPath === 'string' && sidecarIpcPath.length > 0) {
     env[SIDECAR_ENV.IPC_PATH] = sidecarIpcPath;
@@ -1951,6 +1963,8 @@ export function shouldReportRunCompletionTelemetryFallbackStatus(status: unknown
 
 const PROJECT_PREVIEW_SCOPE_TTL_MS = 60 * 60 * 1000;
 const PROJECT_PREVIEW_ASSET_PATH_RE = /^\/projects\/([^/]+)\/preview\/([^/]+)\/.+$/u;
+const PROJECT_RUN_SCOPED_EXPORT_PATH_RE =
+  /^\/projects\/[^/]+\/export(?:\/(?:pptx|pdf-image|image))?$/u;
 
 function createProjectPreviewScopeRegistry() {
   const scopes = new Map();
@@ -1962,15 +1976,18 @@ function createProjectPreviewScopeRegistry() {
   }
 
   return {
-    mint(projectId, workspace = null) {
+    mint(projectId, workspace = null, options = {}) {
       pruneExpired();
       const scope = randomUUID();
       scopes.set(scope, {
         projectId: String(projectId),
         workspace,
-        expiresAt: Date.now() + PROJECT_PREVIEW_SCOPE_TTL_MS,
+        expiresAt: Date.now() + (options.ttlMs ?? PROJECT_PREVIEW_SCOPE_TTL_MS),
       });
       return scope;
+    },
+    revoke(scope) {
+      scopes.delete(String(scope || ''));
     },
     validate(projectId, scope) {
       const key = String(scope || '');
@@ -2399,6 +2416,12 @@ export async function startServer({
   // are exempted so the desktop UI keeps working).
   const apiToken = apiTokenFromEnv();
   const apiAuthDisabled = isApiAuthDisabled();
+  const apiTokenAuthEnabled = apiToken.length > 0 && !apiAuthDisabled;
+  const isApiTokenAuthorization = (authorization: string | undefined): boolean => {
+    if (!apiTokenAuthEnabled) return false;
+    const match = /^Bearer\s+(\S+)\s*$/i.exec(authorization ?? '');
+    return match?.[1] === apiToken;
+  };
   if (!isLoopbackHostname(host) && apiToken.length === 0 && !apiAuthDisabled) {
     throw new Error(
       `OD_BIND_HOST=${host} requires OD_API_TOKEN to be set. ` +
@@ -2432,13 +2455,14 @@ export async function startServer({
   // Loopback origins skip the
   // check (the desktop UI / local CLI never carry a bearer); every
   // other request must present `Authorization: Bearer <token>` with a
-  // value matching `OD_API_TOKEN`. Health / readiness / version remain
-  // open so monitoring probes don't need the token. Server-minted
+  // value matching `OD_API_TOKEN`. A currently valid run-scoped token may
+  // pass only an exact screenshot-export endpoint; its route rechecks the
+  // operation and project. Health / readiness / version remain open. Server-minted
   // project preview asset scopes are also accepted for GETs so sandboxed
   // browser iframes can load HTML/CSS/JS without privileged headers.
   // Rich daemon status stays authenticated because it includes local
   // runtime paths.
-  if (isApiTokenMiddlewareEnabled()) {
+  if (apiTokenAuthEnabled) {
     const openProbePaths = new Set([
       '/health',
       '/api/health',
@@ -2463,14 +2487,20 @@ export async function startServer({
       // bearer; the loopback bypass exists for the localhost desktop
       // UI which has no proxy in the path.
       if (isLoopbackPeerAddress(req.socket?.remoteAddress)) return next();
-      const auth = req.get('authorization') ?? '';
-      const match = /^Bearer\s+(\S+)\s*$/i.exec(auth);
-      if (!match || match[1] !== apiToken) {
-        return res.status(401).json({
-          error: { code: 'API_TOKEN_REQUIRED', message: 'Authorization: Bearer <OD_API_TOKEN> required' },
-        });
+      if (isApiTokenAuthorization(req.get('authorization'))) return next();
+      if (
+        req.method === 'POST'
+        && PROJECT_RUN_SCOPED_EXPORT_PATH_RE.test(req.path)
+        && toolTokenRegistry.validate(bearerTokenFromRequest(req), {
+          endpoint: PROJECT_EXPORT_TOOL_ENDPOINT,
+          operation: 'project:export',
+        }).ok
+      ) {
+        return next();
       }
-      return next();
+      return res.status(401).json({
+        error: { code: 'API_TOKEN_REQUIRED', message: 'Authorization: Bearer <OD_API_TOKEN> required' },
+      });
     });
   }
 
@@ -3003,6 +3033,15 @@ export async function startServer({
     verifyExplicitWorkspaceRequestContext({ req }, { fresh: false });
   const verifyWorkspaceRequestAuthority = (req: unknown) =>
     verifyExplicitWorkspaceRequestContext({ req });
+  const verifyPersonalProjectDeleteLeaseAuthority =
+    process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() === 'vela'
+      ? (req: unknown) => verifyWorkspaceRequestContext({
+          req,
+          // A miss is intentionally returned as unavailable. The project gate
+          // then falls through to the existing fresh authority verifier.
+          fetchWorkspaceDirectory: workspaceDirectoryAuthority.cached,
+        })
+      : undefined;
   const enforceAuthoritativeProjectMutation = createEnforceWorkspaceProjectMutation(
     verifyWorkspaceRequestAuthority,
   );
@@ -4340,7 +4379,42 @@ export async function startServer({
     );
     return version == null ? null : String(version);
   };
+  // Background pull size guard (issue #6518, incident #6512): before any
+  // background lane downloads a published version, an authorize-only Vela
+  // probe reads the manifest entry count; oversized versions are deferred to
+  // the foreground open-project pull. Fail-closed here means PULL AS BEFORE —
+  // an old CLI, a countless output, or a probe failure keeps today's
+  // behavior. See collab/background-pull-size-guard.ts.
+  const backgroundPullSizeGuard = createBackgroundPullSizeGuard({
+    maxEntries: backgroundPullMaxEntriesFromEnv(),
+    inspect: (scope, version) =>
+      inspectAuthorizedTeamProjectPull({
+        projectId: scope.projectId,
+        scope: {
+          workspaceId: scope.workspaceId,
+          resourceTeamId: scope.resourceTeamId,
+          viewerMemberId: scope.viewerMemberId,
+          ownerMemberId: scope.ownerMemberId,
+        },
+        expectedVersion: version,
+      }),
+    onDeferred: (info) => {
+      console.info(
+        '[od] background shared-project pull deferred (oversized): ' +
+          `projectId=${info.projectId} workspaceId=${info.workspaceId} ` +
+          `version=${info.version} entries=${info.entryCount} ` +
+          `maxEntries=${info.maxEntries}; opening the project pulls it on demand`,
+      );
+    },
+    onError: (error) =>
+      console.warn(
+        '[od] background pull size probe failed open (pulling as before):',
+        String(error),
+      ),
+  });
   const proactiveContentPull = createProactiveContentPull({
+    assessBackgroundContentPull: (target, version) =>
+      backgroundPullSizeGuard.assess(target, version),
     getLocalBinding: (projectId) => {
       const row = getWorkspaceProjectByProjectId(db, projectId) as
         | { workspaceId: string; visibility: 'personal' | 'team' }
@@ -6599,6 +6673,7 @@ export async function startServer({
   const uploadDeps = { upload, importUpload, handleProjectUpload };
   const projectStoreDeps = {
     getProject,
+    findTeamWorkspaceIdForProject,
     getWorkspaceProject,
     getWorkspaceProjectByProjectId,
     listWorkspaceProjectBindings,
@@ -6631,7 +6706,7 @@ export async function startServer({
     options,
   ) => {
     const binding = getWorkspaceProjectByProjectId(db, projectId);
-    if (!binding?.workspaceId) return true;
+    if (!binding?.workspaceId) return { workspace: null };
 
     let authority;
     if (process.env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() === 'vela') {
@@ -6646,7 +6721,7 @@ export async function startServer({
           'workspace membership authority is temporarily unavailable',
           { retryable: true },
         );
-        return false;
+        return null;
       }
       const item = directory.items.find(
         (candidate) => candidate.workspaceId === binding.workspaceId,
@@ -6658,7 +6733,7 @@ export async function startServer({
           'WORKSPACE_PROJECT_PERMISSION_DENIED',
           'workspace project access is not allowed',
         );
-        return false;
+        return null;
       }
       authority = workspaceContextFromDirectoryItem(item);
     } else {
@@ -6696,7 +6771,13 @@ export async function startServer({
         return undefined;
       },
     };
-    return scopedAuthorize(request, res, projectId, options);
+    if (!await scopedAuthorize(request, res, projectId, options)) return null;
+    return {
+      workspace: {
+        workspaceId: authority.workspaceId,
+        workspaceMemberId: authority.workspaceMemberId,
+      },
+    };
   };
   const projectFileDeps = {
     ensureProject,
@@ -6981,6 +7062,7 @@ export async function startServer({
     // workspaceContext) — see the mutation-gate cross-check note above.
     verifyWorkspaceReadAuthority,
     verifyWorkspaceRequestAuthority,
+    verifyPersonalProjectDeleteLeaseAuthority,
     authorizeProjectRequest,
     isProjectRevoked: (projectId) =>
       revokedTeamProjectMirrors.has(projectId),
@@ -7289,6 +7371,11 @@ export async function startServer({
       // and `syncSharedTeamDesignSystem` kept re-stamping `markTeamSynced()`
       // onto every teammate forever.
       unshareTeamDesignSystemIfShared: async (id, req) => {
+        const requestContext = workspaceResourceContextFromRequest(req);
+        const hasWorkspaceContextHeaders = Object.keys(req.headers ?? {}).some(
+          (name) => name.startsWith('x-od-workspace-') || name === 'x-od-app-user-id',
+        );
+        if (requestContext === null && !hasWorkspaceContextHeaders) return false;
         const verified = await verifyExplicitWorkspaceRequestContext({
           req,
           requireTeam: false,
@@ -7465,7 +7552,11 @@ export async function startServer({
     exports: projectExportDeps,
     projectFiles: projectFileDeps,
     validation: validationDeps,
+    auth: authDeps,
     authorizeProjectRequest,
+    authorizeProjectToolRequest,
+    isApiTokenAuthorization,
+    projectPreviewScopes,
   });
   registerProjectFileRoutes(app, {
     db,
@@ -8640,7 +8731,6 @@ export async function startServer({
     // from the real ones and mislabel the telemetry it exists to explain.
     const systemPromptInputs = {
       agentId,
-      includeCodexImagegenOverride: false,
       skillBody,
       skillName,
       skillMode,
@@ -9388,6 +9478,15 @@ export async function startServer({
             projectRoot: artifactBaseline.cwd,
             diff,
           };
+          run.artifactPaths = diff.touchedPaths
+            .map((filePath) => path.relative(artifactBaseline.cwd, filePath))
+            .map((filePath) => filePath.replaceAll('\\', '/'))
+            .filter((filePath) =>
+              filePath.length > 0 &&
+              filePath !== '..' &&
+              !filePath.startsWith('../') &&
+              !path.isAbsolute(filePath),
+            );
         } catch {
           outcome = fallbackOutcome();
         }
@@ -9453,34 +9552,11 @@ export async function startServer({
         resolveRunArtifactOutcomeBeforeFinish();
       }
     };
-    let codexGeneratedImagesDir = resolveCodexGeneratedImagesDir(
-      agentId,
-      projectRecord?.metadata,
-      process.env,
-      os.homedir(),
-      run?.mediaExecution,
-    );
-    if (codexGeneratedImagesDir) {
-      codexGeneratedImagesDir = validateCodexGeneratedImagesDir(
-        codexGeneratedImagesDir,
-        {
-          protectedDirs: [SKILLS_DIR, DESIGN_SYSTEMS_DIR, ...linkedDirs],
-        },
-      );
-    }
     const extraAllowedDirs = resolveChatExtraAllowedDirs({
       agentId,
       skillsDir: SKILLS_DIR,
       designSystemsDir: DESIGN_SYSTEMS_DIR,
       linkedDirs,
-      codexGeneratedImagesDir,
-    });
-    const codexImagegenOverride = resolveGrantedCodexImagegenOverride({
-      agentId,
-      metadata: projectRecord?.metadata,
-      codexGeneratedImagesDir,
-      extraAllowedDirs,
-      mediaExecution: run?.mediaExecution,
     });
     const researchCommandContract = resolveResearchCommandContract(
       research,
@@ -9726,7 +9802,7 @@ export async function startServer({
       daemonSystemPrompt: includeStableInstructions ? daemonSystemPrompt : '',
       runtimeToolPrompt: includeStableInstructions ? runtimeToolPrompt : '',
       clientSystemPrompt: clientInstructionPrompt,
-      finalPromptOverride: codexImagegenOverride,
+      finalPromptOverride: null,
     });
     // Some models (notably claude-opus-4-7 with --include-partial-messages)
     // start their reply by echoing the top of the user message verbatim,
@@ -9943,6 +10019,7 @@ export async function startServer({
         ...(failure?.failure_category ? { failure_category: failure.failure_category } : {}),
         ...(failure?.failure_detail ? { failure_detail: failure.failure_detail } : {}),
         ...(failure?.failure_stage ? { failure_stage: failure.failure_stage } : {}),
+        ...(failure?.terminal_trigger ? { terminal_trigger: failure.terminal_trigger } : {}),
         ...(errorCode ? { error_code: errorCode } : {}),
       };
     };
@@ -10016,6 +10093,7 @@ export async function startServer({
       // this reset, a clean-but-empty attempt 1 would vouch for a crashed
       // attempt 2, classifying the run 'succeeded' off a stale flag.
       run.turnCompletedCleanly = false;
+      run.terminalTrigger = null;
       lifecycle.resetForAttempt(run.retryAttemptCount ?? 0);
       run.analyticsTelemetry = {
         startRequestedAt: run.analyticsTelemetry?.startRequestedAt ?? run.createdAt,
@@ -10155,6 +10233,8 @@ export async function startServer({
         },
         ...(errorCode ? { errorCode } : {}),
         agentId: run.agentId,
+        cancelOrigin: run.cancelOrigin ?? null,
+        terminalTrigger: run.terminalTrigger ?? null,
         events: run.events,
       });
       if (
@@ -11128,6 +11208,9 @@ export async function startServer({
           'Retry the turn, pick a different model, or start a new conversation if the prior context is very large.';
         stallPayload = createSseErrorPayload('AGENT_EXECUTION_FAILED', message, { retryable: true });
       }
+      run.terminalTrigger = reason === 'first_output'
+        ? 'first_output_deadline'
+        : 'inactivity_watchdog';
       send('error', stallPayload);
       // A silent first-token hang is one of the safe transient failure shapes
       // this run is allowed to recover: classifyRunFailure maps the stall text
@@ -12490,6 +12573,12 @@ export async function startServer({
       emitVisibleAgentStderr(chunk);
     });
 
+    // A retry reuses the same run object but replaces run.child. Treat that
+    // exact child identity as the attempt generation token: once ownership has
+    // moved, this attempt may still receive a late error/close event, but it
+    // must not emit errors, unregister the new sink, or make a terminal retry
+    // decision for the new attempt.
+    const attemptStillOwnsRun = () => run.child === child;
     const finishCanceledIfRequested = (
       code: number | null,
       signal: NodeJS.Signals | null,
@@ -12508,6 +12597,7 @@ export async function startServer({
       cleanupPromptFile();
       flushVisibleAgentStderr();
       revokeToolToken('child_exit');
+      if (!attemptStillOwnsRun()) return;
       unregisterChatAgentEventSink();
       if (finishCanceledIfRequested(1, null)) return;
       send('error', createSseErrorPayload('AGENT_EXECUTION_FAILED', err.message));
@@ -12519,12 +12609,10 @@ export async function startServer({
       clearFirstOutputWatchdog();
       clearForcedChildShutdown();
       flushVisibleAgentStderr();
-      if (watchdogRetryRestarted) {
-        // The inactivity watchdog already failed this attempt and the same-run
-        // retry restarted on a fresh child. Finalization and event-sink / run-
-        // handle ownership (keyed by the shared runId) now belong to the new
-        // attempt, so this stalled child's close must not re-run them — doing
-        // so would re-finalize the run and delete the new attempt's sink.
+      if (!attemptStillOwnsRun() || watchdogRetryRestarted) {
+        // Finalization and event-sink / run-handle ownership (keyed by the
+        // shared runId) now belong to another retry generation, so this
+        // child's late close must not re-run them.
         // Revoke only THIS attempt's tool token (idempotent, keyed by its own
         // token string) and bail; the `finally` block still cleans up logs.
         revokeToolToken('child_exit');
@@ -13785,6 +13873,7 @@ export async function startServer({
     projectStore: projectStoreDeps,
     authorizeProjectRequest,
     authorizeProjectToolRequest,
+    isApiTokenAuthorization,
     projectFiles: projectFileDeps,
     conversations: conversationDeps,
     templates: templateDeps,

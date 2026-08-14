@@ -69,6 +69,8 @@ const MEDIA_GENERATE_STRING_FLAGS = new Set([
   'prompt-file',
   'output',
   'aspect',
+  'quality',
+  'resolution',
   'length',
   'duration',
   'prompt-influence',
@@ -481,7 +483,10 @@ async function runExport(args) {
     process.exit(2);
   }
   const base = await cliDaemonBaseUrl(flags);
-  const workspaceHeaders = workspaceHeadersFromExplicitFlags(flags) ?? {};
+  const token = process.env.OD_TOOL_TOKEN;
+  const requestHeaders = token
+    ? { authorization: `Bearer ${token}` }
+    : workspaceHeadersFromExplicitFlags(flags) ?? {};
   // All three formats rasterize through the desktop screenshot renderer so the
   // CLI matches the UI exactly. In particular `pdf` uses `/export/pdf-image`
   // (one raster page per deck slide / per viewport for a page) — NOT the generic
@@ -511,7 +516,7 @@ async function runExport(args) {
   try {
     resp = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}/${exportPath}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...workspaceHeaders },
+      headers: { 'content-type': 'application/json', ...requestHeaders },
       body: JSON.stringify(requestBody),
     });
   } catch (err) {
@@ -1474,6 +1479,11 @@ async function runMediaGenerate(rawArgs) {
     console.error('--model required (see http://<daemon>/api/media/models)');
     process.exit(2);
   }
+  const images = repeatableFlagValues(rawArgs, 'image');
+  if (flags.model.startsWith('vela/') && images.length > 5) {
+    console.error(`Vela media accepts at most 5 --image values; received ${images.length}`);
+    process.exit(2);
+  }
 
   // Long-form media prompts (detailed image/video descriptions, program-
   // generated prompts) arrive via --prompt-file <path|-> (stdin) per the CLI
@@ -1487,10 +1497,13 @@ async function runMediaGenerate(rawArgs) {
     prompt,
     output: flags.output,
     aspect: flags.aspect,
+    quality: flags.quality,
+    resolution: flags.resolution,
     voice: flags.voice,
     audioKind: flags['audio-kind'],
     compositionDir: flags['composition-dir'],
-    image: flags.image,
+    image: images[0],
+    images,
     language: flags.language,
   };
   if (flags.length != null) body.length = Number(flags.length);
@@ -1821,6 +1834,13 @@ Common options:
   --prompt-file <path|->     Read the prompt from a file, or - for stdin (for long-form prompts).
   --output <filename>       File to write under the project. Auto-named if omitted.
   --aspect 1:1|16:9|9:16|4:3|3:4
+  --quality <tier>          Open Design Cloud images only: published quality tier
+                            (gpt-image-2 accepts low|medium|high). Omit to let the
+                            model's own default tier decide — tiers are priced
+                            differently, so this is a billing choice.
+  --resolution <res>        Open Design Cloud images only: published output resolution
+                            (e.g. 1K, 2K). Must name a resolution the model publishes
+                            for --aspect. Omit to use the model's default profile.
   --length <seconds>        Video length.
   --duration <seconds>      Audio duration.
   --prompt-influence <0-1>  ElevenLabs SFX prompt adherence. Higher values follow the prompt more closely.
@@ -1832,11 +1852,11 @@ Common options:
                             to the dir containing hyperframes.json /
                             meta.json / index.html. The daemon runs
                             \`npx hyperframes render\` against it.
-  --image <path>            Project-relative path to a reference image
-                            (image-to-video for Seedance i2v models, or
-                            future image-edit endpoints). Daemon reads
-                            the file from the project, base64-encodes
-                            it, and forwards it to the upstream API.
+  --image <path>            Project-relative reference image; repeat up to 5
+                            times for Vela image editing or video references.
+                            The first video image is the first frame; the rest
+                            are references. Existing providers still receive
+                            the first image through the legacy single-image field.
   --daemon-url <url>
 
 Output: a single line of JSON: {"file": { name, size, kind, mime, ... }}
@@ -2061,6 +2081,7 @@ async function runMcpInstall(args) {
       ok: false,
       agent: slug,
       kind: 'manual',
+      ...(dryRun ? { launchSpec: spec } : {}),
       configPath: plan.configPath,
       format: plan.format,
       snippet: plan.snippet,
@@ -2084,6 +2105,7 @@ async function runMcpInstall(args) {
         ok: true,
         agent: slug,
         kind: 'cli',
+        launchSpec: spec,
         command: `${plan.bin} ${argv.join(' ')}`,
         message: `would run: ${plan.bin} ${argv.join(' ')}`,
       });
@@ -2168,6 +2190,7 @@ async function runMcpInstall(args) {
       ok: true,
       agent: slug,
       kind: 'json',
+      launchSpec: spec,
       configPath: plan.configPath,
       preview: next,
       message: `would write ${plan.configPath}`,
@@ -2196,7 +2219,7 @@ Agents:
 Options:
   --uninstall, --remove   Remove the Open Design MCP server instead.
   --print, --dry-run      Show what would change; write nothing.
-  --json                  Machine-readable result.
+  --json                  Machine-readable result (dry runs include launchSpec).
   --name <name>           MCP server name in the agent config (default: open-design).
   --daemon-url <url>      Daemon URL used to resolve the launch command.
 

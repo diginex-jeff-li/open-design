@@ -22,9 +22,11 @@ import type {
   TrackingRuntimeType,
 } from '../analytics/public-params.js';
 import type {
+  TrackingRunCancelOrigin,
   TrackingRunFailureCategory,
   TrackingRunFailureDetail,
   TrackingRunRecoveryActionType,
+  TrackingRunTerminalTrigger,
 } from '../analytics/events.js';
 
 // The daemon's run-failure taxonomy, re-exported under product-facing names so
@@ -34,6 +36,8 @@ import type {
 // producer and consumer can't drift.
 export type RunFailureCategory = TrackingRunFailureCategory;
 export type RunFailureDetail = TrackingRunFailureDetail;
+export type RunCancelOrigin = TrackingRunCancelOrigin;
+export type RunTerminalTrigger = TrackingRunTerminalTrigger;
 export type RunFailureAction = 'relogin' | 'recharge' | 'upgrade' | 'retry' | 'none';
 
 export type ChatRole = 'user' | 'assistant';
@@ -499,6 +503,115 @@ export interface NativeSessionRecoveryMetadata {
   updatedAt: number;
 }
 
+export type ChatRunDiagnosticEvidence = 'measured' | 'computed' | 'indirect';
+export type ChatRunDiagnosticState =
+  | 'available'
+  | 'not_collected'
+  | 'unsupported'
+  | 'upstream_unavailable';
+
+/** One diagnostic value with enough provenance to distinguish a real zero from missing data. */
+export interface ChatRunDiagnosticValue<T> {
+  state: ChatRunDiagnosticState;
+  value?: T;
+  evidence?: ChatRunDiagnosticEvidence;
+  source: 'open-design-daemon' | 'agent-runtime' | 'model-provider';
+  complete?: boolean;
+  definition?: string;
+  missingReason?: string;
+}
+
+/**
+ * Redacted run diagnostics exposed to evaluation clients after a run reaches a
+ * terminal state. This intentionally contains counters and durations only: no
+ * reasoning text, full tool input/output, credentials, or local paths.
+ */
+export interface ChatRunExecutionDiagnostics {
+  schemaVersion: 1;
+  collectorVersion:
+    | 'open-design-execution-diagnostics-v1'
+    | 'open-design-execution-diagnostics-v2';
+  collectedAt: number;
+  eventStreamCompleteness: 'complete' | 'partial';
+  timing: {
+    queueDurationMs: ChatRunDiagnosticValue<number>;
+    promptBuildDurationMs: ChatRunDiagnosticValue<number>;
+    launchPreflightDurationMs: ChatRunDiagnosticValue<number>;
+    processSpawnDurationMs: ChatRunDiagnosticValue<number>;
+    stdinWriteDurationMs: ChatRunDiagnosticValue<number>;
+    firstModelEventWaitMs: ChatRunDiagnosticValue<number>;
+    firstVisibleOutputWaitMs: ChatRunDiagnosticValue<number>;
+    agentExecutionDurationMs: ChatRunDiagnosticValue<number>;
+    toolDurationMs: ChatRunDiagnosticValue<number>;
+    artifactWriteDurationMs: ChatRunDiagnosticValue<number>;
+    totalDurationMs: ChatRunDiagnosticValue<number>;
+    phaseTimingStatus?: string;
+    bottleneckPhase?: string;
+  };
+  modelSteps: {
+    count: ChatRunDiagnosticValue<number>;
+    totalDurationMs: ChatRunDiagnosticValue<number>;
+    averageDurationMs: ChatRunDiagnosticValue<number>;
+    p50DurationMs: ChatRunDiagnosticValue<number>;
+    p90DurationMs: ChatRunDiagnosticValue<number>;
+    maxDurationMs: ChatRunDiagnosticValue<number>;
+    over60sCount: ChatRunDiagnosticValue<number>;
+    durationSampleCount: ChatRunDiagnosticValue<number>;
+    completed: ChatRunDiagnosticValue<number>;
+    failed: ChatRunDiagnosticValue<number>;
+    cancelled: ChatRunDiagnosticValue<number>;
+    incomplete: ChatRunDiagnosticValue<number>;
+    retryCount: ChatRunDiagnosticValue<number>;
+    reasoningTokens: ChatRunDiagnosticValue<number>;
+    reasoningDurationMs: ChatRunDiagnosticValue<number>;
+  };
+  assistantMessages: {
+    count: ChatRunDiagnosticValue<number>;
+    totalDurationMs: ChatRunDiagnosticValue<number>;
+    averageDurationMs: ChatRunDiagnosticValue<number>;
+    maxDurationMs: ChatRunDiagnosticValue<number>;
+    durationSampleCount: ChatRunDiagnosticValue<number>;
+    completed: ChatRunDiagnosticValue<number>;
+    failed: ChatRunDiagnosticValue<number>;
+    cancelled: ChatRunDiagnosticValue<number>;
+    incomplete: ChatRunDiagnosticValue<number>;
+  };
+  anomalies: {
+    retryCount: ChatRunDiagnosticValue<number>;
+    rateLimitedCount: ChatRunDiagnosticValue<number>;
+    timeoutCount: ChatRunDiagnosticValue<number>;
+    upstreamErrorCount: ChatRunDiagnosticValue<number>;
+  };
+  tools: {
+    total: ChatRunDiagnosticValue<number>;
+    succeeded: ChatRunDiagnosticValue<number>;
+    failed: ChatRunDiagnosticValue<number>;
+    unknown: ChatRunDiagnosticValue<number>;
+    durationMs: ChatRunDiagnosticValue<number>;
+    byName: ChatRunDiagnosticValue<Record<string, number>>;
+  };
+  cache: {
+    inputTokensEffective: ChatRunDiagnosticValue<number>;
+    cacheReadInputTokens: ChatRunDiagnosticValue<number>;
+    cacheCreationInputTokens: ChatRunDiagnosticValue<number>;
+    uncachedInputTokens: ChatRunDiagnosticValue<number>;
+    cacheHitRatio: ChatRunDiagnosticValue<number>;
+    firstCallInputTokens: ChatRunDiagnosticValue<number>;
+    firstCallCacheReadInputTokens: ChatRunDiagnosticValue<number>;
+    firstCallCacheHitRatio: ChatRunDiagnosticValue<number>;
+    stablePromptCacheHit: ChatRunDiagnosticValue<boolean>;
+    stablePromptCacheMissReason: ChatRunDiagnosticValue<string>;
+  };
+  environment: {
+    agentId: ChatRunDiagnosticValue<string>;
+    provider: ChatRunDiagnosticValue<string>;
+    requestedModel: ChatRunDiagnosticValue<string>;
+    resolvedModel: ChatRunDiagnosticValue<string>;
+    reasoning: ChatRunDiagnosticValue<string>;
+    agentCliVersion: ChatRunDiagnosticValue<string>;
+  };
+}
+
 export interface ChatRunStatusResponse {
   id: string;
   projectId: string | null;
@@ -521,6 +634,13 @@ export interface ChatRunStatusResponse {
   createdAt: number;
   updatedAt: number;
   cancelRequested?: boolean;
+  /**
+   * Actor or lifecycle path that requested cancellation. Only `user_stop`
+   * proves the user explicitly stopped this run; older daemons may omit it.
+   */
+  cancelOrigin?: RunCancelOrigin | null;
+  /** Structured lifecycle or watchdog mechanism that forced termination. */
+  terminalTrigger?: RunTerminalTrigger | null;
   childPid?: number | null;
   processGroupId?: number | null;
   childExited?: boolean;
@@ -559,6 +679,10 @@ export interface ChatRunStatusResponse {
   /** Authoritative artifact files created or modified by this run. Mirrors
    *  ChatSseEndPayload.artifactCount and run_finished.artifact_count. */
   artifactCount?: number;
+  /** Authoritative project-relative artifact files created or modified by
+   *  this run. Unlike a before/after browser snapshot, this includes edits to
+   *  existing files and excludes untouched reference inputs. */
+  artifactPaths?: string[];
   /** Filesystem-backed validation of the one canonical artifact entry this
    *  run can deliver. Present for terminal runs when the daemon can inspect
    *  the project; callers must not infer validity from artifactCount alone. */
@@ -596,6 +720,8 @@ export interface ChatRunStatusResponse {
   browserUse?: BrowserUseRunState;
   /** Effective storage/provenance for the workspace used by this run. */
   workspace?: RunWorkspace;
+  /** Available only after terminal completion; safe for eval/observability clients. */
+  executionDiagnostics?: ChatRunExecutionDiagnostics;
 }
 
 export type ChatRunResultPackageResponse = RunResultPackageResponse;
